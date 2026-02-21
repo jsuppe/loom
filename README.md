@@ -78,6 +78,119 @@ loom conflicts --text "behavior | Allow quick delete without confirmation" -p my
 loom sync -p myproject
 ```
 
+## Usage Patterns
+
+### For Humans (Chat-Based)
+
+If you're working with an AI agent that has Loom integrated, just describe requirements naturally:
+
+> "The app should require email verification before posting"
+
+The agent will extract it, check for conflicts, and sync. For more precision, use the structured format:
+
+> `REQUIREMENT: behavior | Email verification required before first post`
+
+### For Agents
+
+Add Loom to your `AGENTS.md` (see [agents.d/loom-integration.md](agents.d/loom-integration.md)):
+- Extract requirements when decisions are made
+- Check for drift before modifying code
+- Sync documentation during heartbeats
+
+### For CI/Automation
+
+```bash
+# Extract from a file or pipe
+cat decisions.txt | loom extract -p myproject
+
+# Check a file for drift before merge
+loom check src/auth/login.dart -p myproject
+
+# Fail CI if requirements have no test specs
+loom tests -p myproject --public | grep -q "⚠️" && exit 1
+```
+
+## Managing Test Specs
+
+Test specifications link requirements to verification steps.
+
+### Add a Test Spec
+
+```bash
+loom test REQ-abc123 \
+  -d "Verify email confirmation flow" \
+  -s "Register new account;Check inbox for email;Click verification link;Attempt to post" \
+  -e "Post succeeds only after email verified"
+```
+
+**Options:**
+- `-d, --description` — What the test verifies
+- `-s, --steps` — Semicolon-separated test steps
+- `-e, --expected` — Expected outcome
+- `-a, --automated` — Mark as automated test
+- `--test-file` — Link to actual test file
+- `--private` — Exclude from public docs
+
+### Mark Test as Verified
+
+```bash
+loom verify REQ-abc123
+```
+
+### List All Test Specs
+
+```bash
+loom tests -p myproject
+loom tests -p myproject --public  # Exclude private
+```
+
+## Keeping Things Consistent
+
+### The Source of Truth
+
+The **Loom store** (ChromaDB) is the source of truth, not the markdown files.
+
+```
+Loom Store (ChromaDB)
+    ↓ loom sync
+REQUIREMENTS.md + TEST_SPEC.md (generated)
+    ↓ git push
+GitHub repo (for sharing)
+```
+
+### Do NOT Edit Generated Files Directly
+
+`REQUIREMENTS.md` and `TEST_SPEC.md` are regenerated on each `loom sync`. Direct edits will be overwritten.
+
+**To modify requirements:**
+```bash
+# Add new
+echo "REQUIREMENT: domain | text" | loom extract -p project
+
+# Supersede old (marks as replaced, keeps history)
+loom supersede REQ-oldid
+```
+
+**To modify test specs:**
+```bash
+# Update (overwrites previous)
+loom test REQ-xxx -d "New description" -s "New;Steps" -e "New expected"
+```
+
+### Sync Workflow
+
+```bash
+cd /path/to/requirements-repo
+
+# Regenerate docs from Loom store
+loom --project myproject sync --output ./myproject
+
+# Commit and push
+git add -A && git commit -m "Sync requirements" && git push
+```
+
+For teams, run sync after any requirement changes to keep the repo current.
+
 ## Commands
 
 | Command | Description |
