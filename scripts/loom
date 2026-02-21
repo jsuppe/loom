@@ -1,0 +1,681 @@
+#!/home/melchior/.openclaw/skills/loom/.venv/bin/python3.12
+"""
+Loom CLI - Requirements traceability for AI-assisted development.
+
+Usage:
+    loom extract [--session <key>] [--project <name>]
+    loom check <file> [--lines <range>] [--project <name>]
+    loom link <file> [--lines <range>] [--req <id>...] [--project <name>]
+    loom status [--project <name>]
+    loom query <text> [--project <name>]
+    loom list [--all] [--project <name>]
+"""
+
+import sys
+import os
+import json
+import argparse
+import hashlib
+from pathlib import Path
+from datetime import datetime, timezone
+
+# Add src to path
+SKILL_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(SKILL_DIR / "src"))
+
+from store import LoomStore, Requirement, Implementation, generate_impl_id, generate_content_hash
+
+
+def get_project_name():
+    """Detect project name from current directory or env."""
+    if os.environ.get("LOOM_PROJECT"):
+        return os.environ["LOOM_PROJECT"]
+    
+    # Try to detect from git
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).name
+    except:
+        pass
+    
+    return "default"
+
+
+def get_embedding(text: str, model: str = "nomic-embed-text") -> list:
+    """
+    Get embedding for text using Ollama.
+    
+    Uses nomic-embed-text by default (768 dimensions).
+    Falls back to hash-based pseudo-embedding if Ollama unavailable.
+    """
+    import urllib.request
+    import urllib.error
+    
+    try:
+        data = json.dumps({"model": model, "input": text}).encode()
+        req = urllib.request.Request(
+            "http://localhost:11434/api/embed",
+            data=data,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+            return result["embeddings"][0]
+    except (urllib.error.URLError, KeyError, TimeoutError) as e:
+        # Fallback to hash-based pseudo-embedding
+        print(f"⚠️  Ollama unavailable, using fallback embeddings: {e}")
+        h = hashlib.sha256(text.encode()).digest()
+        embedding = []
+        for i in range(768):  # Match nomic-embed-text dimensions
+            byte_idx = i % 32
+            embedding.append((h[byte_idx] - 128) / 128.0)
+        return embedding
+
+
+def cmd_extract(args):
+    """Extract requirements from current session context."""
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Extract — Project: {args.project}")
+    print()
+    print("To extract requirements, provide them in this format:")
+    print()
+    print("  REQUIREMENT: <domain> | <requirement text>")
+    print()
+    print("Domains: terminology, behavior, ui, data, architecture")
+    print()
+    print("Example:")
+    print("  REQUIREMENT: behavior | Reset button requires 3-second hold with visual feedback")
+    print()
+    
+    # For agent use: read from stdin or args
+    if args.text:
+        lines = [args.text]
+    elif not sys.stdin.isatty():
+        lines = sys.stdin.read().strip().split('\n')
+    else:
+        print("Provide requirements via --text or stdin")
+        return 1
+    
+    extracted = 0
+    for line in lines:
+        if line.strip().upper().startswith("REQUIREMENT:"):
+            content = line.split(":", 1)[1].strip()
+            if "|" in content:
+                domain, value = content.split("|", 1)
+                domain = domain.strip().lower()
+                value = value.strip()
+                
+                # Generate ID
+                timestamp = datetime.now(timezone.utc).isoformat()
+                req_id = f"REQ-{hashlib.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]}"
+                
+                req = Requirement(
+                    id=req_id,
+                    domain=domain,
+                    value=value,
+                    source_msg_id=args.msg_id or "manual",
+                    source_session=args.session or "cli",
+                    timestamp=timestamp
+                )
+                
+                # Check for conflicts before adding
+                try:
+                    from docs import check_conflicts
+                    conflicts = check_conflicts(store, req, get_embedding_fn=get_embedding)
+                    if conflicts:
+                        print(f"⚠️  CONFLICT DETECTED for: {value}")
+                        for c in conflicts:
+                            existing = c["existing"]
+                            print(f"   Conflicts with {existing.id}: {existing.value}")
+                        print(f"   → Consider using `loom supersede {conflicts[0]['existing'].id}` first")
+                        print()
+                except ImportError:
+                    pass  # docs module not available
+                
+                embedding = get_embedding(value)
+                store.add_requirement(req, embedding)
+                print(f"✓ {req_id}: [{domain}] {value}")
+                extracted += 1
+    
+    print()
+    print(f"Extracted {extracted} requirement(s)")
+    return 0
+
+
+def cmd_check(args):
+    """Check a file for drift against linked requirements."""
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Check — {args.file}")
+    print()
+    
+    if not Path(args.file).exists():
+        print(f"File not found: {args.file}")
+        return 1
+    
+    content = Path(args.file).read_text()
+    
+    if args.lines:
+        start, end = map(int, args.lines.split("-"))
+        lines = content.split('\n')
+        content = '\n'.join(lines[start-1:end])
+    
+    impl_id = generate_impl_id(args.file, args.lines or "all")
+    impl = store.get_implementation(impl_id)
+    
+    if not impl:
+        print("No requirements linked to this file/section.")
+        print("Run `loom link` to create links.")
+        return 0
+    
+    # Check for drift
+    drift_found = False
+    for sat in impl.satisfies:
+        req = store.get_requirement(sat["req_id"])
+        if req:
+            if req.superseded_at:
+                print(f"⚠️  DRIFT: {sat['req_id']} was superseded at {req.superseded_at}")
+                print(f"   Old: {req.value}")
+                drift_found = True
+            else:
+                print(f"✓ {sat['req_id']}: {req.value}")
+    
+    if drift_found:
+        print()
+        print("Some linked requirements have changed. Review before modifying.")
+        return 2
+    
+    return 0
+
+
+def cmd_link(args):
+    """Link code to requirements."""
+    import hashlib
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Link — {args.file}")
+    print()
+    
+    if not Path(args.file).exists():
+        print(f"File not found: {args.file}")
+        return 1
+    
+    content = Path(args.file).read_text()
+    
+    if args.lines:
+        start, end = map(int, args.lines.split("-"))
+        lines_content = content.split('\n')
+        content = '\n'.join(lines_content[start-1:end])
+    
+    impl_id = generate_impl_id(args.file, args.lines or "all")
+    content_hash = generate_content_hash(content)
+    
+    # Build satisfies list
+    satisfies = []
+    if args.req:
+        for req_id in args.req:
+            req = store.get_requirement(req_id)
+            if req:
+                satisfies.append({"req_id": req_id, "req_version": req.timestamp})
+            else:
+                print(f"Warning: {req_id} not found")
+    else:
+        # Auto-detect via semantic search
+        embedding = get_embedding(content)
+        results = store.search_requirements(embedding, n=3)
+        print("Detected requirements (confirm with --req):")
+        for r in results:
+            print(f"  {r['id']}: {r['requirement'].value}")
+            satisfies.append({"req_id": r['id'], "req_version": r['requirement'].timestamp})
+    
+    if not satisfies:
+        print("No requirements to link.")
+        return 1
+    
+    impl = Implementation(
+        id=impl_id,
+        file=args.file,
+        lines=args.lines or "all",
+        content=content,
+        content_hash=content_hash,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        satisfies=satisfies
+    )
+    
+    embedding = get_embedding(content)
+    store.add_implementation(impl, embedding)
+    
+    print()
+    print(f"✓ Linked {args.file} to {len(satisfies)} requirement(s)")
+    return 0
+
+
+def cmd_status(args):
+    """Show requirements status."""
+    store = LoomStore(args.project)
+    stats = store.stats()
+    
+    print(f"🧵 Loom Status — Project: {args.project}")
+    print()
+    print(f"Requirements: {stats['requirements']}")
+    print(f"Implementations: {stats['implementations']}")
+    print(f"Chat messages: {stats['chat_messages']}")
+    print()
+    
+    # Check for drift
+    all_reqs = store.list_requirements(include_superseded=True)
+    superseded = [r for r in all_reqs if r.superseded_at]
+    
+    if superseded:
+        print(f"Superseded requirements: {len(superseded)}")
+        
+        # Find implementations linked to superseded reqs
+        drift_count = 0
+        for req in superseded:
+            impls = store.get_implementations_for_requirement(req.id)
+            if impls:
+                drift_count += len(impls)
+                for impl in impls:
+                    print(f"  ⚠️ {impl.file} → {req.id} (superseded)")
+        
+        if drift_count:
+            print()
+            print(f"⚠️  {drift_count} implementation(s) need review")
+    else:
+        print("No drift detected ✓")
+    
+    return 0
+
+
+def cmd_query(args):
+    """Search requirements semantically."""
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Query: {args.text}")
+    print()
+    
+    embedding = get_embedding(args.text)
+    results = store.search_requirements(embedding, n=args.limit or 5)
+    
+    if not results:
+        print("No matching requirements found.")
+        return 0
+    
+    for r in results:
+        req = r['requirement']
+        status = "✓" if not req.superseded_at else "⚠️ superseded"
+        print(f"{req.id} [{req.domain}] {status}")
+        print(f"  {req.value}")
+        print(f"  Source: {req.source_session} @ {req.timestamp}")
+        print()
+    
+    return 0
+
+
+def cmd_list(args):
+    """List all requirements."""
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Requirements — Project: {args.project}")
+    print()
+    
+    reqs = store.list_requirements(include_superseded=args.all)
+    
+    if not reqs:
+        print("No requirements found.")
+        return 0
+    
+    for req in reqs:
+        status = "" if not req.superseded_at else " (superseded)"
+        print(f"{req.id} [{req.domain}]{status}")
+        print(f"  {req.value}")
+    
+    print()
+    print(f"Total: {len(reqs)}")
+    return 0
+
+
+def cmd_sync(args):
+    """Sync/regenerate REQUIREMENTS.md and TEST_SPEC.md."""
+    from docs import generate_requirements_doc, generate_test_spec_doc
+    from testspec import TestSpecStore
+    
+    store = LoomStore(args.project)
+    output_dir = Path(args.output) if args.output else Path.cwd()
+    
+    public_mode = args.public
+    mode_label = " (PUBLIC)" if public_mode else ""
+    
+    print(f"🧵 Loom Sync — Project: {args.project}{mode_label}")
+    print()
+    
+    # Load test specs
+    spec_store = TestSpecStore(store.data_dir)
+    specs = {s.req_id: s for s in spec_store.list_specs()}
+    private_ids = spec_store.get_private_ids()
+    
+    # Also mark specs marked as private
+    for spec in specs.values():
+        if spec.private:
+            private_ids.add(spec.req_id)
+    
+    if public_mode and private_ids:
+        print(f"Excluding {len(private_ids)} private requirement(s)")
+        print()
+    
+    # Generate requirements doc
+    req_path = generate_requirements_doc(store, output_dir, private_ids, public_mode)
+    print(f"✓ Generated {req_path}")
+    
+    # Generate test spec doc
+    test_path = generate_test_spec_doc(store, output_dir, specs, private_ids, public_mode)
+    print(f"✓ Generated {test_path}")
+    
+    return 0
+
+
+def cmd_conflicts(args):
+    """Check for conflicts with a potential new requirement."""
+    from docs import check_conflicts
+    
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Conflict Check")
+    print()
+    
+    if not args.text:
+        print("Provide requirement text with --text")
+        return 1
+    
+    # Parse domain and value
+    if "|" in args.text:
+        domain, value = args.text.split("|", 1)
+        domain = domain.strip().lower()
+        value = value.strip()
+    else:
+        domain = "behavior"
+        value = args.text.strip()
+    
+    # Create temporary requirement for checking
+    temp_req = Requirement(
+        id="TEMP",
+        domain=domain,
+        value=value,
+        source_msg_id="conflict-check",
+        source_session="cli",
+        timestamp=datetime.now(timezone.utc).isoformat()
+    )
+    
+    conflicts = check_conflicts(store, temp_req, get_embedding_fn=get_embedding)
+    
+    if not conflicts:
+        print("✓ No conflicts detected")
+        return 0
+    
+    print(f"⚠️  Found {len(conflicts)} potential conflict(s):")
+    print()
+    
+    for c in conflicts:
+        existing = c["existing"]
+        print(f"  {existing.id} [{existing.domain}]")
+        print(f"    Existing: {existing.value}")
+        print(f"    New:      {value}")
+        print(f"    Reason:   {c['reason']}")
+        print()
+    
+    print("Consider:")
+    print("  1. Supersede the existing requirement if this replaces it")
+    print("  2. Clarify the scope if both should coexist")
+    print("  3. Reject the new requirement if it's invalid")
+    
+    return 2  # Non-zero to indicate conflict
+
+
+def cmd_supersede(args):
+    """Supersede an existing requirement."""
+    store = LoomStore(args.project)
+    
+    print(f"🧵 Loom Supersede — {args.req_id}")
+    print()
+    
+    req = store.get_requirement(args.req_id)
+    if not req:
+        print(f"Requirement {args.req_id} not found")
+        return 1
+    
+    if req.superseded_at:
+        print(f"Already superseded at {req.superseded_at}")
+        return 1
+    
+    store.supersede_requirement(args.req_id)
+    print(f"✓ Superseded: {req.value}")
+    
+    # Show impact
+    from docs import analyze_test_impact
+    from testspec import TestSpecStore
+    spec_store = TestSpecStore(store.data_dir)
+    specs = {s.req_id: s for s in spec_store.list_specs()}
+    affected = analyze_test_impact(store, req, specs)
+    
+    if affected:
+        print()
+        print(f"⚠️  Tests affected ({len(affected)}):")
+        for test_id in affected:
+            print(f"  - {test_id}")
+        print()
+        print("Run `loom sync` to update TEST_SPEC.md")
+    
+    return 0
+
+
+def cmd_test_add(args):
+    """Add or update a test specification."""
+    from testspec import TestSpec, TestSpecStore
+    
+    store = LoomStore(args.project)
+    spec_store = TestSpecStore(store.data_dir)
+    
+    print(f"🧵 Loom Test Add — {args.req_id}")
+    print()
+    
+    # Verify requirement exists
+    req = store.get_requirement(args.req_id)
+    if not req:
+        print(f"Requirement {args.req_id} not found")
+        return 1
+    
+    print(f"Requirement: {req.value}")
+    print()
+    
+    # Get existing spec or create new
+    existing = spec_store.get_spec(args.req_id)
+    
+    spec = TestSpec(
+        req_id=args.req_id,
+        description=args.description or (existing.description if existing else ""),
+        steps=args.steps.split(";") if args.steps else (existing.steps if existing else []),
+        expected=args.expected or (existing.expected if existing else ""),
+        automated=args.automated or (existing.automated if existing else False),
+        test_file=args.test_file or (existing.test_file if existing else None),
+        private=args.private or (existing.private if existing else False),
+    )
+    
+    spec_store.add_spec(spec)
+    print(f"✓ Test spec saved for {args.req_id}")
+    
+    if spec.steps:
+        print(f"  Steps: {len(spec.steps)}")
+    if spec.expected:
+        print(f"  Expected: {spec.expected[:50]}...")
+    if spec.automated:
+        print(f"  Automated: Yes ({spec.test_file})")
+    
+    return 0
+
+
+def cmd_test_verify(args):
+    """Mark a test as verified."""
+    from testspec import TestSpecStore
+    
+    store = LoomStore(args.project)
+    spec_store = TestSpecStore(store.data_dir)
+    
+    print(f"🧵 Loom Test Verify — {args.req_id}")
+    print()
+    
+    if spec_store.mark_verified(args.req_id):
+        print(f"✓ Marked {args.req_id} as verified")
+    else:
+        print(f"No test spec found for {args.req_id}")
+        return 1
+    
+    return 0
+
+
+def cmd_test_list(args):
+    """List all test specifications."""
+    from testspec import TestSpecStore
+    
+    store = LoomStore(args.project)
+    spec_store = TestSpecStore(store.data_dir)
+    
+    print(f"🧵 Loom Test Specs — Project: {args.project}")
+    print()
+    
+    specs = spec_store.list_specs(include_private=not args.public)
+    
+    if not specs:
+        print("No test specs defined yet.")
+        print("Use `loom test add REQ-xxx --description '...'` to add one.")
+        return 0
+    
+    for spec in specs:
+        status = "✅" if spec.last_verified else "⚠️"
+        auto = "🤖" if spec.automated else "👤"
+        private = "🔒" if spec.private else ""
+        
+        print(f"{status} {auto} {spec.req_id} {private}")
+        print(f"   {spec.description}")
+        if spec.last_verified:
+            print(f"   Last verified: {spec.last_verified[:10]}")
+        print()
+    
+    return 0
+
+
+def cmd_init_private(args):
+    """Initialize PRIVATE.md template."""
+    from testspec import create_private_template
+    
+    store = LoomStore(args.project)
+    path = create_private_template(store.data_dir)
+    
+    print(f"🧵 Loom Private — Created {path}")
+    print()
+    print("Edit this file to list requirement IDs that should remain private.")
+    print("Private requirements will be excluded from public documentation.")
+    
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Loom - Requirements traceability")
+    parser.add_argument("--project", "-p", default=None, help="Project name")
+    
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    
+    # extract
+    p_extract = subparsers.add_parser("extract", help="Extract requirements")
+    p_extract.add_argument("--session", help="Session key")
+    p_extract.add_argument("--msg-id", help="Message ID for provenance")
+    p_extract.add_argument("--text", "-t", help="Requirement text")
+    
+    # check
+    p_check = subparsers.add_parser("check", help="Check for drift")
+    p_check.add_argument("file", help="File to check")
+    p_check.add_argument("--lines", help="Line range (e.g., 42-78)")
+    
+    # link
+    p_link = subparsers.add_parser("link", help="Link code to requirements")
+    p_link.add_argument("file", help="File to link")
+    p_link.add_argument("--lines", help="Line range")
+    p_link.add_argument("--req", action="append", help="Requirement ID(s)")
+    
+    # status
+    p_status = subparsers.add_parser("status", help="Show status")
+    
+    # query
+    p_query = subparsers.add_parser("query", help="Search requirements")
+    p_query.add_argument("text", help="Search text")
+    p_query.add_argument("--limit", "-n", type=int, default=5)
+    
+    # list
+    p_list = subparsers.add_parser("list", help="List requirements")
+    p_list.add_argument("--all", "-a", action="store_true", help="Include superseded")
+    
+    # sync
+    p_sync = subparsers.add_parser("sync", help="Generate REQUIREMENTS.md and TEST_SPEC.md")
+    p_sync.add_argument("--output", "-o", help="Output directory (default: current)")
+    p_sync.add_argument("--public", action="store_true", help="Exclude private requirements")
+    
+    # conflicts
+    p_conflicts = subparsers.add_parser("conflicts", help="Check for conflicts")
+    p_conflicts.add_argument("--text", "-t", required=True, help="Requirement to check")
+    
+    # supersede
+    p_supersede = subparsers.add_parser("supersede", help="Supersede a requirement")
+    p_supersede.add_argument("req_id", help="Requirement ID to supersede")
+    
+    # test add
+    p_test_add = subparsers.add_parser("test", help="Add/update test specification")
+    p_test_add.add_argument("req_id", help="Requirement ID")
+    p_test_add.add_argument("--description", "-d", help="Test description")
+    p_test_add.add_argument("--steps", "-s", help="Test steps (semicolon-separated)")
+    p_test_add.add_argument("--expected", "-e", help="Expected outcome")
+    p_test_add.add_argument("--automated", "-a", action="store_true", help="Mark as automated")
+    p_test_add.add_argument("--test-file", help="Path to test file")
+    p_test_add.add_argument("--private", action="store_true", help="Mark test as private")
+    
+    # test verify
+    p_verify = subparsers.add_parser("verify", help="Mark test as verified")
+    p_verify.add_argument("req_id", help="Requirement ID")
+    
+    # test list
+    p_tests = subparsers.add_parser("tests", help="List test specifications")
+    p_tests.add_argument("--public", action="store_true", help="Exclude private tests")
+    
+    # init-private
+    p_private = subparsers.add_parser("init-private", help="Initialize PRIVATE.md template")
+    
+    args = parser.parse_args()
+    
+    if not args.project:
+        args.project = get_project_name()
+    
+    commands = {
+        "extract": cmd_extract,
+        "check": cmd_check,
+        "link": cmd_link,
+        "status": cmd_status,
+        "query": cmd_query,
+        "list": cmd_list,
+        "sync": cmd_sync,
+        "conflicts": cmd_conflicts,
+        "supersede": cmd_supersede,
+        "test": cmd_test_add,
+        "verify": cmd_test_verify,
+        "tests": cmd_test_list,
+        "init-private": cmd_init_private,
+    }
+    
+    return commands[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
