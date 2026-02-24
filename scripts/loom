@@ -229,6 +229,8 @@ def cmd_link(args):
         # Auto-detect via semantic search
         embedding = get_embedding(content)
         results = store.search_requirements(embedding, n=3)
+        # Filter out superseded requirements - only suggest active ones
+        results = [r for r in results if r['requirement'].superseded_at is None]
         print("Detected requirements (confirm with --req):")
         for r in results:
             print(f"  {r['id']}: {r['requirement'].value}")
