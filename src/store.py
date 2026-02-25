@@ -116,14 +116,15 @@ class LoomStore:
     
     def get_current_requirement(self, req_id: str) -> Optional[Requirement]:
         """Get the current (non-superseded) version of a requirement."""
-        # Query for non-superseded version
+        # ChromaDB can't filter on None values, so we get and filter in Python
         result = self.requirements.get(
             ids=[req_id],
-            include=["metadatas"],
-            where={"superseded_at": None}
+            include=["metadatas"]
         )
         if result["ids"]:
-            return Requirement.from_dict(result["metadatas"][0])
+            req = Requirement.from_dict(result["metadatas"][0])
+            if req.superseded_at is None:
+                return req
         return None
     
     def supersede_requirement(self, req_id: str) -> None:

@@ -30,7 +30,7 @@ def temp_store():
 @pytest.fixture
 def sample_embedding():
     """A simple embedding vector for testing."""
-    return [0.1] * 384  # Match nomic-embed-text dimensions
+    return [0.1] * 768  # Match nomic-embed-text dimensions (768d)
 
 
 class TestRequirements:

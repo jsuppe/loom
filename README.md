@@ -207,6 +207,7 @@ For teams, run sync after any requirement changes to keep the repo current.
 | `loom verify <id>` | Mark test as verified |
 | `loom tests` | List test specifications |
 | `loom status` | Show project overview |
+| `loom doctor` | Run health checks |
 | `loom init-private` | Create PRIVATE.md template |
 
 ## Requirement Format
