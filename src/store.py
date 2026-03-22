@@ -38,9 +38,9 @@ class Requirement:
     
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        # Handle None lists
-        if d.get('acceptance_criteria') is None:
-            d['acceptance_criteria'] = []
+        # Handle None/empty lists - ChromaDB rejects empty lists in metadata
+        if not d.get('acceptance_criteria'):
+            d['acceptance_criteria'] = ["TBD"]
         return d
     
     @classmethod
@@ -78,8 +78,9 @@ class Specification:
     
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        if d.get('acceptance_criteria') is None:
-            d['acceptance_criteria'] = []
+        # Handle None/empty lists - ChromaDB rejects empty lists in metadata
+        if not d.get('acceptance_criteria'):
+            d['acceptance_criteria'] = ["TBD"]
         return d
     
     @classmethod
