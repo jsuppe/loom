@@ -1578,6 +1578,153 @@ def cmd_pattern_apply(args):
     return 0
 
 
+# ==================== Coverage ====================
+
+def cmd_coverage(args):
+    """Report requirements missing implementations or test specs."""
+    from testspec import TestSpecStore
+
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+
+    reqs = store.list_requirements(include_superseded=False)
+    spec_store = TestSpecStore(store.data_dir)
+
+    unimplemented = []
+    untested = []
+    fully_covered = []
+
+    for req in reqs:
+        impls = store.get_implementations_for_requirement(req.id)
+        spec = spec_store.get_spec(req.id)
+        has_impl = len(impls) > 0
+        has_test = spec is not None
+
+        entry = {
+            "id": req.id,
+            "domain": req.domain,
+            "value": req.value,
+            "status": req.status,
+            "has_implementation": has_impl,
+            "has_test_spec": has_test,
+            "implementation_files": [impl.file for impl in impls],
+        }
+
+        if not has_impl:
+            unimplemented.append(entry)
+        if not has_test:
+            untested.append(entry)
+        if has_impl and has_test:
+            fully_covered.append(entry)
+
+    # Scan project source files for potential matches if --scan
+    scan_suggestions = {}
+    if getattr(args, 'scan', False) and reqs:
+        scan_suggestions = _scan_project_for_coverage(store, reqs, args)
+
+    total = len(reqs)
+    impl_pct = ((total - len(unimplemented)) / total * 100) if total else 100
+    test_pct = ((total - len(untested)) / total * 100) if total else 100
+    full_pct = (len(fully_covered) / total * 100) if total else 100
+
+    if use_json:
+        output = {
+            "project": args.project,
+            "total_requirements": total,
+            "implementation_coverage": round(impl_pct, 1),
+            "test_coverage": round(test_pct, 1),
+            "full_coverage": round(full_pct, 1),
+            "unimplemented": unimplemented,
+            "untested": untested,
+            "fully_covered": [e["id"] for e in fully_covered],
+        }
+        if scan_suggestions:
+            output["scan_suggestions"] = scan_suggestions
+        print(json.dumps(output, indent=2))
+    else:
+        print(f"🧵 Loom Coverage — Project: {args.project}")
+        print()
+        print(f"Total active requirements: {total}")
+        print(f"Implementation coverage:   {total - len(unimplemented)}/{total} ({impl_pct:.0f}%)")
+        print(f"Test spec coverage:        {total - len(untested)}/{total} ({test_pct:.0f}%)")
+        print(f"Fully covered (both):      {len(fully_covered)}/{total} ({full_pct:.0f}%)")
+
+        if unimplemented:
+            print()
+            print(f"--- Unimplemented ({len(unimplemented)}) ---")
+            for e in unimplemented:
+                print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}")
+                if e['id'] in scan_suggestions:
+                    for s in scan_suggestions[e['id']]:
+                        print(f"    ? possible match: {s['file']} (similarity {s['similarity']:.0%})")
+
+        if untested:
+            print()
+            print(f"--- No Test Spec ({len(untested)}) ---")
+            for e in untested:
+                files = ", ".join(e['implementation_files'][:3]) if e['implementation_files'] else "no code linked"
+                print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}")
+                print(f"    code: {files}")
+
+        if not unimplemented and not untested:
+            print()
+            print("All requirements have implementations and test specs.")
+
+    return 0
+
+
+def _scan_project_for_coverage(store, reqs, args):
+    """Scan project source files to find likely implementations for unlinked requirements."""
+    import glob as glob_mod
+
+    scan_dir = getattr(args, 'scan_dir', None) or '.'
+    suggestions = {}
+
+    # Find source files (skip tests, docs, venvs)
+    patterns = ['**/*.py', '**/*.js', '**/*.ts', '**/*.dart', '**/*.go', '**/*.rs', '**/*.java']
+    skip_dirs = {'.venv', 'venv', 'node_modules', '__pycache__', '.git', 'docs', '.pytest_cache'}
+
+    source_files = []
+    for pattern in patterns:
+        for path in glob_mod.glob(os.path.join(scan_dir, pattern), recursive=True):
+            if not any(skip in path.split(os.sep) for skip in skip_dirs):
+                source_files.append(path)
+
+    if not source_files:
+        return suggestions
+
+    # Embed each source file's content (or first 500 chars) and compare to requirements
+    for req in reqs:
+        impls = store.get_implementations_for_requirement(req.id)
+        if impls:
+            continue  # Already has implementations
+
+        req_embedding = get_embedding(req.value)
+        matches = []
+
+        for fpath in source_files:
+            try:
+                content = Path(fpath).read_text(errors='ignore')[:1000]
+                if len(content.strip()) < 20:
+                    continue
+                file_embedding = get_embedding(content)
+
+                # Cosine-like similarity from L2 distance
+                dist = sum((a - b) ** 2 for a, b in zip(req_embedding, file_embedding)) ** 0.5
+                similarity = max(0, 1 - (dist / 2))
+
+                if similarity > 0.6:
+                    matches.append({"file": fpath, "similarity": round(similarity, 3)})
+            except Exception:
+                continue
+
+        if matches:
+            matches.sort(key=lambda m: m['similarity'], reverse=True)
+            suggestions[req.id] = matches[:3]
+
+    return suggestions
+
+
 # ==================== Traceability Chain ====================
 
 def cmd_chain(args):
@@ -1821,6 +1968,12 @@ def main():
     p_pattern_apply.add_argument("pattern_id", help="Pattern ID")
     p_pattern_apply.add_argument("reqs", nargs="+", help="Requirement IDs to apply to")
     
+    # coverage (gap analysis)
+    p_coverage = subparsers.add_parser("coverage", help="Show requirements missing implementations or tests")
+    p_coverage.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    p_coverage.add_argument("--scan", action="store_true", help="Scan project files for likely implementations")
+    p_coverage.add_argument("--scan-dir", help="Directory to scan (default: current)")
+
     # chain (full traceability chain)
     p_chain = subparsers.add_parser("chain", help="Show full traceability chain for a requirement")
     p_chain.add_argument("req_id", help="Requirement ID")
@@ -1857,6 +2010,7 @@ def main():
         "pattern": cmd_pattern_add,
         "patterns": cmd_pattern_list,
         "pattern-apply": cmd_pattern_apply,
+        "coverage": cmd_coverage,
         "chain": cmd_chain,
     }
     
