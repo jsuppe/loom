@@ -10,8 +10,49 @@ from store import LoomStore, Requirement
 from testspec import TestSpec, TestSpecStore
 
 
+def _format_spec_block(store: LoomStore, req_id: str, superseded_req_ids: Set[str]) -> List[str]:
+    """Format the Specifications section under a requirement, with each spec's implementations."""
+    specs = store.get_specifications_for_requirement(req_id)
+    active_specs = [s for s in specs if not s.superseded_at]
+
+    lines = []
+    if active_specs:
+        lines.append(f"- **Specifications ({len(active_specs)}):**")
+        for spec in active_specs:
+            lines.append(f"  - `{spec.id}` [{spec.status}] {spec.description[:80]}")
+            spec_impls = store.get_implementations_for_specification(spec.id)
+            if spec_impls:
+                for impl in spec_impls:
+                    lines.append(f"    - `{impl.file}` (lines {impl.lines})")
+            else:
+                lines.append(f"    - *No implementation linked*")
+    else:
+        lines.append("- **Specifications:** *None yet*")
+
+    # Show direct (non-spec) implementation links as a fallback/legacy section
+    direct_impls = [
+        i for i in store.get_implementations_for_requirement(req_id)
+        if not (i.satisfies_specs or [])
+    ]
+    if direct_impls:
+        lines.append("- **Direct implementation links (consider adding specs):**")
+        for impl in direct_impls:
+            loc = f"`{impl.file}` (lines {impl.lines})"
+            drifted = any(
+                s["req_id"] in superseded_req_ids
+                for s in impl.satisfies
+                if s["req_id"] == req_id
+            )
+            if drifted:
+                lines.append(f"  - {loc} — **drift detected**")
+            else:
+                lines.append(f"  - {loc}")
+
+    return lines
+
+
 def _format_impl_links(store: LoomStore, req_id: str, superseded_req_ids: Set[str]) -> List[str]:
-    """Format implementation links for a requirement, with drift warnings."""
+    """Legacy flat format (kept for tests). Prefer _format_spec_block."""
     impls = store.get_implementations_for_requirement(req_id)
     if not impls:
         return ["- **Implementations:** *None yet*"]
@@ -19,7 +60,6 @@ def _format_impl_links(store: LoomStore, req_id: str, superseded_req_ids: Set[st
     lines = ["- **Implementations:**"]
     for impl in impls:
         loc = f"`{impl.file}` (lines {impl.lines})"
-        # Check if any of the requirement links are to superseded requirements
         drifted = any(
             s["req_id"] in superseded_req_ids
             for s in impl.satisfies
@@ -55,10 +95,12 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
     for req in reqs:
         by_domain.setdefault(req.domain, []).append(req)
 
-    # Pre-fetch all implementation data for the traceability matrix
+    # Pre-fetch all implementation + spec data for the traceability matrix
     req_impls: Dict[str, list] = {}
+    req_specs: Dict[str, list] = {}
     for req in reqs:
         req_impls[req.id] = store.get_implementations_for_requirement(req.id)
+        req_specs[req.id] = [s for s in store.get_specifications_for_requirement(req.id) if not s.superseded_at]
 
     lines = [
         "# Requirements Document",
@@ -90,7 +132,7 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
             lines.append(f"- **Status:** {req.status}")
             if getattr(req, 'rationale', None):
                 lines.append(f"- **Rationale:** {req.rationale}")
-            lines.extend(_format_impl_links(store, req.id, superseded_ids))
+            lines.extend(_format_spec_block(store, req.id, superseded_ids))
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -105,16 +147,30 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
             lines.append(f"- ~~{req.id}: {req.value}~~ (superseded {req.superseded_at[:10]})")
         lines.append("")
 
-    # Traceability matrix
+    # Traceability matrix — three layers
     lines.append("## Traceability Matrix")
     lines.append("")
-    lines.append("| Requirement | Domain | Status | Files | Test Spec |")
+    lines.append("*Requirements → Specifications → Implementations*")
+    lines.append("")
+    lines.append("| Requirement | Domain | Specs | Files | Test Spec |")
     lines.append("|---|---|---|---|---|")
     for req in sorted(reqs, key=lambda r: r.domain + r.timestamp):
+        specs = req_specs.get(req.id, [])
         impls = req_impls.get(req.id, [])
-        files = ", ".join(f"`{impl.file}`" for impl in impls) if impls else "—"
+
+        if specs:
+            specs_str = ", ".join(f"`{s.id}`" for s in specs)
+        else:
+            specs_str = "—"
+
+        # Files grouped via specs when possible
+        if impls:
+            files = ", ".join(f"`{impl.file}`" for impl in impls)
+        else:
+            files = "—"
+
         test = req.test_spec_id if req.test_spec_id else "—"
-        lines.append(f"| {req.id} | {req.domain} | {req.status} | {files} | {test} |")
+        lines.append(f"| {req.id} | {req.domain} | {specs_str} | {files} | {test} |")
     lines.append("")
 
     output_path = output_dir / "REQUIREMENTS.md"

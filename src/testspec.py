@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict, field
 
 @dataclass
 class TestSpec:
-    """Test specification for a requirement."""
+    """Test specification for a requirement or specification."""
     req_id: str
     description: str
     steps: List[str] = field(default_factory=list)
@@ -22,12 +22,14 @@ class TestSpec:
     test_file: Optional[str] = None
     last_verified: Optional[str] = None
     private: bool = False
-    
+    spec_ids: List[str] = field(default_factory=list)  # Specifications this test verifies
+
     def to_dict(self) -> Dict:
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, d: Dict) -> "TestSpec":
+        d.setdefault('spec_ids', [])
         return cls(**d)
 
 
@@ -103,6 +105,10 @@ class TestSpecStore:
     def get_private_ids(self) -> set:
         """Get all private requirement IDs."""
         return self._private_ids.copy()
+
+    def get_specs_for_spec_id(self, spec_id: str) -> List[TestSpec]:
+        """Get all test specs that verify a given specification."""
+        return [s for s in self._specs.values() if spec_id in (s.spec_ids or [])]
 
 
 def create_private_template(project_dir: Path) -> Path:

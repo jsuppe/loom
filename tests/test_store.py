@@ -355,7 +355,8 @@ class TestDocGeneration:
             content = path.read_text()
 
             assert "## Traceability Matrix" in content
-            assert "| REQ-001 | behavior | pending | `src/projects.py` |" in content
+            assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
+            assert "| REQ-001 | behavior | — | `src/projects.py` | — |" in content
 
     def test_test_spec_doc_shows_covered_code(self, temp_store, sample_embedding):
         """Generated TEST_SPEC.md shows linked code under test specs."""
@@ -434,3 +435,51 @@ class TestDocGeneration:
 
             assert "**Uncovered code:**" in content
             assert "`src/projects.py` (lines 10-25)" in content
+
+    def test_requirements_doc_shows_spec_tier(self, temp_store, sample_embedding):
+        """REQUIREMENTS.md shows specs under each requirement, with impls nested under specs."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from docs import generate_requirements_doc
+        from store import Specification
+
+        req = Requirement(
+            id="REQ-001",
+            domain="behavior",
+            value="Users can create projects",
+            source_msg_id="msg-1",
+            source_session="test-session",
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
+        temp_store.add_requirement(req, sample_embedding)
+
+        spec = Specification(
+            id="SPEC-001",
+            parent_req="REQ-001",
+            description="Project creation endpoint accepts POST /projects with name field",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            status="approved"
+        )
+        temp_store.add_specification(spec, sample_embedding)
+
+        impl = Implementation(
+            id="IMPL-001",
+            file="src/projects.py",
+            lines="10-25",
+            content="def create_project(name): pass",
+            content_hash="abc123",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            satisfies=[{"req_id": "REQ-001", "req_version": "v1"}],
+            satisfies_specs=["SPEC-001"]
+        )
+        temp_store.add_implementation(impl, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            path = generate_requirements_doc(temp_store, Path(out_dir))
+            content = path.read_text()
+
+            assert "**Specifications (1):**" in content
+            assert "`SPEC-001`" in content
+            assert "`src/projects.py` (lines 10-25)" in content
+            # Traceability matrix shows spec ID
+            assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py` | — |" in content

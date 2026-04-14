@@ -285,51 +285,80 @@ def cmd_check(args):
 
 
 def cmd_link(args):
-    """Link code to requirements."""
+    """Link code to requirements and/or specifications."""
     import hashlib
     store = LoomStore(args.project)
-    
+
     print(f"🧵 Loom Link — {args.file}")
     print()
-    
+
     if not Path(args.file).exists():
         print(f"File not found: {args.file}")
         return 1
-    
+
     content = Path(args.file).read_text()
-    
+
     if args.lines:
         start, end = map(int, args.lines.split("-"))
         lines_content = content.split('\n')
         content = '\n'.join(lines_content[start-1:end])
-    
+
     impl_id = generate_impl_id(args.file, args.lines or "all")
     content_hash = generate_content_hash(content)
-    
-    # Build satisfies list
+
+    # Build satisfies list (requirements) and satisfies_specs (specifications)
     satisfies = []
-    if args.req:
-        for req_id in args.req:
-            req = store.get_requirement(req_id)
-            if req:
+    satisfies_specs = []
+
+    spec_ids = getattr(args, 'spec', None) or []
+    req_ids = getattr(args, 'req', None) or []
+
+    # Resolve spec IDs first
+    for spec_id in spec_ids:
+        spec = store.get_specification(spec_id)
+        if spec:
+            satisfies_specs.append(spec_id)
+            # Auto-link to parent requirement too
+            if not any(s["req_id"] == spec.parent_req for s in satisfies):
+                parent_req = store.get_requirement(spec.parent_req)
+                if parent_req:
+                    satisfies.append({"req_id": spec.parent_req, "req_version": parent_req.timestamp})
+        else:
+            print(f"Warning: spec {spec_id} not found")
+
+    # Handle --req
+    for req_id in req_ids:
+        req = store.get_requirement(req_id)
+        if req:
+            # Warn if this requirement has specs but user is linking directly
+            existing_specs = store.get_specifications_for_requirement(req_id)
+            active_specs = [s for s in existing_specs if not s.superseded_at]
+            if active_specs and not spec_ids:
+                print(f"⚠️  {req_id} has {len(active_specs)} active specification(s).")
+                print(f"   Consider linking to a spec instead of the requirement directly:")
+                for s in active_specs:
+                    print(f"     {s.id}: {s.description[:60]}")
+                print(f"   Continuing with direct link to {req_id}...")
+                print()
+            if not any(s["req_id"] == req_id for s in satisfies):
                 satisfies.append({"req_id": req_id, "req_version": req.timestamp})
-            else:
-                print(f"Warning: {req_id} not found")
-    else:
-        # Auto-detect via semantic search
+        else:
+            print(f"Warning: {req_id} not found")
+
+    # Auto-detect if nothing specified
+    if not satisfies and not satisfies_specs:
         embedding = get_embedding(content)
         results = store.search_requirements(embedding, n=3)
-        # Filter out superseded requirements - only suggest active ones
         results = [r for r in results if r['requirement'].superseded_at is None]
-        print("Detected requirements (confirm with --req):")
+        print("Detected requirements (confirm with --req or --spec):")
         for r in results:
             print(f"  {r['id']}: {r['requirement'].value}")
             satisfies.append({"req_id": r['id'], "req_version": r['requirement'].timestamp})
-    
-    if not satisfies:
-        print("No requirements to link.")
+
+    if not satisfies and not satisfies_specs:
+        print("No requirements or specs to link.")
         return 1
-    
+
     impl = Implementation(
         id=impl_id,
         file=args.file,
@@ -337,14 +366,18 @@ def cmd_link(args):
         content=content,
         content_hash=content_hash,
         timestamp=datetime.now(timezone.utc).isoformat(),
-        satisfies=satisfies
+        satisfies=satisfies,
+        satisfies_specs=satisfies_specs or None,
     )
-    
+
     embedding = get_embedding(content)
     store.add_implementation(impl, embedding)
-    
+
     print()
-    print(f"✓ Linked {args.file} to {len(satisfies)} requirement(s)")
+    if satisfies_specs:
+        print(f"✓ Linked {args.file} to {len(satisfies_specs)} spec(s) and {len(satisfies)} requirement(s)")
+    else:
+        print(f"✓ Linked {args.file} to {len(satisfies)} requirement(s)")
     return 0
 
 
@@ -1581,7 +1614,7 @@ def cmd_pattern_apply(args):
 # ==================== Coverage ====================
 
 def cmd_coverage(args):
-    """Report requirements missing implementations or test specs."""
+    """Three-layer coverage analysis: Requirements → Specs → Implementations/Tests."""
     from testspec import TestSpecStore
 
     store = LoomStore(args.project)
@@ -1589,92 +1622,148 @@ def cmd_coverage(args):
 
     reqs = store.list_requirements(include_superseded=False)
     spec_store = TestSpecStore(store.data_dir)
+    all_specs = store.list_specifications()
 
-    unimplemented = []
-    untested = []
-    fully_covered = []
-
+    # ----- Layer 1: Requirements → Specifications -----
+    reqs_without_specs = []
+    reqs_with_specs = []
     for req in reqs:
-        impls = store.get_implementations_for_requirement(req.id)
-        spec = spec_store.get_spec(req.id)
-        has_impl = len(impls) > 0
-        has_test = spec is not None
-
+        specs = store.get_specifications_for_requirement(req.id)
         entry = {
             "id": req.id,
             "domain": req.domain,
             "value": req.value,
             "status": req.status,
-            "has_implementation": has_impl,
-            "has_test_spec": has_test,
-            "implementation_files": [impl.file for impl in impls],
+            "spec_ids": [s.id for s in specs],
+            "direct_implementations": [
+                {"file": i.file, "lines": i.lines}
+                for i in store.get_implementations_for_requirement(req.id)
+                if not (i.satisfies_specs or [])
+            ],
         }
+        if specs:
+            reqs_with_specs.append(entry)
+        else:
+            reqs_without_specs.append(entry)
 
-        if not has_impl:
-            unimplemented.append(entry)
-        if not has_test:
-            untested.append(entry)
-        if has_impl and has_test:
-            fully_covered.append(entry)
+    # ----- Layer 2: Specifications → Implementations -----
+    specs_without_impls = []
+    specs_with_impls = []
+    # ----- Layer 3: Specifications → Tests -----
+    specs_without_tests = []
+    specs_with_tests = []
 
-    # Scan project source files for potential matches if --scan
+    for spec in all_specs:
+        if spec.superseded_at:
+            continue
+        impls = store.get_implementations_for_specification(spec.id)
+        tests = spec_store.get_specs_for_spec_id(spec.id)
+
+        spec_entry = {
+            "id": spec.id,
+            "parent_req": spec.parent_req,
+            "description": spec.description[:80],
+            "status": spec.status,
+            "implementation_files": [i.file for i in impls],
+            "test_ids": [t.req_id for t in tests],  # TestSpecs are indexed by req_id
+        }
+        if impls:
+            specs_with_impls.append(spec_entry)
+        else:
+            specs_without_impls.append(spec_entry)
+        if tests:
+            specs_with_tests.append(spec_entry)
+        else:
+            specs_without_tests.append(spec_entry)
+
+    # ----- Aggregates -----
+    total_reqs = len(reqs)
+    active_specs = [s for s in all_specs if not s.superseded_at]
+    total_specs = len(active_specs)
+
+    spec_cov_pct = (len(reqs_with_specs) / total_reqs * 100) if total_reqs else 100
+    impl_cov_pct = (len(specs_with_impls) / total_specs * 100) if total_specs else 0
+    test_cov_pct = (len(specs_with_tests) / total_specs * 100) if total_specs else 0
+
+    # Optional: scan for likely implementations
     scan_suggestions = {}
-    if getattr(args, 'scan', False) and reqs:
-        scan_suggestions = _scan_project_for_coverage(store, reqs, args)
-
-    total = len(reqs)
-    impl_pct = ((total - len(unimplemented)) / total * 100) if total else 100
-    test_pct = ((total - len(untested)) / total * 100) if total else 100
-    full_pct = (len(fully_covered) / total * 100) if total else 100
+    if getattr(args, 'scan', False) and specs_without_impls:
+        # Scan for specs, not requirements
+        scan_suggestions = _scan_project_for_specs(store, active_specs, specs_without_impls, args)
 
     if use_json:
         output = {
             "project": args.project,
-            "total_requirements": total,
-            "implementation_coverage": round(impl_pct, 1),
-            "test_coverage": round(test_pct, 1),
-            "full_coverage": round(full_pct, 1),
-            "unimplemented": unimplemented,
-            "untested": untested,
-            "fully_covered": [e["id"] for e in fully_covered],
+            "layer_1_req_to_spec": {
+                "total_requirements": total_reqs,
+                "coverage_pct": round(spec_cov_pct, 1),
+                "with_specs": len(reqs_with_specs),
+                "without_specs": reqs_without_specs,
+            },
+            "layer_2_spec_to_impl": {
+                "total_specs": total_specs,
+                "coverage_pct": round(impl_cov_pct, 1),
+                "with_impls": len(specs_with_impls),
+                "without_impls": specs_without_impls,
+            },
+            "layer_3_spec_to_test": {
+                "total_specs": total_specs,
+                "coverage_pct": round(test_cov_pct, 1),
+                "with_tests": len(specs_with_tests),
+                "without_tests": specs_without_tests,
+            },
         }
         if scan_suggestions:
             output["scan_suggestions"] = scan_suggestions
         print(json.dumps(output, indent=2))
-    else:
-        print(f"🧵 Loom Coverage — Project: {args.project}")
+        return 0
+
+    # Human-readable
+    print(f"🧵 Loom Coverage — Project: {args.project}")
+    print()
+    print("Three-layer traceability: Requirements → Specs → Implementations/Tests")
+    print()
+    print(f"Layer 1 — Requirements have specs:    {len(reqs_with_specs)}/{total_reqs} ({spec_cov_pct:.0f}%)")
+    print(f"Layer 2 — Specs have implementations: {len(specs_with_impls)}/{total_specs} ({impl_cov_pct:.0f}%)")
+    print(f"Layer 3 — Specs have tests:           {len(specs_with_tests)}/{total_specs} ({test_cov_pct:.0f}%)")
+
+    if reqs_without_specs:
         print()
-        print(f"Total active requirements: {total}")
-        print(f"Implementation coverage:   {total - len(unimplemented)}/{total} ({impl_pct:.0f}%)")
-        print(f"Test spec coverage:        {total - len(untested)}/{total} ({test_pct:.0f}%)")
-        print(f"Fully covered (both):      {len(fully_covered)}/{total} ({full_pct:.0f}%)")
+        print(f"--- Requirements Without Specs ({len(reqs_without_specs)}) ---")
+        print("(These requirements need a specification describing HOW to implement them.)")
+        for e in reqs_without_specs:
+            direct = f"  [{len(e['direct_implementations'])} direct impl link(s)]" if e['direct_implementations'] else ""
+            print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}{direct}")
+            print(f"    → Run: loom spec {e['id']} -d \"specification text\"")
 
-        if unimplemented:
-            print()
-            print(f"--- Unimplemented ({len(unimplemented)}) ---")
-            for e in unimplemented:
-                print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}")
-                if e['id'] in scan_suggestions:
-                    for s in scan_suggestions[e['id']]:
-                        print(f"    ? possible match: {s['file']} (similarity {s['similarity']:.0%})")
+    if specs_without_impls:
+        print()
+        print(f"--- Specs Without Implementations ({len(specs_without_impls)}) ---")
+        for e in specs_without_impls:
+            print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
+            if e['id'] in scan_suggestions:
+                for s in scan_suggestions[e['id']]:
+                    print(f"    ? possible match: {s['file']} (similarity {s['similarity']:.0%})")
+            else:
+                print(f"    → Run: loom spec-link {e['id']} <file>")
 
-        if untested:
-            print()
-            print(f"--- No Test Spec ({len(untested)}) ---")
-            for e in untested:
-                files = ", ".join(e['implementation_files'][:3]) if e['implementation_files'] else "no code linked"
-                print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}")
-                print(f"    code: {files}")
+    if specs_without_tests:
+        print()
+        print(f"--- Specs Without Tests ({len(specs_without_tests)}) ---")
+        for e in specs_without_tests:
+            files = ", ".join(e['implementation_files'][:3]) if e['implementation_files'] else "no code linked"
+            print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
+            print(f"    code: {files}")
 
-        if not unimplemented and not untested:
-            print()
-            print("All requirements have implementations and test specs.")
+    if not reqs_without_specs and not specs_without_impls and not specs_without_tests:
+        print()
+        print("All requirements have specs, and all specs have implementations and tests.")
 
     return 0
 
 
-def _scan_project_for_coverage(store, reqs, args):
-    """Scan project source files to find likely implementations for unlinked requirements."""
+def _scan_project_for_specs(store, all_specs, specs_without_impls, args):
+    """Scan project source files to find likely implementations for unlinked specifications."""
     import glob as glob_mod
 
     scan_dir = getattr(args, 'scan_dir', None) or '.'
@@ -1693,13 +1782,12 @@ def _scan_project_for_coverage(store, reqs, args):
     if not source_files:
         return suggestions
 
-    # Embed each source file's content (or first 500 chars) and compare to requirements
-    for req in reqs:
-        impls = store.get_implementations_for_requirement(req.id)
-        if impls:
-            continue  # Already has implementations
+    # Only scan specs that have no impls
+    unlinked_spec_ids = {s['id'] for s in specs_without_impls}
+    specs_to_scan = [s for s in all_specs if s.id in unlinked_spec_ids]
 
-        req_embedding = get_embedding(req.value)
+    for spec in specs_to_scan:
+        spec_embedding = get_embedding(spec.description)
         matches = []
 
         for fpath in source_files:
@@ -1709,8 +1797,7 @@ def _scan_project_for_coverage(store, reqs, args):
                     continue
                 file_embedding = get_embedding(content)
 
-                # Cosine-like similarity from L2 distance
-                dist = sum((a - b) ** 2 for a, b in zip(req_embedding, file_embedding)) ** 0.5
+                dist = sum((a - b) ** 2 for a, b in zip(spec_embedding, file_embedding)) ** 0.5
                 similarity = max(0, 1 - (dist / 2))
 
                 if similarity > 0.6:
@@ -1720,7 +1807,7 @@ def _scan_project_for_coverage(store, reqs, args):
 
         if matches:
             matches.sort(key=lambda m: m['similarity'], reverse=True)
-            suggestions[req.id] = matches[:3]
+            suggestions[spec.id] = matches[:3]
 
     return suggestions
 
@@ -1844,10 +1931,11 @@ def main():
     p_check.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # link
-    p_link = subparsers.add_parser("link", help="Link code to requirements")
+    p_link = subparsers.add_parser("link", help="Link code to requirements or specifications")
     p_link.add_argument("file", help="File to link")
     p_link.add_argument("--lines", help="Line range")
-    p_link.add_argument("--req", action="append", help="Requirement ID(s)")
+    p_link.add_argument("--req", action="append", help="Requirement ID(s) — direct link (use sparingly; prefer --spec)")
+    p_link.add_argument("--spec", action="append", help="Specification ID(s) — preferred link target")
     
     # status
     p_status = subparsers.add_parser("status", help="Show status")
