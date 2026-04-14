@@ -29,8 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit:*)",
-            "command": "LOOM_DIR=$(git rev-parse --show-toplevel 2>/dev/null) && PROJECT=$(basename \"$LOOM_DIR\") && CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -v '^docs/' | head -1) && if [ -n \"$CHANGED\" ]; then python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" sync --output \"$LOOM_DIR/docs\" >/dev/null 2>&1 && echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"Loom: REQUIREMENTS.md and TEST_SPEC.md regenerated in docs/\\\"}}\"; fi",
+            "command": "CMD=$(jq -r '.tool_input.command // \"\"'); echo \"$CMD\" | grep -q 'git commit' || exit 0; LOOM_DIR=$(git rev-parse --show-toplevel 2>/dev/null) && PROJECT=$(basename \"$LOOM_DIR\") && CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -v '^docs/' | head -1) && if [ -n \"$CHANGED\" ]; then python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" sync --output \"$LOOM_DIR/docs\" >/dev/null 2>&1 && echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"Loom: REQUIREMENTS.md and TEST_SPEC.md regenerated in docs/\\\"}}\"; fi",
             "timeout": 30,
             "statusMessage": "Syncing Loom documentation..."
           }
