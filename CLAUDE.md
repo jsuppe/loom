@@ -39,6 +39,7 @@ loom/
 - **`src/docs.py`** — Functions that render the store into Markdown (`generate_requirements_doc`, `generate_test_spec_doc`) and compare embeddings (`check_conflicts`, `analyze_test_impact`). Includes implementation links and a traceability matrix in generated docs. Honors a `PRIVATE.md` allow/deny list and `public_mode`.
 - **`src/testspec.py`** — JSON-backed store for test specs (separate from ChromaDB). Data lives at `~/.openclaw/loom/<project>/.loom-specs.json`.
 - **`src/embedding.py`** — Ollama embedding wrapper with retries + process-local LRU cache (max 500). Shared by the CLI and (eventually) the MCP server; do not duplicate this logic anywhere else.
+- **`src/services.py`** — Shared logic between the CLI (`scripts/loom`) and MCP server. Each function returns plain, JSON-serializable data — no printing, no `sys.exit`, no argparse. The CLI's `cmd_*` functions call these and add pretty printing + exit codes. Grows as `cmd_*` are refactored; currently covers `status`, `query`, `list_requirements`.
 - **`scripts/loom`** — Argparse CLI. Each subcommand is a `cmd_*` function. Inserts `src/` on `sys.path` and imports `store` / `embedding` directly (not as a package).
 
 ## CLI Commands (reference)

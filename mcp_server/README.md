@@ -13,12 +13,20 @@ Before filling in the handlers, two things should be factored out of
 
 1. ~~**`get_embedding()`** → `src/embedding.py`~~ — **DONE.** The MCP
    server now imports from `embedding` directly.
-2. **`cmd_*` function bodies** → shared callables in `src/`. The CLI's
-   `cmd_status`, `cmd_trace`, `cmd_chain`, `cmd_coverage`, `cmd_doctor` all
-   mix argparse handling with real logic. Split them so the MCP handlers
-   can call the same functions without re-parsing args.
+2. **`cmd_*` function bodies** → `src/services.py`. **In progress.** The
+   CLI's `cmd_*` functions mix argparse handling with real logic. We're
+   splitting them so MCP handlers can call shared functions without
+   re-parsing args or rendering strings.
 
-Once those land, each MCP handler becomes a 2-3 line wrapper.
+   **Done:** `status`, `query`, `list_requirements` (the three simplest,
+   read-only commands). `cmd_status`/`cmd_query`/`cmd_list` in `scripts/loom`
+   are now thin wrappers over `services.py`.
+
+   **Remaining:** `trace`, `chain`, `coverage`, `doctor`, `conflicts`,
+   `extract`, `link`, `check`, `sync`, `supersede`, plus spec/pattern
+   commands. Landing in groups.
+
+Each MCP handler should collapse to 2-3 lines once its service exists.
 
 ## Installing
 

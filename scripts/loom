@@ -32,6 +32,7 @@ sys.path.insert(0, str(SKILL_DIR / "src"))
 
 from store import LoomStore, Requirement, Implementation, Specification, Pattern, generate_impl_id, generate_content_hash
 from embedding import get_embedding  # noqa: F401 — re-exported for callers that reach into scripts/loom
+import services
 
 
 def get_project_name():
@@ -299,53 +300,28 @@ def cmd_link(args):
 def cmd_status(args):
     """Show requirements status."""
     store = LoomStore(args.project)
-    stats = store.stats()
-
-    # Check for drift
-    all_reqs = store.list_requirements(include_superseded=True)
-    superseded = [r for r in all_reqs if r.superseded_at]
-    active = [r for r in all_reqs if not r.superseded_at]
-
-    drift_items = []
-    for req in superseded:
-        impls = store.get_implementations_for_requirement(req.id)
-        for impl in impls:
-            drift_items.append({
-                "file": impl.file,
-                "lines": impl.lines,
-                "req_id": req.id,
-                "req_value": req.value,
-                "superseded_at": req.superseded_at
-            })
+    data = services.status(store)
 
     if getattr(args, 'json', False):
-        print(json.dumps({
-            "project": args.project,
-            "requirements": stats['requirements'],
-            "active": len(active),
-            "superseded": len(superseded),
-            "implementations": stats['implementations'],
-            "chat_messages": stats['chat_messages'],
-            "drift_count": len(drift_items),
-            "drift": drift_items
-        }, indent=2))
-    else:
-        print(f"🧵 Loom Status — Project: {args.project}")
-        print()
-        print(f"Requirements: {stats['requirements']}")
-        print(f"Implementations: {stats['implementations']}")
-        print(f"Chat messages: {stats['chat_messages']}")
-        print()
+        print(json.dumps(data, indent=2))
+        return 0
 
-        if superseded:
-            print(f"Superseded requirements: {len(superseded)}")
-            for d in drift_items:
-                print(f"  ⚠️ {d['file']} → {d['req_id']} (superseded)")
-            if drift_items:
-                print()
-                print(f"⚠️  {len(drift_items)} implementation(s) need review")
-        else:
-            print("No drift detected ✓")
+    print(f"🧵 Loom Status — Project: {data['project']}")
+    print()
+    print(f"Requirements: {data['requirements']}")
+    print(f"Implementations: {data['implementations']}")
+    print(f"Chat messages: {data['chat_messages']}")
+    print()
+
+    if data['superseded']:
+        print(f"Superseded requirements: {data['superseded']}")
+        for d in data['drift']:
+            print(f"  ⚠️ {d['file']} → {d['req_id']} (superseded)")
+        if data['drift']:
+            print()
+            print(f"⚠️  {data['drift_count']} implementation(s) need review")
+    else:
+        print("No drift detected ✓")
 
     return 0
 
@@ -353,25 +329,10 @@ def cmd_status(args):
 def cmd_query(args):
     """Search requirements semantically."""
     store = LoomStore(args.project)
-
-    embedding = get_embedding(args.text)
-    results = store.search_requirements(embedding, n=args.limit or 5)
+    results = services.query(store, args.text, limit=args.limit or 5)
 
     if getattr(args, 'json', False):
-        output = []
-        for r in results:
-            req = r['requirement']
-            output.append({
-                "id": req.id,
-                "domain": req.domain,
-                "value": req.value,
-                "status": req.status,
-                "superseded": req.superseded_at is not None,
-                "source": req.source_session,
-                "timestamp": req.timestamp,
-                "distance": r.get("distance")
-            })
-        print(json.dumps(output, indent=2))
+        print(json.dumps(results, indent=2))
         return 0
 
     print(f"🧵 Loom Query: {args.text}")
@@ -382,11 +343,10 @@ def cmd_query(args):
         return 0
 
     for r in results:
-        req = r['requirement']
-        status = "✓" if not req.superseded_at else "⚠️ superseded"
-        print(f"{req.id} [{req.domain}] {status}")
-        print(f"  {req.value}")
-        print(f"  Source: {req.source_session} @ {req.timestamp}")
+        marker = "⚠️ superseded" if r['superseded'] else "✓"
+        print(f"{r['id']} [{r['domain']}] {marker}")
+        print(f"  {r['value']}")
+        print(f"  Source: {r['source']} @ {r['timestamp']}")
         print()
 
     return 0
@@ -395,64 +355,42 @@ def cmd_query(args):
 def cmd_list(args):
     """List all requirements."""
     store = LoomStore(args.project)
-    
-    reqs = store.list_requirements(include_superseded=args.all)
-    
-    # JSON output mode for API consumption
+    reqs = services.list_requirements(store, include_superseded=args.all)
+
     if args.json:
-        from testspec import TestSpecStore
-        spec_store = TestSpecStore(store.data_dir)
-        
-        output = []
-        for req in reqs:
-            spec = spec_store.get_spec(req.id)
-            output.append({
-                "id": req.id,
-                "domain": req.domain,
-                "text": req.value,
-                "status": req.status,
-                "elaboration": req.elaboration,
-                "rationale": req.rationale,
-                "acceptance_criteria": req.acceptance_criteria or [],
-                "test_spec_id": req.test_spec_id,
-                "conversation_context": req.conversation_context,
-                "is_complete": req.is_complete(),
-                "has_test": spec is not None,
-                "superseded": req.superseded_at is not None
-            })
-        print(json.dumps(output, indent=2))
+        print(json.dumps(reqs, indent=2))
         return 0
-    
+
     # Human-readable output
     print(f"🧵 Loom Requirements — Project: {args.project}")
     print()
-    
+
     if not reqs:
         print("No requirements found.")
         return 0
-    
-    for req in reqs:
+
+    for r in reqs:
         status_parts = []
-        if req.superseded_at:
+        if r['superseded']:
             status_parts.append("superseded")
-        if req.status != "pending":
-            status_parts.append(req.status)
-        if not req.is_complete():
+        if r['status'] != "pending":
+            status_parts.append(r['status'])
+        if not r['is_complete']:
             status_parts.append("needs refinement")
-        
+
         status = f" ({', '.join(status_parts)})" if status_parts else ""
-        print(f"{req.id} [{req.domain}]{status}")
-        print(f"  {req.value}")
-        if req.elaboration:
-            print(f"  📝 {req.elaboration[:60]}...")
-    
+        print(f"{r['id']} [{r['domain']}]{status}")
+        print(f"  {r['text']}")
+        if r['elaboration']:
+            print(f"  📝 {r['elaboration'][:60]}...")
+
     print()
     print(f"Total: {len(reqs)}")
-    
-    incomplete = [r for r in reqs if not r.is_complete()]
+
+    incomplete = [r for r in reqs if not r['is_complete']]
     if incomplete:
         print(f"⚠️  {len(incomplete)} need refinement (run: loom incomplete)")
-    
+
     return 0
 
 

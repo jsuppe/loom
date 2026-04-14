@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import store  # noqa: E402  (src/store.py)
+import services  # noqa: E402  (src/services.py)
 
 # ---------------------------------------------------------------------------
 # MCP imports — guarded so the file is readable without the SDK installed.
@@ -202,25 +203,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 # ---------------------------------------------------------------------------
 async def _handle_query(args: dict[str, Any]) -> dict:
     s = _get_store(args.get("project"))
-    emb = _embed(args["text"])
-    return {"results": s.search_requirements(emb, n=args.get("limit", 5))}
+    results = services.query(s, args["text"], limit=args.get("limit", 5))
+    return {"results": results}
 
 
 async def _handle_list(args: dict[str, Any]) -> dict:
     s = _get_store(args.get("project"))
-    if status := args.get("status"):
-        reqs = s.get_requirements_by_status(status)
-    else:
-        reqs = s.list_requirements(
-            include_superseded=args.get("include_superseded", False)
-        )
-    return {"requirements": [r.to_dict() for r in reqs]}
+    reqs = services.list_requirements(
+        s, include_superseded=args.get("include_superseded", False)
+    )
+    # Optional post-filter by status — kept here because the CLI doesn't
+    # need it but MCP clients asked for it in the tool schema.
+    if status_filter := args.get("status"):
+        reqs = [r for r in reqs if r["status"] == status_filter]
+    return {"requirements": reqs}
 
 
 async def _handle_status(args: dict[str, Any]) -> dict:
-    # TODO: refactor cmd_status body out of scripts/loom into a shared
-    # function, then call it here.
-    raise NotImplementedError
+    return services.status(_get_store(args.get("project")))
 
 
 async def _handle_trace(args: dict[str, Any]) -> dict:
