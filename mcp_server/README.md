@@ -11,9 +11,8 @@ See `ROADMAP.md` → Milestone 4.2 for the design.
 Before filling in the handlers, two things should be factored out of
 `scripts/loom` into `src/`:
 
-1. **`get_embedding()`** → `src/embedding.py`. Currently lives in the CLI
-   script with its LRU cache. The MCP server needs it too, and duplicating
-   it would mean two caches out of sync.
+1. ~~**`get_embedding()`** → `src/embedding.py`~~ — **DONE.** The MCP
+   server now imports from `embedding` directly.
 2. **`cmd_*` function bodies** → shared callables in `src/`. The CLI's
    `cmd_status`, `cmd_trace`, `cmd_chain`, `cmd_coverage`, `cmd_doctor` all
    mix argparse handling with real logic. Split them so the MCP handlers

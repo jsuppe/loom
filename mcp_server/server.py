@@ -68,16 +68,14 @@ def _get_store(project: str | None) -> store.LoomStore:
 
 
 def _embed(text: str) -> list[float]:
-    """Embed text via Ollama (with hash fallback).
+    """Embed text via the shared `src/embedding.py` helper.
 
-    TODO (4.2 prep): factor get_embedding() out of scripts/loom into
-    src/embedding.py so the CLI and MCP server share one implementation
-    and one LRU cache. This stub exists so the skeleton reads cleanly.
+    Process-local LRU cache lives inside that module, so long-lived MCP
+    sessions get real cache reuse across tool calls (unlike the CLI,
+    which cold-starts each invocation).
     """
-    raise NotImplementedError(
-        "Move get_embedding() from scripts/loom into src/embedding.py "
-        "as a prerequisite for 4.2."
-    )
+    from embedding import get_embedding  # noqa: WPS433
+    return get_embedding(text)
 
 
 # ---------------------------------------------------------------------------

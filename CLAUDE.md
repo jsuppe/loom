@@ -38,7 +38,8 @@ loom/
 - **`src/store.py`** — Defines the core dataclasses and `LoomStore` (ChromaDB wrapper with five collections: requirements, implementations, chat_messages, specifications, patterns). All persistence lives here. ID helpers: `generate_impl_id`, `generate_content_hash`.
 - **`src/docs.py`** — Functions that render the store into Markdown (`generate_requirements_doc`, `generate_test_spec_doc`) and compare embeddings (`check_conflicts`, `analyze_test_impact`). Includes implementation links and a traceability matrix in generated docs. Honors a `PRIVATE.md` allow/deny list and `public_mode`.
 - **`src/testspec.py`** — JSON-backed store for test specs (separate from ChromaDB). Data lives at `~/.openclaw/loom/<project>/.loom-specs.json`.
-- **`scripts/loom`** — Argparse CLI. Each subcommand is a `cmd_*` function. Inserts `src/` on `sys.path` and imports `store` directly (not as a package). Also handles Ollama embedding calls with retries + LRU cache (`_embedding_cache`, max 500).
+- **`src/embedding.py`** — Ollama embedding wrapper with retries + process-local LRU cache (max 500). Shared by the CLI and (eventually) the MCP server; do not duplicate this logic anywhere else.
+- **`scripts/loom`** — Argparse CLI. Each subcommand is a `cmd_*` function. Inserts `src/` on `sys.path` and imports `store` / `embedding` directly (not as a package).
 
 ## CLI Commands (reference)
 
@@ -133,7 +134,7 @@ python3 scripts/loom doctor -p test-dev --json
 - **Backward compatibility**: `from_dict` methods use `setdefault` for newly added fields — preserve this pattern when adding fields so older stores still load.
 - **Shebang in `scripts/loom`** uses `#!/usr/bin/env python3` for portability. Invoke via `python3 scripts/loom ...` if your PATH doesn't include it.
 - **src is not a package when invoked via CLI**: `scripts/loom` does `sys.path.insert(0, SKILL_DIR/"src")` and imports `store` directly. The tests do the same. The `src/__init__.py` package form is used if you `import loom` as a library.
-- **Embedding cache**: `_embedding_cache` in `scripts/loom` is an in-process LRU (max 500). Not shared across invocations.
+- **Embedding cache**: `_embedding_cache` in `src/embedding.py` is an in-process LRU (max 500). Not shared across invocations of the CLI; persistent across calls within a long-lived process (e.g. the MCP server).
 - **Ollama retries**: `get_embedding` retries up to 3 times with backoff. If Ollama is down, it falls back to a deterministic hash-based vector — fine for dev, unsuitable for semantic search.
 - **`--json` flag**: Most read-only commands support `--json` / `-j` for machine-readable output. Use this when invoking from hooks or agents to avoid parsing emoji-decorated text.
 - **Python style**: PEP 8, type hints where practical, keep `cmd_*` functions focused. No formal linter/formatter is enforced.

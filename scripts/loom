@@ -31,16 +31,7 @@ SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
 
 from store import LoomStore, Requirement, Implementation, Specification, Pattern, generate_impl_id, generate_content_hash
-
-
-# Simple LRU cache for embeddings (avoids repeated Ollama calls)
-_embedding_cache = {}
-_CACHE_MAX_SIZE = 500
-
-
-def _cache_key(text: str) -> str:
-    """Generate cache key from text content."""
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+from embedding import get_embedding  # noqa: F401 — re-exported for callers that reach into scripts/loom
 
 
 def get_project_name():
@@ -61,82 +52,6 @@ def get_project_name():
         pass
     
     return "default"
-
-
-def get_embedding(text: str, model: str = "nomic-embed-text", max_retries: int = 3, use_cache: bool = True) -> list:
-    """
-    Get embedding for text using Ollama.
-    
-    Uses nomic-embed-text by default (768 dimensions).
-    Falls back to hash-based pseudo-embedding if Ollama unavailable.
-    
-    Args:
-        text: Text to embed
-        model: Ollama model name
-        max_retries: Number of retry attempts for transient failures
-        use_cache: Whether to use embedding cache (default True)
-    """
-    import urllib.request
-    import urllib.error
-    import time
-    
-    # Check cache first
-    if use_cache:
-        cache_key = _cache_key(text)
-        if cache_key in _embedding_cache:
-            return _embedding_cache[cache_key]
-    
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            data = json.dumps({"model": model, "input": text}).encode()
-            req = urllib.request.Request(
-                "http://localhost:11434/api/embed",
-                data=data,
-                headers={"Content-Type": "application/json"}
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                result = json.loads(resp.read().decode())
-                embedding = result["embeddings"][0]
-                
-                # Cache the result
-                if use_cache:
-                    # Simple LRU: clear oldest if at capacity
-                    if len(_embedding_cache) >= _CACHE_MAX_SIZE:
-                        # Remove first item (oldest)
-                        oldest_key = next(iter(_embedding_cache))
-                        del _embedding_cache[oldest_key]
-                    _embedding_cache[cache_key] = embedding
-                
-                return embedding
-        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                # Exponential backoff: 1s, 2s, 4s
-                wait_time = 2 ** attempt
-                time.sleep(wait_time)
-                continue
-        except KeyError as e:
-            # Bad response format - don't retry
-            last_error = e
-            break
-    
-    # All retries failed - fallback to hash-based pseudo-embedding
-    print(f"⚠️  Ollama unavailable after {max_retries} attempts, using fallback embeddings: {last_error}")
-    h = hashlib.sha256(text.encode()).digest()
-    embedding = []
-    for i in range(768):  # Match nomic-embed-text dimensions
-        byte_idx = i % 32
-        embedding.append((h[byte_idx] - 128) / 128.0)
-    
-    # Cache fallback too
-    if use_cache:
-        if len(_embedding_cache) >= _CACHE_MAX_SIZE:
-            oldest_key = next(iter(_embedding_cache))
-            del _embedding_cache[oldest_key]
-        _embedding_cache[cache_key] = embedding
-    
-    return embedding
 
 
 def cmd_extract(args):

@@ -126,7 +126,7 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 **Observed:** `mcp_server/server.py` declares tools and dispatch but all handlers except `loom_query` and `loom_list` raise `NotImplementedError`. `_embed()` is also a stub.
 
-**Why deferred:** Needs two upstream refactors first — (a) move `get_embedding()` out of `scripts/loom` into `src/embedding.py`, (b) split `cmd_*` functions so the MCP handlers can share logic with the CLI without reimplementing it. Doing the handlers before those refactors would create duplication.
+**Why deferred:** Needs one remaining upstream refactor — split `cmd_*` functions so the MCP handlers can share logic with the CLI without reimplementing it. (The embedding extraction — the other prerequisite — is done.) Filling in handlers before the `cmd_*` split would create duplication.
 
 **Fix:** Milestone 4.2 proper. See `mcp_server/README.md` for the sequence.
 
