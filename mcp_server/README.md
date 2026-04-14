@@ -18,13 +18,13 @@ Before filling in the handlers, two things should be factored out of
    splitting them so MCP handlers can call shared functions without
    re-parsing args or rendering strings.
 
-   **Done:** `status`, `query`, `list_requirements` (the three simplest,
-   read-only commands). `cmd_status`/`cmd_query`/`cmd_list` in `scripts/loom`
-   are now thin wrappers over `services.py`.
+   **Done:** `status`, `query`, `list_requirements`, `trace`, `chain`.
+   Their `cmd_*` counterparts in `scripts/loom` are thin wrappers over
+   `services.py`.
 
-   **Remaining:** `trace`, `chain`, `coverage`, `doctor`, `conflicts`,
-   `extract`, `link`, `check`, `sync`, `supersede`, plus spec/pattern
-   commands. Landing in groups.
+   **Remaining:** `coverage`, `doctor`, `conflicts`, `extract`, `link`,
+   `check`, `sync`, `supersede`, plus spec/pattern/test commands.
+   Landing in groups.
 
 Each MCP handler should collapse to 2-3 lines once its service exists.
 

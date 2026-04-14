@@ -138,3 +138,64 @@ class TestListRequirements:
         _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
         reqs = services.list_requirements(store)
         assert reqs[0]["has_test"] is False
+
+
+class TestTrace:
+    def test_unknown_req_raises_lookup(self, store):
+        with pytest.raises(LookupError):
+            services.trace(store, "REQ-missing")
+
+    def test_missing_file_raises_lookup(self, store):
+        with pytest.raises(LookupError):
+            services.trace(store, "/nonexistent/path.py")
+
+    def test_req_with_no_impls(self, store, fake_embedding):
+        _mk_req(store, "REQ-lonely", "behavior", "alone", fake_embedding)
+        data = services.trace(store, "REQ-lonely")
+        assert data["type"] == "requirement"
+        assert data["id"] == "REQ-lonely"
+        assert data["implementations"] == []
+        assert data["test_spec"] is None
+        assert data["superseded_at"] is None
+
+    def test_req_with_impls(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        impl = Implementation(
+            id="IMPL-1", file="src/x.py", lines="1-10",
+            content="x = 1", content_hash="h",
+            satisfies=[{"req_id": "REQ-x"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        data = services.trace(store, "REQ-x")
+        assert len(data["implementations"]) == 1
+        assert data["implementations"][0]["file"] == "src/x.py"
+
+
+class TestChain:
+    def test_unknown_req_raises_lookup(self, store):
+        with pytest.raises(LookupError):
+            services.chain(store, "REQ-missing")
+
+    def test_bare_requirement_has_empty_sublists(self, store, fake_embedding):
+        _mk_req(store, "REQ-bare", "behavior", "bare", fake_embedding)
+        data = services.chain(store, "REQ-bare")
+        assert data["id"] == "REQ-bare"
+        assert data["patterns"] == []
+        assert data["specifications"] == []
+        assert data["direct_implementations"] == []
+        assert data["test_spec"] is None
+
+    def test_direct_impl_separated_from_spec_impl(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "one", fake_embedding)
+        direct = Implementation(
+            id="IMPL-direct", file="src/a.py", lines="1-5",
+            content="a", content_hash="ha",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(direct, fake_embedding)
+        data = services.chain(store, "REQ-1")
+        assert len(data["direct_implementations"]) == 1
+        assert data["direct_implementations"][0]["file"] == "src/a.py"
+        assert data["specifications"] == []

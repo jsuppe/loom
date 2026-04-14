@@ -224,11 +224,19 @@ async def _handle_status(args: dict[str, Any]) -> dict:
 
 
 async def _handle_trace(args: dict[str, Any]) -> dict:
-    raise NotImplementedError  # TODO: share cmd_trace logic
+    s = _get_store(args.get("project"))
+    try:
+        return services.trace(s, args["target"])
+    except LookupError as e:
+        return {"error": str(e)}
 
 
 async def _handle_chain(args: dict[str, Any]) -> dict:
-    raise NotImplementedError  # TODO: share cmd_chain logic
+    s = _get_store(args.get("project"))
+    try:
+        return services.chain(s, args["req_id"])
+    except LookupError as e:
+        return {"error": str(e)}
 
 
 async def _handle_coverage(args: dict[str, Any]) -> dict:

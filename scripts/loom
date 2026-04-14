@@ -911,140 +911,72 @@ def cmd_trace(args):
     target = args.target
     use_json = getattr(args, 'json', False)
 
-    # Determine if target is a requirement ID or a file path
-    is_requirement = target.lower().startswith("req-")
-
-    if is_requirement:
-        req_id = target
-        req = store.get_requirement(req_id)
-
-        if req is None:
-            if use_json:
-                print(json.dumps({"error": f"Requirement {req_id} not found"}))
-            else:
-                print(f"❌ Requirement {req_id} not found")
-            return 1
-
-        impls = store.get_implementations_for_requirement(req_id)
-
-        from testspec import TestSpecStore
-        spec_store = TestSpecStore(store.data_dir)
-        spec = spec_store.get_spec(req_id)
-
+    try:
+        data = services.trace(store, target)
+    except LookupError as e:
         if use_json:
-            output = {
-                "type": "requirement",
-                "id": req_id,
-                "domain": req.domain,
-                "value": req.value,
-                "status": req.status,
-                "superseded_at": req.superseded_at,
-                "implementations": [
-                    {"file": impl.file, "lines": impl.lines}
-                    for impl in impls
-                ],
-                "test_spec": {
-                    "description": spec.description,
-                    "verified": spec.last_verified is not None
-                } if spec else None
-            }
-            print(json.dumps(output, indent=2))
+            print(json.dumps({"error": str(e)}))
         else:
-            print(f"🧵 Loom Trace — {req_id}")
+            print(f"❌ {e}")
+        return 1
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 0
+
+    if data["type"] == "requirement":
+        req_id = data["id"]
+        print(f"🧵 Loom Trace — {req_id}")
+        print()
+        print(f"📋 Requirement [{data['domain']}]")
+        print(f"   {data['value']}")
+        print()
+
+        if data["superseded_at"]:
+            print(f"⚠️  SUPERSEDED on {data['superseded_at'][:10]}")
             print()
-            print(f"📋 Requirement [{req.domain}]")
-            print(f"   {req.value}")
-            print()
 
-            if req.superseded_at:
-                print(f"⚠���  SUPERSEDED on {req.superseded_at[:10]}")
-                if hasattr(req, 'superseded_by') and req.superseded_by:
-                    print(f"   Replaced by: {req.superseded_by}")
-                print()
-
-            if not impls:
-                print("📁 Implemented by: (none)")
-                print("   Run: loom link <file> --req " + req_id)
-            else:
-                print(f"📁 Implemented by ({len(impls)} file(s)):")
-                for impl in impls:
-                    lines_info = f" (lines {impl.lines})" if impl.lines else ""
-                    print(f"   📄 {impl.file}{lines_info}")
-
-            print()
-            if spec:
-                status = "✅ verified" if spec.verified_at else "⏳ pending"
-                print(f"🧪 Test Spec: {status}")
-                print(f"   {spec.test_description[:80]}...")
-            else:
-                print("🧪 Test Spec: (none)")
-                print("   Run: loom test " + req_id + ' --desc "..."')
-
-    else:
-        filepath = Path(target).resolve()
-
-        if not filepath.exists():
-            if use_json:
-                print(json.dumps({"error": f"File not found: {target}"}))
-            else:
-                print(f"❌ File not found: {target}")
-            return 1
-
-        result = store.implementations.get(include=["metadatas"])
-        file_impls = []
-
-        for meta in result.get("metadatas", []):
-            impl_path = meta.get("file", "")
-            if impl_path and Path(impl_path).resolve() == filepath:
-                meta["satisfies"] = json.loads(meta.get("satisfies", "[]"))
-                file_impls.append(meta)
-
-        all_reqs = set()
-        for meta in file_impls:
-            for sat in meta.get("satisfies", []):
-                all_reqs.add(sat.get("req_id"))
-
-        if use_json:
-            req_list = []
-            for rid in sorted(all_reqs):
-                r = store.get_requirement(rid)
-                if r:
-                    req_list.append({
-                        "id": rid,
-                        "domain": r.domain,
-                        "value": r.value,
-                        "status": r.status,
-                        "superseded": r.superseded_at is not None
-                    })
-                else:
-                    req_list.append({"id": rid, "orphan": True})
-            print(json.dumps({
-                "type": "file",
-                "file": target,
-                "requirements": req_list
-            }, indent=2))
+        impls = data["implementations"]
+        if not impls:
+            print("📁 Implemented by: (none)")
+            print(f"   Run: loom link <file> --req {req_id}")
         else:
-            print(f"🧵 Loom Trace — {target}")
-            print()
+            print(f"📁 Implemented by ({len(impls)} file(s)):")
+            for impl in impls:
+                lines_info = f" (lines {impl['lines']})" if impl['lines'] else ""
+                print(f"   📄 {impl['file']}{lines_info}")
 
-            if not file_impls:
-                print("📋 Implements: (none)")
-                print("   Run: loom link " + str(target) + " --req REQ-xxx")
-                return 0
+        print()
+        spec = data["test_spec"]
+        if spec:
+            status = "✅ verified" if spec["verified"] else "⏳ pending"
+            print(f"🧪 Test Spec: {status}")
+            print(f"   {spec['description'][:80]}...")
+        else:
+            print("🧪 Test Spec: (none)")
+            print(f"   Run: loom test {req_id} --desc \"...\"")
+        return 0
 
-            print(f"📋 Implements ({len(all_reqs)} requirement(s)):")
-            print()
+    # file branch
+    print(f"🧵 Loom Trace — {target}")
+    print()
 
-            for req_id in sorted(all_reqs):
-                req = store.get_requirement(req_id)
-                if req:
-                    status = "⚠️ superseded" if req.superseded_at else "✓"
-                    domain = f"[{req.domain}]"
-                    print(f"   {status} {req_id} {domain}")
-                    print(f"      {req.value[:70]}...")
-                else:
-                    print(f"   ❌ {req_id} (not found - orphan link)")
-                print()
+    reqs = data["requirements"]
+    if not reqs:
+        print("📋 Implements: (none)")
+        print(f"   Run: loom link {target} --req REQ-xxx")
+        return 0
+
+    print(f"📋 Implements ({len(reqs)} requirement(s)):")
+    print()
+    for r in reqs:
+        if r.get("orphan"):
+            print(f"   ❌ {r['id']} (not found - orphan link)")
+        else:
+            status = "⚠️ superseded" if r["superseded"] else "✓"
+            print(f"   {status} {r['id']} [{r['domain']}]")
+            print(f"      {r['value'][:70]}...")
+        print()
 
     return 0
 
@@ -1671,95 +1603,61 @@ def cmd_chain(args):
     """Show full traceability chain for a requirement."""
     store = LoomStore(args.project)
     use_json = getattr(args, 'json', False)
-
     req_id = args.req_id
-    req = store.get_requirement(req_id)
 
-    if not req:
+    try:
+        data = services.chain(store, req_id)
+    except LookupError as e:
         if use_json:
-            print(json.dumps({"error": f"Requirement {req_id} not found"}))
+            print(json.dumps({"error": str(e)}))
         else:
-            print(f"❌ Requirement {req_id} not found")
+            print(f"❌ {e}")
         return 1
 
-    patterns = store.get_patterns_for_requirement(req_id)
-    specs = store.get_specifications_for_requirement(req_id)
-    impls = store.get_implementations_for_requirement(req_id)
-    direct_impls = [i for i in impls if not i.satisfies_specs]
-
-    from testspec import TestSpecStore
-    spec_store = TestSpecStore(store.data_dir)
-    test = spec_store.get_spec(req_id)
-
     if use_json:
-        spec_data = []
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🔗 Traceability Chain — {req_id}")
+    print()
+
+    print(f"📋 REQUIREMENT [{data['domain']}]")
+    print(f"   {data['value']}")
+    if data['elaboration']:
+        print(f"   📝 {data['elaboration'][:60]}...")
+    print()
+
+    patterns = data['patterns']
+    if patterns:
+        print(f"🔷 PATTERNS ({len(patterns)})")
+        for p in patterns:
+            print(f"   {p['id']}: {p['name']}")
+        print()
+
+    specs = data['specifications']
+    if specs:
+        print(f"📐 SPECIFICATIONS ({len(specs)})")
         for spec in specs:
-            spec_impls = store.get_implementations_for_specification(spec.id)
-            spec_data.append({
-                "id": spec.id,
-                "description": spec.description,
-                "status": spec.status,
-                "implementations": [
-                    {"file": si.file, "lines": si.lines} for si in spec_impls
-                ]
-            })
+            status_icon = "✓" if spec['status'] == "implemented" else "○"
+            print(f"   {status_icon} {spec['id']}: {spec['description'][:50]}...")
+            for impl in spec['implementations']:
+                print(f"      📁 {impl['file']}:{impl['lines']}")
+        print()
 
-        output = {
-            "id": req_id,
-            "domain": req.domain,
-            "value": req.value,
-            "status": req.status,
-            "elaboration": req.elaboration,
-            "rationale": req.rationale,
-            "patterns": [{"id": p.id, "name": p.name} for p in patterns],
-            "specifications": spec_data,
-            "direct_implementations": [
-                {"file": i.file, "lines": i.lines} for i in direct_impls
-            ],
-            "test_spec": {
-                "description": test.description,
-                "verified": test.last_verified is not None
-            } if test else None
-        }
-        print(json.dumps(output, indent=2))
+    direct = data['direct_implementations']
+    if direct:
+        print(f"📁 DIRECT IMPLEMENTATIONS ({len(direct)})")
+        for impl in direct:
+            print(f"   {impl['file']}:{impl['lines']}")
+        print()
+
+    test = data['test_spec']
+    if test:
+        status = "✅ verified" if test['verified'] else "⏳ pending"
+        print(f"🧪 TEST SPECIFICATION: {status}")
+        print(f"   {test['description'][:60]}...")
     else:
-        print(f"🔗 Traceability Chain — {req_id}")
-        print()
-
-        print(f"📋 REQUIREMENT [{req.domain}]")
-        print(f"   {req.value}")
-        if req.elaboration:
-            print(f"   📝 {req.elaboration[:60]}...")
-        print()
-
-        if patterns:
-            print(f"🔷 PATTERNS ({len(patterns)})")
-            for p in patterns:
-                print(f"   {p.id}: {p.name}")
-            print()
-
-        if specs:
-            print(f"📐 SPECIFICATIONS ({len(specs)})")
-            for spec in specs:
-                status_icon = "✓" if spec.status == "implemented" else "○"
-                print(f"   {status_icon} {spec.id}: {spec.description[:50]}...")
-                spec_impls = store.get_implementations_for_specification(spec.id)
-                for impl in spec_impls:
-                    print(f"      📁 {impl.file}:{impl.lines}")
-            print()
-
-        if direct_impls:
-            print(f"📁 DIRECT IMPLEMENTATIONS ({len(direct_impls)})")
-            for impl in direct_impls:
-                print(f"   {impl.file}:{impl.lines}")
-            print()
-
-        if test:
-            status = "✅ verified" if test.last_verified else "⏳ pending"
-            print(f"🧪 TEST SPECIFICATION: {status}")
-            print(f"   {test.description[:60]}...")
-        else:
-            print("🧪 TEST SPECIFICATION: (none)")
+        print("🧪 TEST SPECIFICATION: (none)")
 
     return 0
 

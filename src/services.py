@@ -123,3 +123,151 @@ def list_requirements(
             "superseded": req.superseded_at is not None,
         })
     return out
+
+
+def trace(store: LoomStore, target: str) -> dict[str, Any]:
+    """Bidirectional traceability.
+
+    `target` is either a REQ-id (returns linked files + test spec) or a
+    file path (returns requirements linked to that file).
+
+    Raises:
+        LookupError: target not found (unknown req-id or missing file).
+
+    Result shapes:
+        - requirement: {type, id, domain, value, status, superseded_at,
+                        implementations: [{file, lines}],
+                        test_spec: {description, verified} | None}
+        - file: {type, file, requirements: [{id, domain, value, status,
+                                             superseded} | {id, orphan: True}]}
+    """
+    from pathlib import Path
+    from testspec import TestSpecStore
+    import json as _json
+
+    if target.lower().startswith("req-"):
+        req = store.get_requirement(target)
+        if req is None:
+            raise LookupError(f"Requirement {target} not found")
+
+        impls = store.get_implementations_for_requirement(target)
+        spec_store = TestSpecStore(store.data_dir)
+        spec = spec_store.get_spec(target)
+
+        return {
+            "type": "requirement",
+            "id": target,
+            "domain": req.domain,
+            "value": req.value,
+            "status": req.status,
+            "superseded_at": req.superseded_at,
+            "implementations": [
+                {"file": impl.file, "lines": impl.lines} for impl in impls
+            ],
+            "test_spec": (
+                {"description": spec.description,
+                 "verified": spec.last_verified is not None}
+                if spec else None
+            ),
+        }
+
+    # File-path branch. Resolve to absolute so we match regardless of how
+    # the caller spelled the path, matching cmd_trace's original behavior.
+    filepath = Path(target).resolve()
+    if not filepath.exists():
+        raise LookupError(f"File not found: {target}")
+
+    result = store.implementations.get(include=["metadatas"])
+    file_impls = []
+    for meta in result.get("metadatas", []):
+        impl_path = meta.get("file", "")
+        if impl_path and Path(impl_path).resolve() == filepath:
+            meta = dict(meta)  # don't mutate the stored metadata
+            meta["satisfies"] = _json.loads(meta.get("satisfies", "[]"))
+            file_impls.append(meta)
+
+    all_reqs: set[str] = set()
+    for meta in file_impls:
+        for sat in meta.get("satisfies", []):
+            if rid := sat.get("req_id"):
+                all_reqs.add(rid)
+
+    req_list: list[dict[str, Any]] = []
+    for rid in sorted(all_reqs):
+        r = store.get_requirement(rid)
+        if r:
+            req_list.append({
+                "id": rid,
+                "domain": r.domain,
+                "value": r.value,
+                "status": r.status,
+                "superseded": r.superseded_at is not None,
+            })
+        else:
+            req_list.append({"id": rid, "orphan": True})
+
+    return {
+        "type": "file",
+        "file": target,
+        "requirements": req_list,
+    }
+
+
+def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
+    """Full traceability chain for a requirement: req → patterns → specs
+    → implementations → test.
+
+    Raises:
+        LookupError: req_id not found.
+
+    Result shape:
+        {id, domain, value, status, elaboration, rationale,
+         patterns: [{id, name}],
+         specifications: [{id, description, status, implementations: [{file, lines}]}],
+         direct_implementations: [{file, lines}],  # impls with no spec link
+         test_spec: {description, verified} | None}
+    """
+    from testspec import TestSpecStore
+
+    req = store.get_requirement(req_id)
+    if req is None:
+        raise LookupError(f"Requirement {req_id} not found")
+
+    patterns = store.get_patterns_for_requirement(req_id)
+    specs = store.get_specifications_for_requirement(req_id)
+    impls = store.get_implementations_for_requirement(req_id)
+    direct_impls = [i for i in impls if not i.satisfies_specs]
+
+    spec_store = TestSpecStore(store.data_dir)
+    test = spec_store.get_spec(req_id)
+
+    spec_data = []
+    for spec in specs:
+        spec_impls = store.get_implementations_for_specification(spec.id)
+        spec_data.append({
+            "id": spec.id,
+            "description": spec.description,
+            "status": spec.status,
+            "implementations": [
+                {"file": si.file, "lines": si.lines} for si in spec_impls
+            ],
+        })
+
+    return {
+        "id": req_id,
+        "domain": req.domain,
+        "value": req.value,
+        "status": req.status,
+        "elaboration": req.elaboration,
+        "rationale": req.rationale,
+        "patterns": [{"id": p.id, "name": p.name} for p in patterns],
+        "specifications": spec_data,
+        "direct_implementations": [
+            {"file": i.file, "lines": i.lines} for i in direct_impls
+        ],
+        "test_spec": (
+            {"description": test.description,
+             "verified": test.last_verified is not None}
+            if test else None
+        ),
+    }
