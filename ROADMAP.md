@@ -36,7 +36,47 @@ Remove hard dependency on local Ollama.
 First-class tool integration with Claude Code sessions.
 
 - [x] **4.1 Hooks** — `.claude/settings.json` with SessionStart (doctor + status), PostToolUse on Edit/Write (drift check), PostToolUse on Bash git commit (sync docs).
-- [ ] **4.2 MCP server** — Thin Python MCP server (~200-300 lines) wrapping core verbs (`extract`, `query`, `check`, `link`, `status`, `sync`, `stale`) as typed MCP tools. Gives Claude Code structured schemas instead of Bash string parsing.
+- [ ] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Replaces Bash-subprocess + `--json`-parsing with first-class tool calls.
+
+### 4.2 MCP server — design
+
+**Location:** `mcp_server/server.py` (thin) + `mcp_server/tools.py` (handlers). Imports `src/store.py` directly — same `sys.path` trick as `scripts/loom`. Do not duplicate business logic.
+
+**Phase A — read tools (ship first):**
+| Tool | Wraps | Notes |
+|---|---|---|
+| `loom_query` | `LoomStore.query` | `text`, `project?`, `limit?` |
+| `loom_list` | `LoomStore.list_requirements` | `project?`, `status?` |
+| `loom_status` | `cmd_status` logic | drift summary |
+| `loom_trace` | `cmd_trace` | bidirectional |
+| `loom_chain` | `cmd_chain` | full req→specs→impls→tests |
+| `loom_doctor` | `cmd_doctor` | health checks |
+| `loom_coverage` | `cmd_coverage` | gap analysis |
+
+**Phase B — write tools:**
+| Tool | Wraps | Confirmation? |
+|---|---|---|
+| `loom_extract` | `cmd_extract` | ask (creates requirement) |
+| `loom_link` | `cmd_link` | ask (mutates store) |
+| `loom_check` | `cmd_check` | no (read-only) |
+| `loom_spec_create` | `cmd_spec` | ask |
+| `loom_supersede` | `cmd_supersede` | ask (destructive-ish) |
+| `loom_sync` | `cmd_sync` | no (regenerates docs) |
+
+**Resources:**
+- `loom://requirements/{project}` — live REQUIREMENTS.md
+- `loom://testspec/{project}` — live TEST_SPEC.md
+- `loom://drift/{project}` — current drift report (JSON)
+
+**Project scoping:** every tool takes optional `project`. Default from `LOOM_PROJECT` env var, then falls back to `get_project_name()` from the MCP server's cwd (usually the project dir the user launched Claude Code from).
+
+**State wins:** per-session embedding cache survives across tool calls (vs. cold cache on every CLI subprocess).
+
+**Registration:** ship a sample `.mcp.json` in the repo root so users can enable Loom in their Claude Code session with one file.
+
+**Non-goals for 4.2:**
+- Don't reimplement the CLI. The MCP server and CLI must call the same `LoomStore` methods.
+- Don't replace hooks. Hooks fire on deterministic events (Edit/Write, SessionStart); MCP tools are model-initiated. They're complementary.
 
 ## Milestone 5: Metrics & Effectiveness Measurement
 

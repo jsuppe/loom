@@ -122,7 +122,15 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 **Fix:** Update README.md's "Usage Patterns" and SKILL.md's "Example Flow" to show the three-layer workflow (`extract` → `spec` → `link --spec` → `test`).
 
-### D2. `prompts/extract.md` and `prompts/link.md` not updated
+### D2. MCP server skeleton has no handler implementations
+
+**Observed:** `mcp_server/server.py` declares tools and dispatch but all handlers except `loom_query` and `loom_list` raise `NotImplementedError`. `_embed()` is also a stub.
+
+**Why deferred:** Needs two upstream refactors first — (a) move `get_embedding()` out of `scripts/loom` into `src/embedding.py`, (b) split `cmd_*` functions so the MCP handlers can share logic with the CLI without reimplementing it. Doing the handlers before those refactors would create duplication.
+
+**Fix:** Milestone 4.2 proper. See `mcp_server/README.md` for the sequence.
+
+### D3. `prompts/extract.md` and `prompts/link.md` not updated
 
 **Observed:** Extraction and linking prompt templates may reference the old model.
 
