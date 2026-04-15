@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-Loom MCP server — skeleton for Milestone 4.2.
+Loom MCP server — milestone 4.2.
 
-Exposes LoomStore as typed MCP tools so Claude Code can call Loom without
-shelling out to `scripts/loom`. Phase A ships read-only tools only.
+Exposes LoomStore as typed MCP tools so Claude Code can call Loom
+without shelling out to `scripts/loom`. All handlers delegate to
+`src/services.py`; see mcp_server/README.md for the architecture.
 
-Prerequisites (not wired yet):
+Prerequisites:
     pip install mcp
 
 Run standalone:
     python3 mcp_server/server.py
 
-Register in Claude Code via .mcp.json (see repo root).
-
-Status: SKELETON — tools are declared but handlers are TODO. The intent
-is to show structure and let a follow-up PR fill in the bodies.
+Register in Claude Code via .mcp.json (see mcp_server/README.md).
 """
 from __future__ import annotations
 
@@ -805,14 +803,90 @@ async def _handle_incomplete(args: dict[str, Any]) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Resources — live views of generated docs and drift.
 # ---------------------------------------------------------------------------
+# URI scheme: loom://{kind}/{project}
+#   loom://requirements/{project} → REQUIREMENTS.md (text/markdown)
+#   loom://testspec/{project}     → TEST_SPEC.md    (text/markdown)
+#   loom://drift/{project}        → drift report    (application/json)
+#
+# Discovery: enumerates ~/.openclaw/loom/*/ and exposes three resources
+# per project. Projects created with a custom data_dir won't show up —
+# see services.list_projects for the caveat.
+_URI_PREFIX = "loom://"
+_KINDS = {
+    "requirements": ("text/markdown", "REQUIREMENTS.md"),
+    "testspec": ("text/markdown", "TEST_SPEC.md"),
+    "drift": ("application/json", "drift report (JSON)"),
+}
+
+
+def _parse_resource_uri(uri: str) -> tuple[str, str]:
+    """Split loom://{kind}/{project} into (kind, project).
+
+    Raises ValueError if the URI is malformed or the kind is unknown.
+    """
+    if not uri.startswith(_URI_PREFIX):
+        raise ValueError(f"Not a loom URI: {uri}")
+    path = uri[len(_URI_PREFIX):]
+    parts = path.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"Malformed loom URI: {uri}")
+    kind, project = parts
+    if kind not in _KINDS:
+        raise ValueError(f"Unknown resource kind: {kind}")
+    return kind, project
+
+
 @app.list_resources()
 async def list_resources() -> list[Resource]:
-    # TODO: enumerate known projects from ~/.openclaw/loom/ and expose one
-    # resource per project per doc. For now, return an empty list; resources
-    # land alongside the write tools in Phase B.
-    return []
+    resources: list[Resource] = []
+    for project in services.list_projects():
+        for kind, (mime, label) in _KINDS.items():
+            resources.append(Resource(
+                uri=f"{_URI_PREFIX}{kind}/{project}",
+                name=f"{project}: {label}",
+                description=(
+                    f"Live {label} for project '{project}'. "
+                    "Regenerated on each read."
+                ),
+                mimeType=mime,
+            ))
+    return resources
+
+
+@app.read_resource()
+async def read_resource(uri: str) -> str:
+    # MCP passes a pydantic AnyUrl; coerce to plain str for parsing so
+    # we don't depend on AnyUrl's interface.
+    uri = str(uri)
+    try:
+        kind, project = _parse_resource_uri(uri)
+    except ValueError as e:
+        # Return the error as the resource body; MCP clients surface it.
+        import json as _json
+        return _json.dumps({"error": str(e)})
+
+    s = store.LoomStore(project=project)
+
+    if kind == "requirements":
+        return services.render_requirements_md(s)
+    if kind == "testspec":
+        return services.render_testspec_md(s)
+    if kind == "drift":
+        import json as _json
+        data = services.status(s)
+        return _json.dumps(
+            {
+                "project": data["project"],
+                "drift_count": data["drift_count"],
+                "drift": data["drift"],
+            },
+            indent=2,
+        )
+    # Unreachable — _parse_resource_uri validates kind.
+    raise RuntimeError(f"Unhandled kind: {kind}")
 
 
 # ---------------------------------------------------------------------------

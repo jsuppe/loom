@@ -95,8 +95,15 @@ Test specs:
 Phase B is complete. Only `init-private` remains CLI-only (it
 writes a template file — not appropriate as an MCP tool).
 
-## Resources (planned)
+## Resources — shipped
 
-- `loom://requirements/{project}`
-- `loom://testspec/{project}`
-- `loom://drift/{project}`
+Three resources per project, auto-enumerated from `~/.openclaw/loom/*/`:
+
+- `loom://requirements/{project}` → REQUIREMENTS.md (text/markdown)
+- `loom://testspec/{project}` → TEST_SPEC.md (text/markdown)
+- `loom://drift/{project}` → drift report (application/json)
+
+Resources are regenerated on each read — they always reflect the
+live store. Projects created with a custom `data_dir` won't appear
+in `list_resources` (the enumeration scans the default data directory
+only); use the tools for those projects instead.

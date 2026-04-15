@@ -36,7 +36,7 @@ Remove hard dependency on local Ollama.
 First-class tool integration with Claude Code sessions.
 
 - [x] **4.1 Hooks** — `.claude/settings.json` with SessionStart (doctor + status), PostToolUse on Edit/Write (drift check), PostToolUse on Bash git commit (sync docs).
-- [ ] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Replaces Bash-subprocess + `--json`-parsing with first-class tool calls.
+- [~] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Phase A (read) + Phase B (write) + Phase C (resources) shipped; Phase D (release plumbing) remaining.
 
 ### 4.2 MCP server — design
 

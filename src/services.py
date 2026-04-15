@@ -1400,3 +1400,57 @@ def incomplete(store: LoomStore) -> list[dict[str, Any]]:
             "missing": missing,
         })
     return out
+
+
+# ==================== Projects / resources ====================
+
+def list_projects() -> list[str]:
+    """Enumerate project names under the default data directory.
+
+    Returns the subdirectory names of `~/.openclaw/loom/`, which is
+    where `LoomStore.__init__` puts per-project data when no explicit
+    data_dir is passed. Projects created with a custom data_dir won't
+    appear here — that's intentional, since we have no way to discover
+    them without scanning the filesystem.
+    """
+    from pathlib import Path
+    root = Path.home() / ".openclaw" / "loom"
+    if not root.exists():
+        return []
+    return sorted(
+        p.name for p in root.iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    )
+
+
+def render_requirements_md(store: LoomStore, public: bool = False) -> str:
+    """Render REQUIREMENTS.md content as a string (without writing to disk).
+
+    Used by the MCP resource handler for `loom://requirements/{project}`.
+    Writes to a temp dir, reads back, cleans up — avoids duplicating the
+    generator's logic.
+    """
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp(prefix="loom-render-"))
+    try:
+        result = sync(store, str(tmp), public=public)
+        return Path(result["requirements_path"]).read_text()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def render_testspec_md(store: LoomStore, public: bool = False) -> str:
+    """Render TEST_SPEC.md content as a string (without writing to disk)."""
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp(prefix="loom-render-"))
+    try:
+        result = sync(store, str(tmp), public=public)
+        return Path(result["test_spec_path"]).read_text()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
