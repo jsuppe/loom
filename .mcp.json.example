@@ -1,0 +1,12 @@
+{
+  "$comment": "Copy this file to .mcp.json in your project root to register the Loom MCP server with Claude Code. Adjust `command`/`args` paths if you installed Loom somewhere else (e.g. ~/.openclaw/skills/loom/mcp_server/server.py).",
+  "mcpServers": {
+    "loom": {
+      "command": "python3",
+      "args": ["mcp_server/server.py"],
+      "env": {
+        "LOOM_PROJECT": "loom"
+      }
+    }
+  }
+}

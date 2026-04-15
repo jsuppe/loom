@@ -31,12 +31,12 @@ Remove hard dependency on local Ollama.
 - [ ] **3.1 Provider interface** — Abstract `get_embedding()` to support `ollama` (default), `openai` (via `OPENAI_API_KEY`), and `hash` (deterministic fallback). Selection via `LOOM_EMBEDDING_PROVIDER` env var or `--embedding-provider` flag. Config stored in `.loom-config.json` per project.
 - [ ] **3.2 Dimension validation** — Record embedding dimensions on first use. Reject mismatched dimensions with a clear error on subsequent calls.
 
-## Milestone 4: Claude Code Integration (PARTIAL)
+## Milestone 4: Claude Code Integration (DONE)
 
 First-class tool integration with Claude Code sessions.
 
 - [x] **4.1 Hooks** — `.claude/settings.json` with SessionStart (doctor + status), PostToolUse on Edit/Write (drift check), PostToolUse on Bash git commit (sync docs).
-- [~] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Phase A (read) + Phase B (write) + Phase C (resources) shipped; Phase D (release plumbing) remaining.
+- [x] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools (22 tools + 3 resources per project). Replaces Bash-subprocess + `--json`-parsing with first-class tool calls. Shared `src/services.py` backs both the CLI and the server. Registration via `.mcp.json.example` + `requirements-mcp.txt`.
 
 ### 4.2 MCP server — design
 

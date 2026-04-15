@@ -97,6 +97,21 @@ Loom categorizes requirements by domain:
 - Uses ChromaDB with persistent storage
 - Three collections: requirements, implementations, chat_messages
 
+## MCP Integration (Claude Code)
+
+Loom also ships an MCP server so Claude Code can call verbs like
+`loom_query`, `loom_extract`, `loom_trace`, `loom_chain` as first-class
+tools — no shell subprocess, no string parsing. Three resources per
+project (`loom://requirements/…`, `loom://testspec/…`, `loom://drift/…`)
+stream live docs into Claude's context.
+
+```bash
+pip install -r requirements-mcp.txt
+cp .mcp.json.example .mcp.json   # or adapt to your setup
+```
+
+Full tool inventory and architecture: `mcp_server/README.md`.
+
 ## Example Flow
 
 ```

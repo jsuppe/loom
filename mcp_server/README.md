@@ -1,28 +1,28 @@
-# Loom MCP Server (skeleton)
+# Loom MCP Server
 
-Thin MCP server that exposes `LoomStore` operations as typed tools to Claude
-Code and other MCP-compatible clients. Status: **skeleton** — structure and
-tool schemas are in place; handlers are TODO.
+Thin MCP server that exposes `LoomStore` operations as typed tools and
+resources to Claude Code and other MCP-compatible clients. Status:
+**shipped** — all 22 tools and 3 resources are live.
 
-See `ROADMAP.md` → Milestone 4.2 for the design.
+See `ROADMAP.md` → Milestone 4.2 for the design trail.
 
-## Prerequisite refactors
+## Architecture
 
-Before filling in the handlers, two things should be factored out of
-`scripts/loom` into `src/`:
+The CLI (`scripts/loom`) and this MCP server both delegate to
+`src/services.py` — one shared code path. Each MCP handler is a 2-3
+line wrapper that calls a service function and translates `LookupError`
+/ `ValueError` into `{error: "..."}` result dicts.
+
+Modules:
 
 1. ~~**`get_embedding()`** → `src/embedding.py`~~ — **DONE.** The MCP
-   server now imports from `embedding` directly.
-2. **`cmd_*` function bodies** → `src/services.py`. **In progress.** The
-   CLI's `cmd_*` functions mix argparse handling with real logic. We're
-   splitting them so MCP handlers can call shared functions without
-   re-parsing args or rendering strings.
-
-   **Done:** all CLI verbs are now services (`status`, `query`,
-   `list_requirements`, `trace`, `chain`, `coverage`, `doctor`,
-   `conflicts`, `extract`, `check`, `link`, `detect_requirements`,
-   `sync`, `supersede`, `set_status`, `refine`, `spec_add`/`spec_list`/
-   `spec_link`, `pattern_add`/`pattern_list`/`pattern_apply`,
+   server imports from `embedding` directly.
+2. ~~**`cmd_*` function bodies** → `src/services.py`~~ — **DONE.** All
+   CLI verbs are now services (`status`, `query`, `list_requirements`,
+   `trace`, `chain`, `coverage`, `doctor`, `conflicts`, `extract`,
+   `check`, `link`, `detect_requirements`, `sync`, `supersede`,
+   `set_status`, `refine`, `spec_add`/`spec_list`/`spec_link`,
+   `pattern_add`/`pattern_list`/`pattern_apply`,
    `test_add`/`test_verify`/`test_list`/`test_generate`, `incomplete`).
    Their `cmd_*` counterparts in `scripts/loom` are thin wrappers over
    `services.py`.

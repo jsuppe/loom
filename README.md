@@ -243,6 +243,35 @@ After implementing:
 → Link to requirements: `loom link <file> --req REQ-xxx`
 ```
 
+## MCP Integration (Claude Code)
+
+If you're using Claude Code, Loom can run as an **MCP server** so Claude
+calls `loom_query`, `loom_extract`, etc. as first-class typed tools
+instead of shelling out to the CLI. You also get three live resources
+per project: `loom://requirements/{project}`, `loom://testspec/{project}`,
+and `loom://drift/{project}`.
+
+**Install the optional MCP dep:**
+
+```bash
+pip install -r requirements-mcp.txt
+```
+
+**Register the server.** Copy `.mcp.json.example` to `.mcp.json` in your
+project root and adjust the paths if needed:
+
+```bash
+cp .mcp.json.example .mcp.json
+```
+
+Restart Claude Code (or reload via `/mcp`) and the `loom_*` tools
+become available. See `mcp_server/README.md` for the full tool
+inventory and architecture.
+
+The CLI and MCP server share one code path (`src/services.py`), so
+you can mix both in the same project — hooks and CI scripts keep
+using the CLI while Claude Code sessions use MCP tools.
+
 ## Privacy
 
 Create `PRIVATE.md` in your project to exclude sensitive requirements from public docs:

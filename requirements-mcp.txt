@@ -1,0 +1,11 @@
+# Optional dependencies for running the Loom MCP server.
+# The CLI (scripts/loom) does NOT need these — install only if you want
+# to expose Loom to Claude Code (or other MCP clients) as typed tools
+# and resources.
+#
+# Install:
+#     pip install -r requirements-mcp.txt
+#
+# See mcp_server/README.md for the server design and registration.
+
+mcp>=1.0
