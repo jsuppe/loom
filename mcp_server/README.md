@@ -20,11 +20,11 @@ Before filling in the handlers, two things should be factored out of
 
    **Done:** `status`, `query`, `list_requirements`, `trace`, `chain`,
    `coverage`, `doctor`, `conflicts`, `extract`, `check`, `link`,
-   `detect_requirements`. Their `cmd_*` counterparts in `scripts/loom`
-   are thin wrappers over `services.py`.
+   `detect_requirements`, `sync`, `supersede`, `set_status`, `refine`.
+   Their `cmd_*` counterparts in `scripts/loom` are thin wrappers over
+   `services.py`.
 
-   **Remaining:** `sync`, `supersede`, `refine`, `set_status`, plus
-   spec/pattern/test commands.
+   **Remaining:** spec/pattern/test commands (typed entity CRUD).
 
 Each MCP handler should collapse to 2-3 lines once its service exists.
 
@@ -75,10 +75,13 @@ Shipped:
 - `loom_check` — drift check for a file
 - `loom_link` — link a file to req(s) and/or spec(s)
 - `loom_conflicts` — read-only conflict probe (does NOT add)
+- `loom_sync` — regenerate REQUIREMENTS.md and TEST_SPEC.md
+- `loom_supersede` — mark a requirement as superseded
+- `loom_set_status` — set req status (pending/in_progress/...)
+- `loom_refine` — elaborate a req with criteria, context, status
 
 Planned:
-- `loom_spec_create`, `loom_supersede`, `loom_sync`, `loom_refine`,
-  `loom_set_status`
+- `loom_spec_create`, `loom_pattern_create`, `loom_test_*`
 
 ## Resources (planned)
 

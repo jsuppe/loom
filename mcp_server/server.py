@@ -254,6 +254,92 @@ async def list_tools() -> list[Tool]:
                 "required": ["text"],
             },
         ),
+        Tool(
+            name="loom_sync",
+            description=(
+                "Regenerate REQUIREMENTS.md and TEST_SPEC.md from the store. "
+                "Writes to `output_dir` (defaults to project's docs/ if omitted). "
+                "`public=true` filters out IDs listed in PRIVATE.md."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory to write the markdown files to",
+                    },
+                    "public": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Exclude private requirements",
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["output_dir"],
+            },
+        ),
+        Tool(
+            name="loom_supersede",
+            description=(
+                "Mark a requirement as superseded. Returns the affected "
+                "test spec ids so the caller can prompt for follow-up."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id"],
+            },
+        ),
+        Tool(
+            name="loom_set_status",
+            description=(
+                "Set a requirement's implementation status: pending, "
+                "in_progress, implemented, verified, superseded."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "implemented",
+                                 "verified", "superseded"],
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id", "status"],
+            },
+        ),
+        Tool(
+            name="loom_refine",
+            description=(
+                "Elaborate a requirement: add elaboration text, optional "
+                "acceptance criteria, conversation context, and/or status. "
+                "`elaboration` is required."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string"},
+                    "elaboration": {"type": "string"},
+                    "acceptance_criteria": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "conversation_context": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "implemented",
+                                 "verified", "superseded"],
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id", "elaboration"],
+            },
+        ),
     ]
 
 
@@ -281,6 +367,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         "loom_check": _handle_check,
         "loom_link": _handle_link,
         "loom_conflicts": _handle_conflicts,
+        "loom_sync": _handle_sync,
+        "loom_supersede": _handle_supersede,
+        "loom_set_status": _handle_set_status,
+        "loom_refine": _handle_refine,
     }
     handler = handlers.get(name)
     if handler is None:
@@ -381,6 +471,41 @@ async def _handle_conflicts(args: dict[str, Any]) -> dict:
         "count": len(found),
         "conflicts": found,
     }
+
+
+async def _handle_sync(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return services.sync(s, args["output_dir"], public=args.get("public", False))
+
+
+async def _handle_supersede(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.supersede(s, args["req_id"])
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
+
+
+async def _handle_set_status(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.set_status(s, args["req_id"], args["status"])
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
+
+
+async def _handle_refine(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.refine(
+            s, args["req_id"],
+            elaboration=args["elaboration"],
+            acceptance_criteria=args.get("acceptance_criteria"),
+            conversation_context=args.get("conversation_context"),
+            status=args.get("status"),
+        )
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------

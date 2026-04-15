@@ -313,40 +313,21 @@ def cmd_list(args):
 
 def cmd_sync(args):
     """Sync/regenerate REQUIREMENTS.md and TEST_SPEC.md."""
-    from docs import generate_requirements_doc, generate_test_spec_doc
-    from testspec import TestSpecStore
-    
     store = LoomStore(args.project)
-    output_dir = Path(args.output) if args.output else Path.cwd()
-    
-    public_mode = args.public
-    mode_label = " (PUBLIC)" if public_mode else ""
-    
+    output_dir = args.output or str(Path.cwd())
+
+    mode_label = " (PUBLIC)" if args.public else ""
     print(f"🧵 Loom Sync — Project: {args.project}{mode_label}")
     print()
-    
-    # Load test specs
-    spec_store = TestSpecStore(store.data_dir)
-    specs = {s.req_id: s for s in spec_store.list_specs()}
-    private_ids = spec_store.get_private_ids()
-    
-    # Also mark specs marked as private
-    for spec in specs.values():
-        if spec.private:
-            private_ids.add(spec.req_id)
-    
-    if public_mode and private_ids:
-        print(f"Excluding {len(private_ids)} private requirement(s)")
+
+    result = services.sync(store, output_dir, public=args.public)
+
+    if args.public and result["private_excluded"]:
+        print(f"Excluding {result['private_excluded']} private requirement(s)")
         print()
-    
-    # Generate requirements doc
-    req_path = generate_requirements_doc(store, output_dir, private_ids, public_mode)
-    print(f"✓ Generated {req_path}")
-    
-    # Generate test spec doc
-    test_path = generate_test_spec_doc(store, output_dir, specs, private_ids, public_mode)
-    print(f"✓ Generated {test_path}")
-    
+
+    print(f"✓ Generated {result['requirements_path']}")
+    print(f"✓ Generated {result['test_spec_path']}")
     return 0
 
 
@@ -406,29 +387,22 @@ def cmd_conflicts(args):
 def cmd_supersede(args):
     """Supersede an existing requirement."""
     store = LoomStore(args.project)
-    
+
     print(f"🧵 Loom Supersede — {args.req_id}")
     print()
-    
-    req = store.get_requirement(args.req_id)
-    if not req:
-        print(f"Requirement {args.req_id} not found")
+
+    try:
+        result = services.supersede(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
         return 1
-    
-    if req.superseded_at:
-        print(f"Already superseded at {req.superseded_at}")
+    except ValueError as e:
+        print(str(e))
         return 1
-    
-    store.supersede_requirement(args.req_id)
-    print(f"✓ Superseded: {req.value}")
-    
-    # Show impact
-    from docs import analyze_test_impact
-    from testspec import TestSpecStore
-    spec_store = TestSpecStore(store.data_dir)
-    specs = {s.req_id: s for s in spec_store.list_specs()}
-    affected = analyze_test_impact(store, req, specs)
-    
+
+    print(f"✓ Superseded: {result['value']}")
+
+    affected = result["affected_tests"]
     if affected:
         print()
         print(f"⚠️  Tests affected ({len(affected)}):")
@@ -436,7 +410,7 @@ def cmd_supersede(args):
             print(f"  - {test_id}")
         print()
         print("Run `loom sync` to update TEST_SPEC.md")
-    
+
     return 0
 
 
@@ -788,24 +762,20 @@ def cmd_refine(args):
     """Elaborate on a requirement with acceptance criteria and conversation context."""
     store = LoomStore(args.project)
     req_id = args.req_id
-    
-    req = store.get_requirement(req_id)
-    if not req:
-        print(f"❌ Requirement {req_id} not found")
-        return 1
-    
-    print(f"🔍 Refining {req_id}")
-    print(f"   Original: {req.value}")
-    print()
-    
-    # If elaboration provided via args, use it directly
+
+    # Resolve elaboration source: --elaboration > --text > stdin (interactive).
     if args.elaboration:
         elaboration = args.elaboration
     elif args.text:
-        # Read from stdin/text for elaboration
         elaboration = args.text
     else:
-        # Interactive mode - prompt for elaboration
+        # Look up the req purely so we can show "Original: ..." before
+        # blocking on stdin; keeps the existing UX.
+        existing = store.get_requirement(req_id)
+        if existing:
+            print(f"🔍 Refining {req_id}")
+            print(f"   Original: {existing.value}")
+            print()
         print("Enter elaboration (how to satisfy this requirement):")
         print("(Press Ctrl+D when done)")
         try:
@@ -813,81 +783,62 @@ def cmd_refine(args):
         except KeyboardInterrupt:
             print("\nCancelled")
             return 1
-    
-    if not elaboration:
-        print("❌ No elaboration provided")
-        return 1
-    
-    # Parse acceptance criteria if provided
-    acceptance_criteria = []
+
+    # Parse acceptance criteria — CLI input formats; service takes a list.
     if args.criteria:
-        acceptance_criteria = args.criteria
+        criteria = list(args.criteria)
     elif args.criteria_text:
-        # Parse criteria from text (one per line, or semicolon-separated)
-        criteria_text = args.criteria_text
-        if ';' in criteria_text:
-            acceptance_criteria = [c.strip() for c in criteria_text.split(';') if c.strip()]
-        else:
-            acceptance_criteria = [c.strip() for c in criteria_text.split('\n') if c.strip()]
-    
-    # Set status if provided
-    status = args.status if args.status else None
-    
-    # Update the requirement
-    updates = {"elaboration": elaboration}
-    if acceptance_criteria:
-        updates["acceptance_criteria"] = acceptance_criteria
-    if args.context:
-        updates["conversation_context"] = args.context
-    if status:
-        updates["status"] = status
-    
-    updated_req = store.update_requirement(req_id, updates)
-    
-    if updated_req:
-        print(f"✅ Refined {req_id}")
-        print()
-        print(f"📝 Elaboration:")
-        print(f"   {updated_req.elaboration}")
-        print()
-        if updated_req.acceptance_criteria:
-            print(f"✓ Acceptance Criteria ({len(updated_req.acceptance_criteria)}):")
-            for i, criterion in enumerate(updated_req.acceptance_criteria, 1):
-                print(f"   {i}. {criterion}")
-        if updated_req.status != "pending":
-            print(f"📊 Status: {updated_req.status}")
-        print()
-        if updated_req.is_complete():
-            print("🎯 Requirement is fully refined!")
-        else:
-            print("⚠️  Missing: " + (
-                "acceptance criteria" if not updated_req.acceptance_criteria else ""
-            ))
+        text = args.criteria_text
+        sep = ';' if ';' in text else '\n'
+        criteria = [c.strip() for c in text.split(sep) if c.strip()]
     else:
-        print(f"❌ Failed to update {req_id}")
+        criteria = None
+
+    try:
+        result = services.refine(
+            store, req_id,
+            elaboration=elaboration,
+            acceptance_criteria=criteria,
+            conversation_context=args.context,
+            status=args.status,
+        )
+    except LookupError as e:
+        print(f"❌ {e}")
         return 1
-    
+    except ValueError as e:
+        print(f"❌ {e}")
+        return 1
+
+    print(f"✅ Refined {req_id}")
+    print()
+    print(f"📝 Elaboration:")
+    print(f"   {result['elaboration']}")
+    print()
+    if result['acceptance_criteria']:
+        print(f"✓ Acceptance Criteria ({len(result['acceptance_criteria'])}):")
+        for i, c in enumerate(result['acceptance_criteria'], 1):
+            print(f"   {i}. {c}")
+    if result['status'] != "pending":
+        print(f"📊 Status: {result['status']}")
+    print()
+    if result['is_complete']:
+        print("🎯 Requirement is fully refined!")
+    else:
+        missing = "acceptance criteria" if not result['acceptance_criteria'] else ""
+        print(f"⚠️  Missing: {missing}")
+
     return 0
 
 
 def cmd_set_status(args):
     """Set the implementation status of a requirement."""
     store = LoomStore(args.project)
-    req_id = args.req_id
-    status = args.status
-    
-    valid = ["pending", "in_progress", "implemented", "verified", "superseded"]
-    if status not in valid:
-        print(f"❌ Invalid status: {status}")
-        print(f"   Valid: {', '.join(valid)}")
+    try:
+        result = services.set_status(store, args.req_id, args.status)
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
         return 1
-    
-    if store.set_requirement_status(req_id, status):
-        print(f"✅ {req_id} → {status}")
-    else:
-        print(f"❌ Requirement {req_id} not found")
-        return 1
-    
+    print(f"✅ {result['req_id']} → {result['status']}")
     return 0
 
 

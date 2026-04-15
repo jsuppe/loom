@@ -402,3 +402,97 @@ class TestDetectRequirements:
         if candidates:
             assert "req_id" in candidates[0]
             assert "value" in candidates[0]
+
+
+class TestSync:
+    def test_writes_both_docs(self, store, tmp_path):
+        result = services.sync(store, str(tmp_path))
+        from pathlib import Path
+        assert Path(result["requirements_path"]).exists()
+        assert Path(result["test_spec_path"]).exists()
+        assert result["public"] is False
+
+    def test_public_mode_flag_passed(self, store, tmp_path):
+        result = services.sync(store, str(tmp_path), public=True)
+        assert result["public"] is True
+
+
+class TestSupersede:
+    def test_unknown_req_raises(self, store):
+        with pytest.raises(LookupError):
+            services.supersede(store, "REQ-missing")
+
+    def test_already_superseded_raises_value_error(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.supersede(store, "REQ-x")
+        with pytest.raises(ValueError):
+            services.supersede(store, "REQ-x")
+
+    def test_supersedes_and_returns_value(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "old way", fake_embedding)
+        result = services.supersede(store, "REQ-x")
+        assert result["req_id"] == "REQ-x"
+        assert result["value"] == "old way"
+        assert result["affected_tests"] == []
+        # Verify mutation persisted.
+        req = store.get_requirement("REQ-x")
+        assert req.superseded_at is not None
+
+
+class TestSetStatus:
+    def test_unknown_req_raises_lookup(self, store):
+        with pytest.raises(LookupError):
+            services.set_status(store, "REQ-missing", "implemented")
+
+    def test_invalid_status_raises_value_error(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError):
+            services.set_status(store, "REQ-x", "bogus")
+
+    def test_valid_status_updates(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.set_status(store, "REQ-x", "implemented")
+        assert result == {"req_id": "REQ-x", "status": "implemented"}
+        assert store.get_requirement("REQ-x").status == "implemented"
+
+
+class TestRefine:
+    def test_unknown_req_raises_lookup(self, store):
+        with pytest.raises(LookupError):
+            services.refine(store, "REQ-missing", elaboration="how")
+
+    def test_empty_elaboration_raises_value_error(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError):
+            services.refine(store, "REQ-x", elaboration="   ")
+
+    def test_invalid_status_raises_value_error(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError):
+            services.refine(store, "REQ-x", elaboration="how", status="bogus")
+
+    def test_full_update(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.refine(
+            store, "REQ-x",
+            elaboration="add input validation on the form",
+            acceptance_criteria=["empty email rejected", "bad domain rejected"],
+            conversation_context="discussed in design review",
+            status="in_progress",
+        )
+        assert result["req_id"] == "REQ-x"
+        assert result["elaboration"] == "add input validation on the form"
+        assert len(result["acceptance_criteria"]) == 2
+        assert result["status"] == "in_progress"
+        assert result["is_complete"] is True
+
+    def test_minimal_update_keeps_pending(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.refine(store, "REQ-x", elaboration="add validation")
+        # Status not provided → unchanged
+        assert result["status"] == "pending"
+        # Note: ChromaDB rejects empty lists, so acceptance_criteria
+        # round-trips as ["TBD"]. That's a pre-existing quirk (see
+        # CLAUDE.md ChromaDB metadata rules); is_complete therefore
+        # returns True even though no criteria were provided.
+        assert result["acceptance_criteria"] == ["TBD"]

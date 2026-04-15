@@ -817,3 +817,151 @@ def link(
         "satisfies_specs": satisfies_specs,
         "warnings": warnings,
     }
+
+
+VALID_STATUSES = ("pending", "in_progress", "implemented", "verified", "superseded")
+
+
+def sync(
+    store: LoomStore,
+    output_dir: str,
+    public: bool = False,
+) -> dict[str, Any]:
+    """Regenerate REQUIREMENTS.md and TEST_SPEC.md.
+
+    Returns:
+        {requirements_path, test_spec_path, public, private_excluded}
+
+    `public=True` filters out IDs listed in PRIVATE.md (and any test
+    specs marked private). `private_excluded` is the count of req IDs
+    that were filtered out, even when `public=False` (informational).
+    """
+    from pathlib import Path
+    from docs import generate_requirements_doc, generate_test_spec_doc
+    from testspec import TestSpecStore
+
+    out = Path(output_dir)
+    spec_store = TestSpecStore(store.data_dir)
+    specs = {s.req_id: s for s in spec_store.list_specs()}
+
+    private_ids = spec_store.get_private_ids()
+    for spec in specs.values():
+        if spec.private:
+            private_ids.add(spec.req_id)
+
+    req_path = generate_requirements_doc(store, out, private_ids, public)
+    test_path = generate_test_spec_doc(store, out, specs, private_ids, public)
+
+    return {
+        "requirements_path": str(req_path),
+        "test_spec_path": str(test_path),
+        "public": public,
+        "private_excluded": len(private_ids),
+    }
+
+
+def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
+    """Mark a requirement as superseded.
+
+    Returns:
+        {req_id, value, affected_tests: [test_id]}
+
+    Raises:
+        LookupError: req_id not found.
+        ValueError: requirement is already superseded.
+    """
+    from docs import analyze_test_impact
+    from testspec import TestSpecStore
+
+    req = store.get_requirement(req_id)
+    if req is None:
+        raise LookupError(f"Requirement {req_id} not found")
+    if req.superseded_at:
+        raise ValueError(f"Already superseded at {req.superseded_at}")
+
+    store.supersede_requirement(req_id)
+
+    spec_store = TestSpecStore(store.data_dir)
+    specs = {s.req_id: s for s in spec_store.list_specs()}
+    affected = list(analyze_test_impact(store, req, specs))
+
+    return {
+        "req_id": req_id,
+        "value": req.value,
+        "affected_tests": affected,
+    }
+
+
+def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
+    """Set a requirement's implementation status.
+
+    Returns: {req_id, status}.
+
+    Raises:
+        ValueError: status not in VALID_STATUSES.
+        LookupError: req_id not found.
+    """
+    if status not in VALID_STATUSES:
+        raise ValueError(
+            f"Invalid status: {status}. Valid: {', '.join(VALID_STATUSES)}"
+        )
+    if not store.set_requirement_status(req_id, status):
+        raise LookupError(f"Requirement {req_id} not found")
+    return {"req_id": req_id, "status": status}
+
+
+def refine(
+    store: LoomStore,
+    req_id: str,
+    *,
+    elaboration: str,
+    acceptance_criteria: list[str] | None = None,
+    conversation_context: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """Elaborate a requirement.
+
+    `elaboration` is required (the "how to satisfy"). The other fields
+    are optional updates.
+
+    Returns:
+        {req_id, elaboration, acceptance_criteria, status,
+         conversation_context, is_complete}
+
+    Raises:
+        LookupError: req_id not found.
+        ValueError: elaboration is empty/whitespace, or status invalid.
+    """
+    if not elaboration or not elaboration.strip():
+        raise ValueError("elaboration is required")
+    if status is not None and status not in VALID_STATUSES:
+        raise ValueError(
+            f"Invalid status: {status}. Valid: {', '.join(VALID_STATUSES)}"
+        )
+
+    if store.get_requirement(req_id) is None:
+        raise LookupError(f"Requirement {req_id} not found")
+
+    updates: dict[str, Any] = {"elaboration": elaboration.strip()}
+    if acceptance_criteria:
+        updates["acceptance_criteria"] = acceptance_criteria
+    if conversation_context:
+        updates["conversation_context"] = conversation_context
+    if status:
+        updates["status"] = status
+
+    updated = store.update_requirement(req_id, updates)
+    if updated is None:
+        # update_requirement returned None despite get_requirement
+        # finding it — treat as a transient store failure rather than
+        # a logical "not found" so the caller knows to retry.
+        raise RuntimeError(f"Failed to update {req_id}")
+
+    return {
+        "req_id": req_id,
+        "elaboration": updated.elaboration,
+        "acceptance_criteria": updated.acceptance_criteria or [],
+        "conversation_context": updated.conversation_context,
+        "status": updated.status,
+        "is_complete": updated.is_complete(),
+    }
