@@ -58,7 +58,7 @@ def get_project_name():
 def cmd_extract(args):
     """Extract requirements from current session context."""
     store = LoomStore(args.project)
-    
+
     print(f"🧵 Loom Extract — Project: {args.project}")
     print()
     print("To extract requirements, provide them in this format:")
@@ -70,7 +70,7 @@ def cmd_extract(args):
     print("Example:")
     print("  REQUIREMENT: behavior | Reset button requires 3-second hold with visual feedback")
     print()
-    
+
     # For agent use: read from stdin or args
     if args.text:
         lines = [args.text]
@@ -79,49 +79,35 @@ def cmd_extract(args):
     else:
         print("Provide requirements via --text or stdin")
         return 1
-    
+
     extracted = 0
     for line in lines:
-        if line.strip().upper().startswith("REQUIREMENT:"):
-            content = line.split(":", 1)[1].strip()
-            if "|" in content:
-                domain, value = content.split("|", 1)
-                domain = domain.strip().lower()
-                value = value.strip()
-                
-                # Generate ID
-                timestamp = datetime.now(timezone.utc).isoformat()
-                req_id = f"REQ-{hashlib.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]}"
-                
-                req = Requirement(
-                    id=req_id,
-                    domain=domain,
-                    value=value,
-                    source_msg_id=args.msg_id or "manual",
-                    source_session=args.session or "cli",
-                    timestamp=timestamp,
-                    rationale=getattr(args, 'rationale', None)
-                )
-                
-                # Check for conflicts before adding
-                try:
-                    from docs import check_conflicts
-                    conflicts = check_conflicts(store, req, get_embedding_fn=get_embedding)
-                    if conflicts:
-                        print(f"⚠️  CONFLICT DETECTED for: {value}")
-                        for c in conflicts:
-                            existing = c["existing"]
-                            print(f"   Conflicts with {existing.id}: {existing.value}")
-                        print(f"   → Consider using `loom supersede {conflicts[0]['existing'].id}` first")
-                        print()
-                except ImportError:
-                    pass  # docs module not available
-                
-                embedding = get_embedding(value)
-                store.add_requirement(req, embedding)
-                print(f"✓ {req_id}: [{domain}] {value}")
-                extracted += 1
-    
+        if not line.strip().upper().startswith("REQUIREMENT:"):
+            continue
+        content = line.split(":", 1)[1].strip()
+        if "|" not in content:
+            continue
+        domain, value = content.split("|", 1)
+
+        result = services.extract(
+            store,
+            domain=domain,
+            value=value,
+            msg_id=args.msg_id or "manual",
+            session=args.session or "cli",
+            rationale=getattr(args, 'rationale', None),
+        )
+
+        if result["conflicts"]:
+            print(f"⚠️  CONFLICT DETECTED for: {result['value']}")
+            for c in result["conflicts"]:
+                print(f"   Conflicts with {c['existing_id']}: {c['existing_value']}")
+            print(f"   → Consider using `loom supersede {result['conflicts'][0]['existing_id']}` first")
+            print()
+
+        print(f"✓ {result['req_id']}: [{result['domain']}] {result['value']}")
+        extracted += 1
+
     print()
     print(f"Extracted {extracted} requirement(s)")
     return 0
@@ -130,170 +116,101 @@ def cmd_extract(args):
 def cmd_check(args):
     """Check a file for drift against linked requirements."""
     store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
 
-    if not Path(args.file).exists():
-        if getattr(args, 'json', False):
-            print(json.dumps({"error": f"File not found: {args.file}"}))
+    try:
+        data = services.check(store, args.file, lines=args.lines)
+    except LookupError as e:
+        if use_json:
+            print(json.dumps({"error": str(e)}))
         else:
-            print(f"File not found: {args.file}")
+            print(str(e))
         return 1
 
-    content = Path(args.file).read_text()
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 2 if data["drift_detected"] else 0
 
-    if args.lines:
-        start, end = map(int, args.lines.split("-"))
-        lines = content.split('\n')
-        content = '\n'.join(lines[start-1:end])
-
-    impl_id = generate_impl_id(args.file, args.lines or "all")
-    impl = store.get_implementation(impl_id)
-
-    if not impl:
-        if getattr(args, 'json', False):
-            print(json.dumps({"file": args.file, "linked": False, "requirements": []}))
-        else:
-            print(f"🧵 Loom Check — {args.file}")
-            print()
-            print("No requirements linked to this file/section.")
-            print("Run `loom link` to create links.")
-        return 0
-
-    # Check for drift
-    drift_found = False
-    results = []
-    for sat in impl.satisfies:
-        req = store.get_requirement(sat["req_id"])
-        if req:
-            drifted = req.superseded_at is not None
-            if drifted:
-                drift_found = True
-            results.append({
-                "req_id": sat["req_id"],
-                "value": req.value,
-                "domain": req.domain,
-                "status": req.status,
-                "drifted": drifted,
-                "superseded_at": req.superseded_at
-            })
-
-    if getattr(args, 'json', False):
-        print(json.dumps({
-            "file": args.file,
-            "lines": args.lines,
-            "linked": True,
-            "drift_detected": drift_found,
-            "requirements": results
-        }, indent=2))
-    else:
+    if not data["linked"]:
         print(f"🧵 Loom Check — {args.file}")
         print()
-        for r in results:
-            if r["drifted"]:
-                print(f"⚠️  DRIFT: {r['req_id']} was superseded at {r['superseded_at']}")
-                print(f"   Old: {r['value']}")
-            else:
-                print(f"✓ {r['req_id']}: {r['value']}")
-        if drift_found:
-            print()
-            print("Some linked requirements have changed. Review before modifying.")
+        print("No requirements linked to this file/section.")
+        print("Run `loom link` to create links.")
+        return 0
 
-    return 2 if drift_found else 0
+    print(f"🧵 Loom Check — {args.file}")
+    print()
+    for r in data["requirements"]:
+        if r["drifted"]:
+            print(f"⚠️  DRIFT: {r['req_id']} was superseded at {r['superseded_at']}")
+            print(f"   Old: {r['value']}")
+        else:
+            print(f"✓ {r['req_id']}: {r['value']}")
+    if data["drift_detected"]:
+        print()
+        print("Some linked requirements have changed. Review before modifying.")
+
+    return 2 if data["drift_detected"] else 0
 
 
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
-    import hashlib
     store = LoomStore(args.project)
 
     print(f"🧵 Loom Link — {args.file}")
     print()
 
-    if not Path(args.file).exists():
-        print(f"File not found: {args.file}")
+    spec_ids = list(getattr(args, 'spec', None) or [])
+    req_ids = list(getattr(args, 'req', None) or [])
+
+    # Auto-detect if nothing specified.
+    if not spec_ids and not req_ids:
+        try:
+            detected = services.detect_requirements(
+                store, args.file, lines=args.lines, n=3
+            )
+        except LookupError as e:
+            print(str(e))
+            return 1
+        if not detected:
+            print("No requirements or specs to link.")
+            return 1
+        print("Detected requirements (confirm with --req or --spec):")
+        for d in detected:
+            print(f"  {d['req_id']}: {d['value']}")
+        req_ids = [d["req_id"] for d in detected]
+
+    try:
+        result = services.link(
+            store, args.file,
+            lines=args.lines,
+            req_ids=req_ids,
+            spec_ids=spec_ids,
+        )
+    except LookupError as e:
+        print(str(e))
         return 1
 
-    content = Path(args.file).read_text()
-
-    if args.lines:
-        start, end = map(int, args.lines.split("-"))
-        lines_content = content.split('\n')
-        content = '\n'.join(lines_content[start-1:end])
-
-    impl_id = generate_impl_id(args.file, args.lines or "all")
-    content_hash = generate_content_hash(content)
-
-    # Build satisfies list (requirements) and satisfies_specs (specifications)
-    satisfies = []
-    satisfies_specs = []
-
-    spec_ids = getattr(args, 'spec', None) or []
-    req_ids = getattr(args, 'req', None) or []
-
-    # Resolve spec IDs first
-    for spec_id in spec_ids:
-        spec = store.get_specification(spec_id)
-        if spec:
-            satisfies_specs.append(spec_id)
-            # Auto-link to parent requirement too
-            if not any(s["req_id"] == spec.parent_req for s in satisfies):
-                parent_req = store.get_requirement(spec.parent_req)
-                if parent_req:
-                    satisfies.append({"req_id": spec.parent_req, "req_version": parent_req.timestamp})
+    # Surface warnings (spec-not-found, req-not-found, has-active-spec lint).
+    for w in result["warnings"]:
+        if w.startswith("spec ") or w.startswith("requirement "):
+            print(f"Warning: {w}")
         else:
-            print(f"Warning: spec {spec_id} not found")
+            # The "has N active spec(s); prefer --spec" lint.
+            print(f"⚠️  {w}")
+    if result["warnings"]:
+        print()
 
-    # Handle --req
-    for req_id in req_ids:
-        req = store.get_requirement(req_id)
-        if req:
-            # Warn if this requirement has specs but user is linking directly
-            existing_specs = store.get_specifications_for_requirement(req_id)
-            active_specs = [s for s in existing_specs if not s.superseded_at]
-            if active_specs and not spec_ids:
-                print(f"⚠️  {req_id} has {len(active_specs)} active specification(s).")
-                print(f"   Consider linking to a spec instead of the requirement directly:")
-                for s in active_specs:
-                    print(f"     {s.id}: {s.description[:60]}")
-                print(f"   Continuing with direct link to {req_id}...")
-                print()
-            if not any(s["req_id"] == req_id for s in satisfies):
-                satisfies.append({"req_id": req_id, "req_version": req.timestamp})
-        else:
-            print(f"Warning: {req_id} not found")
-
-    # Auto-detect if nothing specified
-    if not satisfies and not satisfies_specs:
-        embedding = get_embedding(content)
-        results = store.search_requirements(embedding, n=3)
-        results = [r for r in results if r['requirement'].superseded_at is None]
-        print("Detected requirements (confirm with --req or --spec):")
-        for r in results:
-            print(f"  {r['id']}: {r['requirement'].value}")
-            satisfies.append({"req_id": r['id'], "req_version": r['requirement'].timestamp})
-
-    if not satisfies and not satisfies_specs:
+    if not result["linked"]:
         print("No requirements or specs to link.")
         return 1
 
-    impl = Implementation(
-        id=impl_id,
-        file=args.file,
-        lines=args.lines or "all",
-        content=content,
-        content_hash=content_hash,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        satisfies=satisfies,
-        satisfies_specs=satisfies_specs or None,
-    )
-
-    embedding = get_embedding(content)
-    store.add_implementation(impl, embedding)
-
-    print()
-    if satisfies_specs:
-        print(f"✓ Linked {args.file} to {len(satisfies_specs)} spec(s) and {len(satisfies)} requirement(s)")
+    n_specs = len(result["satisfies_specs"])
+    n_reqs = len(result["satisfies"])
+    if n_specs:
+        print(f"✓ Linked {args.file} to {n_specs} spec(s) and {n_reqs} requirement(s)")
     else:
-        print(f"✓ Linked {args.file} to {len(satisfies)} requirement(s)")
+        print(f"✓ Linked {args.file} to {n_reqs} requirement(s)")
     return 0
 
 

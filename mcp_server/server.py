@@ -167,6 +167,93 @@ async def list_tools() -> list[Tool]:
                 "properties": {"project": {"type": "string"}},
             },
         ),
+        # ----- Phase B: write tools -----
+        # MCP clients should treat these as side-effecting; Claude Code
+        # asks the user to approve each call by default.
+        Tool(
+            name="loom_extract",
+            description=(
+                "Add a requirement to the store. Returns the new req_id "
+                "and any conflicts detected against existing requirements "
+                "(the requirement is added regardless)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "enum": ["terminology", "behavior", "ui", "data", "architecture"],
+                    },
+                    "value": {"type": "string", "description": "Requirement text"},
+                    "rationale": {"type": "string", "description": "Why this requirement exists"},
+                    "project": {"type": "string"},
+                },
+                "required": ["domain", "value"],
+            },
+        ),
+        Tool(
+            name="loom_check",
+            description=(
+                "Check whether a file (or line range) has drifted from "
+                "its linked requirements. Returns drift status and the "
+                "list of linked requirements."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "lines": {
+                        "type": "string",
+                        "description": "Line range like '42-78' (optional)",
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["file"],
+            },
+        ),
+        Tool(
+            name="loom_link",
+            description=(
+                "Link a file (or line range) to one or more requirements "
+                "and/or specifications. Provide req_ids, spec_ids, or both. "
+                "If neither is provided, returns an error — use the "
+                "loom_query tool first to find candidates."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "lines": {"type": "string"},
+                    "req_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "spec_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["file"],
+            },
+        ),
+        Tool(
+            name="loom_conflicts",
+            description=(
+                "Check whether a candidate requirement text would conflict "
+                "with existing requirements. Read-only — does NOT add the "
+                "requirement. Pass `text` as 'domain | requirement text' "
+                "(or just the text; defaults to 'behavior' domain)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["text"],
+            },
+        ),
     ]
 
 
@@ -190,6 +277,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         "loom_chain": _handle_chain,
         "loom_coverage": _handle_coverage,
         "loom_doctor": _handle_doctor,
+        "loom_extract": _handle_extract,
+        "loom_check": _handle_check,
+        "loom_link": _handle_link,
+        "loom_conflicts": _handle_conflicts,
     }
     handler = handlers.get(name)
     if handler is None:
@@ -245,6 +336,51 @@ async def _handle_coverage(args: dict[str, Any]) -> dict:
 
 async def _handle_doctor(args: dict[str, Any]) -> dict:
     return services.doctor(_get_store(args.get("project")))
+
+
+# ----- Phase B: write tool handlers -----
+
+async def _handle_extract(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return services.extract(
+        s,
+        domain=args["domain"],
+        value=args["value"],
+        rationale=args.get("rationale"),
+        msg_id=args.get("msg_id", "mcp"),
+        session=args.get("session", "mcp"),
+    )
+
+
+async def _handle_check(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.check(s, args["file"], lines=args.get("lines"))
+    except LookupError as e:
+        return {"error": str(e)}
+
+
+async def _handle_link(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.link(
+            s, args["file"],
+            lines=args.get("lines"),
+            req_ids=args.get("req_ids", []),
+            spec_ids=args.get("spec_ids", []),
+        )
+    except LookupError as e:
+        return {"error": str(e)}
+
+
+async def _handle_conflicts(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    found = services.conflicts(s, args["text"])
+    return {
+        "conflicts_found": len(found) > 0,
+        "count": len(found),
+        "conflicts": found,
+    }
 
 
 # ---------------------------------------------------------------------------

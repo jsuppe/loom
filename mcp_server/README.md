@@ -19,12 +19,12 @@ Before filling in the handlers, two things should be factored out of
    re-parsing args or rendering strings.
 
    **Done:** `status`, `query`, `list_requirements`, `trace`, `chain`,
-   `coverage`, `doctor`, `conflicts`. Their `cmd_*` counterparts in
-   `scripts/loom` are thin wrappers over `services.py`. All Phase A
-   read-only MCP handlers are now wired to real implementations.
+   `coverage`, `doctor`, `conflicts`, `extract`, `check`, `link`,
+   `detect_requirements`. Their `cmd_*` counterparts in `scripts/loom`
+   are thin wrappers over `services.py`.
 
-   **Remaining:** `extract`, `link`, `check`, `sync`, `supersede`, plus
-   spec/pattern/test commands (write tools, Phase B).
+   **Remaining:** `sync`, `supersede`, `refine`, `set_status`, plus
+   spec/pattern/test commands.
 
 Each MCP handler should collapse to 2-3 lines once its service exists.
 
@@ -58,7 +58,7 @@ Add to `.mcp.json` in the repo root:
 }
 ```
 
-## Phase A tools (read-only)
+## Phase A tools (read-only) — shipped
 
 - `loom_query` — semantic search
 - `loom_list` — list requirements
@@ -68,10 +68,17 @@ Add to `.mcp.json` in the repo root:
 - `loom_coverage` — gap analysis
 - `loom_doctor` — health checks
 
-## Phase B tools (write, planned)
+## Phase B tools — partially shipped
 
-- `loom_extract`, `loom_link`, `loom_check`, `loom_spec_create`,
-  `loom_supersede`, `loom_sync`
+Shipped:
+- `loom_extract` — add a requirement (returns conflicts if any)
+- `loom_check` — drift check for a file
+- `loom_link` — link a file to req(s) and/or spec(s)
+- `loom_conflicts` — read-only conflict probe (does NOT add)
+
+Planned:
+- `loom_spec_create`, `loom_supersede`, `loom_sync`, `loom_refine`,
+  `loom_set_status`
 
 ## Resources (planned)
 

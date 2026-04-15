@@ -272,3 +272,133 @@ class TestDoctor:
         store.supersede_requirement("REQ-old")
         data = services.doctor(store)
         assert data["checks"]["drift"]["count"] == 1
+
+
+class TestExtract:
+    def test_creates_requirement(self, store):
+        result = services.extract(
+            store, domain="behavior", value="users must log in",
+        )
+        assert result["req_id"].startswith("REQ-")
+        assert result["domain"] == "behavior"
+        assert result["value"] == "users must log in"
+        assert result["conflicts"] == []
+        # Verify it was actually persisted.
+        assert store.get_requirement(result["req_id"]) is not None
+
+    def test_lowercases_domain_and_strips_whitespace(self, store):
+        result = services.extract(
+            store, domain="  BEHAVIOR  ", value="  spaced text  ",
+        )
+        assert result["domain"] == "behavior"
+        assert result["value"] == "spaced text"
+
+    def test_id_is_deterministic(self, store):
+        # Same domain+value → same ID.
+        r1 = services.extract(store, domain="data", value="cache TTL is 60s")
+        # Re-extraction creates the same ID; ChromaDB will overwrite.
+        r2 = services.extract(store, domain="data", value="cache TTL is 60s")
+        assert r1["req_id"] == r2["req_id"]
+
+    def test_rationale_persisted(self, store):
+        result = services.extract(
+            store, domain="behavior", value="rate limit", rationale="prevent abuse",
+        )
+        req = store.get_requirement(result["req_id"])
+        assert req.rationale == "prevent abuse"
+
+
+class TestCheck:
+    def test_missing_file_raises(self, store):
+        with pytest.raises(LookupError):
+            services.check(store, "/nonexistent/path.py")
+
+    def test_unlinked_file_returns_empty(self, store, tmp_path):
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        data = services.check(store, str(f))
+        assert data["linked"] is False
+        assert data["drift_detected"] is False
+        assert data["requirements"] == []
+
+    def test_drift_detected_when_req_superseded(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "x.py"
+        f.write_text("# impl\n")
+
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="# impl\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-x"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        store.supersede_requirement("REQ-x")
+
+        data = services.check(store, str(f))
+        assert data["linked"] is True
+        assert data["drift_detected"] is True
+        assert data["requirements"][0]["drifted"] is True
+
+
+class TestLink:
+    def test_missing_file_raises(self, store):
+        with pytest.raises(LookupError):
+            services.link(store, "/nonexistent/path.py", req_ids=["REQ-x"])
+
+    def test_no_ids_returns_unlinked_with_warning(self, store, tmp_path):
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        result = services.link(store, str(f))
+        assert result["linked"] is False
+        assert result["impl_id"] is None
+        assert result["warnings"]  # should explain why
+
+    def test_all_unknown_ids_returns_unlinked_with_warnings(self, store, tmp_path):
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        result = services.link(store, str(f), req_ids=["REQ-ghost"])
+        assert result["linked"] is False
+        assert any("REQ-ghost" in w for w in result["warnings"])
+
+    def test_unknown_req_warned_and_skipped(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-real", "behavior", "real", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+
+        result = services.link(
+            store, str(f), req_ids=["REQ-real", "REQ-ghost"],
+        )
+        assert result["linked"] is True
+        assert any("REQ-ghost" in w for w in result["warnings"])
+        # REQ-real should still be linked despite REQ-ghost failing.
+        assert any(s["req_id"] == "REQ-real" for s in result["satisfies"])
+
+    def test_links_persisted(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("def a(): pass\n")
+        result = services.link(store, str(f), req_ids=["REQ-a"])
+        assert result["linked"] is True
+        impls = store.get_implementations_for_requirement("REQ-a")
+        assert len(impls) == 1
+        assert impls[0].id == result["impl_id"]
+
+
+class TestDetectRequirements:
+    def test_missing_file_raises(self, store):
+        with pytest.raises(LookupError):
+            services.detect_requirements(store, "/nonexistent/path.py")
+
+    def test_returns_candidates(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-1", "behavior", "match", fake_embedding)
+        f = tmp_path / "x.py"
+        f.write_text("anything\n")
+        candidates = services.detect_requirements(store, str(f), n=3)
+        assert isinstance(candidates, list)
+        # With one req and matching dummy embedding, we expect to see it.
+        if candidates:
+            assert "req_id" in candidates[0]
+            assert "value" in candidates[0]

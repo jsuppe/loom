@@ -532,3 +532,288 @@ def doctor(store: LoomStore) -> dict[str, Any]:
         "issues": issues,
         "warnings": warnings,
     }
+
+
+def extract(
+    store: LoomStore,
+    *,
+    domain: str,
+    value: str,
+    msg_id: str = "manual",
+    session: str = "cli",
+    rationale: str | None = None,
+) -> dict[str, Any]:
+    """Add a single requirement.
+
+    Returns {req_id, domain, value, conflicts}. Conflicts is a list of
+    conflict entries (same shape as `services.conflicts`); empty if none.
+    The requirement is added to the store regardless of conflicts —
+    callers (CLI, MCP) decide how to surface them.
+
+    Note: callers that want to parse `REQUIREMENT: domain | text` syntax
+    should do that themselves; this function takes structured fields.
+    """
+    from datetime import datetime, timezone
+    import hashlib as _hashlib
+    from store import Requirement
+    from embedding import get_embedding
+
+    domain = domain.strip().lower()
+    value = value.strip()
+    timestamp = datetime.now(timezone.utc).isoformat()
+    req_id = f"REQ-{_hashlib.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]}"
+
+    req = Requirement(
+        id=req_id,
+        domain=domain,
+        value=value,
+        source_msg_id=msg_id,
+        source_session=session,
+        timestamp=timestamp,
+        rationale=rationale,
+    )
+
+    # Conflict check is best-effort. Done before adding so the conflict
+    # list reflects pre-existing reqs, not this one.
+    try:
+        from docs import check_conflicts
+        raw_conflicts = check_conflicts(store, req, get_embedding_fn=get_embedding)
+    except Exception:
+        raw_conflicts = []
+
+    conflicts_out: list[dict[str, Any]] = []
+    for c in raw_conflicts:
+        existing = c["existing"]
+        entry = {
+            "existing_id": existing.id,
+            "existing_domain": existing.domain,
+            "existing_value": existing.value,
+            "reason": c["reason"],
+        }
+        if "similarity" in c:
+            entry["similarity"] = c["similarity"]
+        if "overlap" in c:
+            entry["overlap"] = list(c["overlap"])
+        conflicts_out.append(entry)
+
+    embedding = get_embedding(value)
+    store.add_requirement(req, embedding)
+
+    return {
+        "req_id": req_id,
+        "domain": domain,
+        "value": value,
+        "conflicts": conflicts_out,
+    }
+
+
+def _read_file_content(file_path: str, lines: str | None = None) -> str:
+    """Read file (optionally a line range like '42-78'). Raises LookupError."""
+    from pathlib import Path
+    p = Path(file_path)
+    if not p.exists():
+        raise LookupError(f"File not found: {file_path}")
+    content = p.read_text()
+    if lines:
+        start, end = (int(x) for x in lines.split("-"))
+        content = "\n".join(content.split("\n")[start - 1:end])
+    return content
+
+
+def check(
+    store: LoomStore, file_path: str, lines: str | None = None
+) -> dict[str, Any]:
+    """Check a file (or line range) for drift against linked requirements.
+
+    Returns:
+        {file, lines, linked: bool, drift_detected: bool,
+         requirements: [{req_id, value, domain, status, drifted, superseded_at}]}
+
+    `linked` is False if no Implementation exists for this file/range; in
+    that case `requirements` is `[]` and `drift_detected` is False.
+
+    Raises:
+        LookupError: file not found.
+    """
+    from store import generate_impl_id
+
+    # Resolve early so a missing file fails fast (without a stray read).
+    if not __import__("pathlib").Path(file_path).exists():
+        raise LookupError(f"File not found: {file_path}")
+
+    impl_id = generate_impl_id(file_path, lines or "all")
+    impl = store.get_implementation(impl_id)
+
+    if not impl:
+        return {
+            "file": file_path,
+            "lines": lines,
+            "linked": False,
+            "drift_detected": False,
+            "requirements": [],
+        }
+
+    drift_found = False
+    results: list[dict[str, Any]] = []
+    for sat in impl.satisfies:
+        req = store.get_requirement(sat["req_id"])
+        if req:
+            drifted = req.superseded_at is not None
+            if drifted:
+                drift_found = True
+            results.append({
+                "req_id": sat["req_id"],
+                "value": req.value,
+                "domain": req.domain,
+                "status": req.status,
+                "drifted": drifted,
+                "superseded_at": req.superseded_at,
+            })
+
+    return {
+        "file": file_path,
+        "lines": lines,
+        "linked": True,
+        "drift_detected": drift_found,
+        "requirements": results,
+    }
+
+
+def detect_requirements(
+    store: LoomStore, file_path: str, lines: str | None = None, n: int = 3
+) -> list[dict[str, Any]]:
+    """Semantic search to suggest req_ids that match a file's content.
+
+    Excludes superseded requirements. Returns up to `n` matches as
+    [{req_id, value, distance}]. Raises LookupError if file missing.
+    """
+    from embedding import get_embedding
+    content = _read_file_content(file_path, lines)
+    vec = get_embedding(content)
+    results = store.search_requirements(vec, n=n)
+    return [
+        {
+            "req_id": r["id"],
+            "value": r["requirement"].value,
+            "distance": r.get("distance"),
+        }
+        for r in results
+        if r["requirement"].superseded_at is None
+    ]
+
+
+def link(
+    store: LoomStore,
+    file_path: str,
+    *,
+    lines: str | None = None,
+    req_ids: list[str] | tuple[str, ...] = (),
+    spec_ids: list[str] | tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Link a file (or line range) to requirements and/or specifications.
+
+    Both `req_ids` and `spec_ids` are taken as-given — if you want
+    auto-detection, call `detect_requirements` first and pass the IDs in.
+
+    For each spec linked, the spec's parent requirement is also linked
+    (preserving the dual-index pattern that lets `loom trace REQ-id`
+    keep working). This is intentional; see KNOWN_ISSUES.md M2.
+
+    Linking a requirement that has active specs is allowed but flagged
+    in `warnings` (the CLI's "consider linking to a spec instead" UX).
+
+    Returns:
+        {linked: bool, impl_id, file, lines,
+         satisfies: [{req_id}], satisfies_specs: [str], warnings: [str]}
+
+    `linked` is False if all provided ids were invalid (or none were
+    provided). In that case `impl_id` is `None`, `satisfies` and
+    `satisfies_specs` are `[]`, and `warnings` carries diagnostics.
+
+    Raises:
+        LookupError: file not found.
+    """
+    from datetime import datetime, timezone
+    from store import Implementation, generate_impl_id, generate_content_hash
+    from embedding import get_embedding
+
+    content = _read_file_content(file_path, lines)
+    impl_id = generate_impl_id(file_path, lines or "all")
+    content_hash = generate_content_hash(content)
+
+    satisfies: list[dict[str, str]] = []
+    satisfies_specs: list[str] = []
+    warnings: list[str] = []
+
+    # Resolve specs first so we can auto-link parent reqs.
+    for sid in spec_ids:
+        spec = store.get_specification(sid)
+        if not spec:
+            warnings.append(f"spec {sid} not found")
+            continue
+        satisfies_specs.append(sid)
+        if not any(s["req_id"] == spec.parent_req for s in satisfies):
+            parent = store.get_requirement(spec.parent_req)
+            if parent:
+                satisfies.append({
+                    "req_id": spec.parent_req,
+                    "req_version": parent.timestamp,
+                })
+
+    # Resolve direct req links.
+    for rid in req_ids:
+        req = store.get_requirement(rid)
+        if not req:
+            warnings.append(f"requirement {rid} not found")
+            continue
+
+        # Lint: warn if user is linking direct when active specs exist
+        # AND no spec was explicitly given.
+        if not spec_ids:
+            existing_specs = store.get_specifications_for_requirement(rid)
+            active = [s for s in existing_specs if not s.superseded_at]
+            if active:
+                spec_list = ", ".join(f"{s.id} ({s.description[:40]})" for s in active)
+                warnings.append(
+                    f"{rid} has {len(active)} active spec(s); "
+                    f"prefer --spec: {spec_list}"
+                )
+
+        if not any(s["req_id"] == rid for s in satisfies):
+            satisfies.append({"req_id": rid, "req_version": req.timestamp})
+
+    if not satisfies and not satisfies_specs:
+        if not warnings:
+            warnings.append("no requirement or spec ids provided")
+        return {
+            "linked": False,
+            "impl_id": None,
+            "file": file_path,
+            "lines": lines or "all",
+            "satisfies": [],
+            "satisfies_specs": [],
+            "warnings": warnings,
+        }
+
+    impl = Implementation(
+        id=impl_id,
+        file=file_path,
+        lines=lines or "all",
+        content=content,
+        content_hash=content_hash,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        satisfies=satisfies,
+        satisfies_specs=satisfies_specs or None,
+    )
+    embedding = get_embedding(content)
+    store.add_implementation(impl, embedding)
+
+    return {
+        "linked": True,
+        "impl_id": impl_id,
+        "file": file_path,
+        "lines": lines or "all",
+        "satisfies": satisfies,
+        "satisfies_specs": satisfies_specs,
+        "warnings": warnings,
+    }
