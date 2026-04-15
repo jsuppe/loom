@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "LOOM_DIR=$(git rev-parse --show-toplevel 2>/dev/null) && PROJECT=$(basename \"$LOOM_DIR\") && STATUS=$(python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" status --json 2>/dev/null) && DOCTOR=$(python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" doctor --json 2>/dev/null) && DRIFT=$(echo \"$STATUS\" | jq -r '.drift_count // 0') && HEALTHY=$(echo \"$DOCTOR\" | jq -r '.healthy // false') && if [ \"$DRIFT\" != \"0\" ] || [ \"$HEALTHY\" != \"true\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"Loom status: $DRIFT drifted implementation(s). Store healthy: $HEALTHY. Run loom status or loom doctor for details.\\\"}}\"; fi",
+            "timeout": 30,
+            "statusMessage": "Checking Loom requirements status..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "LOOM_DIR=$(git rev-parse --show-toplevel 2>/dev/null) && PROJECT=$(basename \"$LOOM_DIR\") && jq -r '.tool_input.file_path' | { read -r f; RESULT=$(python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" check \"$f\" --json 2>/dev/null) || true; DRIFT=$(echo \"$RESULT\" | jq -r '.drift_detected // false' 2>/dev/null); if [ \"$DRIFT\" = \"true\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"Loom drift detected in $f. Requirements linked to this file have been superseded. Run: loom trace $f --json\\\"}}\"; fi; }",
+            "timeout": 15,
+            "statusMessage": "Checking for requirement drift..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command // \"\"'); echo \"$CMD\" | grep -q 'git commit' || exit 0; LOOM_DIR=$(git rev-parse --show-toplevel 2>/dev/null) && PROJECT=$(basename \"$LOOM_DIR\") && CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -v '^docs/' | head -1) && if [ -n \"$CHANGED\" ]; then python3 \"$LOOM_DIR/scripts/loom\" -p \"$PROJECT\" sync --output \"$LOOM_DIR/docs\" >/dev/null 2>&1 && echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"Loom: REQUIREMENTS.md and TEST_SPEC.md regenerated in docs/\\\"}}\"; fi",
+            "timeout": 30,
+            "statusMessage": "Syncing Loom documentation..."
+          }
+        ]
+      }
+    ]
+  }
+}

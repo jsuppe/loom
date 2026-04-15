@@ -31,6 +31,7 @@ class Requirement:
     
     # Enhanced fields for actionable requirements
     elaboration: Optional[str] = None  # Agent-generated expansion of how to satisfy this
+    rationale: Optional[str] = None  # Why this requirement exists (decision context)
     status: str = "pending"  # pending, in_progress, implemented, verified, superseded
     acceptance_criteria: Optional[List[str]] = None  # Definition of done
     test_spec_id: Optional[str] = None  # Link to test specification
@@ -47,6 +48,7 @@ class Requirement:
     def from_dict(cls, d: Dict[str, Any]) -> "Requirement":
         # Handle missing fields for backwards compatibility
         d.setdefault('elaboration', None)
+        d.setdefault('rationale', None)
         d.setdefault('status', 'pending')
         d.setdefault('acceptance_criteria', None)
         d.setdefault('test_spec_id', None)
