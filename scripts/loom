@@ -416,164 +416,101 @@ def cmd_supersede(args):
 
 def cmd_test_add(args):
     """Add or update a test specification."""
-    from testspec import TestSpec, TestSpecStore
-    
     store = LoomStore(args.project)
-    spec_store = TestSpecStore(store.data_dir)
-    
+
     print(f"🧵 Loom Test Add — {args.req_id}")
     print()
-    
-    # Verify requirement exists
+
     req = store.get_requirement(args.req_id)
-    if not req:
-        print(f"Requirement {args.req_id} not found")
+    if req:
+        print(f"Requirement: {req.value}")
+        print()
+
+    try:
+        result = services.test_add(
+            store, args.req_id,
+            description=args.description,
+            steps=args.steps.split(";") if args.steps else (),
+            expected=args.expected,
+            automated=args.automated,
+            test_file=args.test_file,
+            private=args.private,
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
         return 1
-    
-    print(f"Requirement: {req.value}")
-    print()
-    
-    # Get existing spec or create new
-    existing = spec_store.get_spec(args.req_id)
-    
-    spec = TestSpec(
-        req_id=args.req_id,
-        description=args.description or (existing.description if existing else ""),
-        steps=args.steps.split(";") if args.steps else (existing.steps if existing else []),
-        expected=args.expected or (existing.expected if existing else ""),
-        automated=args.automated or (existing.automated if existing else False),
-        test_file=args.test_file or (existing.test_file if existing else None),
-        private=args.private or (existing.private if existing else False),
-    )
-    
-    spec_store.add_spec(spec)
+
     print(f"✓ Test spec saved for {args.req_id}")
-    
-    if spec.steps:
-        print(f"  Steps: {len(spec.steps)}")
-    if spec.expected:
-        print(f"  Expected: {spec.expected[:50]}...")
-    if spec.automated:
-        print(f"  Automated: Yes ({spec.test_file})")
-    
+    if result["steps"]:
+        print(f"  Steps: {len(result['steps'])}")
+    if result["expected"]:
+        print(f"  Expected: {result['expected'][:50]}...")
+    if result["automated"]:
+        print(f"  Automated: Yes ({result['test_file']})")
     return 0
 
 
 def cmd_test_verify(args):
     """Mark a test as verified."""
-    from testspec import TestSpecStore
-    
     store = LoomStore(args.project)
-    spec_store = TestSpecStore(store.data_dir)
-    
     print(f"🧵 Loom Test Verify — {args.req_id}")
     print()
-    
-    if spec_store.mark_verified(args.req_id):
-        print(f"✓ Marked {args.req_id} as verified")
-    else:
-        print(f"No test spec found for {args.req_id}")
+    try:
+        services.test_verify(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
         return 1
-    
+    print(f"✓ Marked {args.req_id} as verified")
     return 0
 
 
 def cmd_test_list(args):
     """List all test specifications."""
-    from testspec import TestSpecStore
-    
     store = LoomStore(args.project)
-    spec_store = TestSpecStore(store.data_dir)
-    
-    specs = spec_store.list_specs(include_private=not args.public)
-    
-    # JSON output mode
+    specs = services.test_list(store, include_private=not args.public)
+
     if args.json:
-        output = [s.to_dict() for s in specs]
-        print(json.dumps(output, indent=2))
+        print(json.dumps(specs, indent=2))
         return 0
-    
+
     print(f"🧵 Loom Test Specs — Project: {args.project}")
     print()
-    
+
     if not specs:
         print("No test specs defined yet.")
         print("Use `loom test add REQ-xxx --description '...'` to add one.")
         return 0
-    
-    for spec in specs:
-        status = "✅" if spec.last_verified else "⚠️"
-        auto = "🤖" if spec.automated else "👤"
-        private = "🔒" if spec.private else ""
-        
-        print(f"{status} {auto} {spec.req_id} {private}")
-        print(f"   {spec.description}")
-        if spec.last_verified:
-            print(f"   Last verified: {spec.last_verified[:10]}")
+
+    for s in specs:
+        status = "✅" if s.get("last_verified") else "⚠️"
+        auto = "🤖" if s.get("automated") else "👤"
+        private = "🔒" if s.get("private") else ""
+
+        print(f"{status} {auto} {s['req_id']} {private}")
+        print(f"   {s['description']}")
+        if s.get("last_verified"):
+            print(f"   Last verified: {s['last_verified'][:10]}")
         print()
-    
     return 0
 
 
 def cmd_test_generate(args):
     """Auto-generate test specifications from acceptance criteria."""
-    from testspec import TestSpec, TestSpecStore
-    
     store = LoomStore(args.project)
-    spec_store = TestSpecStore(store.data_dir)
-    
+
     print(f"🧵 Loom Test Generate — Project: {args.project}")
     print()
-    
-    reqs = store.list_requirements()
-    generated = 0
-    skipped = 0
-    no_criteria = 0
-    
-    for req in reqs:
-        ac = getattr(req, 'acceptance_criteria', None)
-        
-        # Skip if no acceptance criteria
-        if not ac or len(ac) == 0:
-            no_criteria += 1
-            continue
-        
-        # Skip if already has test spec (unless --force)
-        existing = spec_store.get_spec(req.id)
-        if existing and not args.force:
-            skipped += 1
-            continue
-        
-        # Convert acceptance criteria to test steps
-        steps = []
-        for i, criterion in enumerate(ac, 1):
-            steps.append(f"Verify: {criterion}")
-        
-        # Create test spec
-        spec = TestSpec(
-            req_id=req.id,
-            description=f"Test for: {req.value[:100]}..." if len(req.value) > 100 else f"Test for: {req.value}",
-            steps=steps,
-            expected="All acceptance criteria pass",
-            automated=False,
-            test_file=None,
-            private=False,
-        )
-        
-        spec_store.add_spec(spec)
-        
-        # Also link the test spec to the requirement
-        store.link_test_spec(req.id, f"TEST-{req.id}")
-        
-        generated += 1
-        if not args.quiet:
-            print(f"✓ {req.id} — {len(steps)} steps")
-    
+
+    result = services.test_generate(store, force=args.force)
+
+    if not args.quiet:
+        for rid in result["generated"]:
+            print(f"✓ {rid}")
+
     print()
-    print(f"Generated: {generated}")
-    print(f"Skipped (existing): {skipped}")
-    print(f"No acceptance criteria: {no_criteria}")
-    
+    print(f"Generated: {len(result['generated'])}")
+    print(f"Skipped (existing): {len(result['skipped'])}")
+    print(f"No acceptance criteria: {len(result['no_criteria'])}")
     return 0
 
 
@@ -845,27 +782,20 @@ def cmd_set_status(args):
 def cmd_incomplete(args):
     """List requirements that need refinement."""
     store = LoomStore(args.project)
-    
-    incomplete = store.get_incomplete_requirements()
-    
+    incomplete = services.incomplete(store)
+
     if not incomplete:
         print("✅ All requirements are fully refined!")
         return 0
-    
+
     print(f"⚠️  {len(incomplete)} requirement(s) need refinement:")
     print()
-    
+
     for req in incomplete:
-        missing = []
-        if not req.elaboration:
-            missing.append("elaboration")
-        if not req.acceptance_criteria:
-            missing.append("acceptance criteria")
-        
-        print(f"  {req.id} [{req.domain}] — missing: {', '.join(missing)}")
-        print(f"    {req.value[:70]}...")
+        print(f"  {req['id']} [{req['domain']}] — missing: {', '.join(req['missing'])}")
+        print(f"    {req['value'][:70]}...")
         print()
-    
+
     print(f"Run: loom refine <req-id> --elaboration '...' --criteria '...'")
     return 0
 
@@ -881,96 +811,75 @@ def generate_spec_id() -> str:
 def cmd_spec_add(args):
     """Add a specification to a requirement."""
     store = LoomStore(args.project)
-    
-    # Verify requirement exists
-    req = store.get_requirement(args.req_id)
-    if not req:
-        print(f"❌ Requirement {args.req_id} not found")
-        return 1
-    
-    # Get description
+
     if args.description:
         description = args.description
     else:
-        print(f"Adding specification to {args.req_id}: {req.value[:60]}...")
+        req = store.get_requirement(args.req_id)
+        if req:
+            print(f"Adding specification to {args.req_id}: {req.value[:60]}...")
         print("Enter specification description:")
         try:
             description = sys.stdin.read().strip()
         except KeyboardInterrupt:
             print("\nCancelled")
             return 1
-    
-    if not description:
-        print("❌ No description provided")
+
+    try:
+        result = services.spec_add(
+            store, args.req_id, description,
+            acceptance_criteria=args.criteria or None,
+            status=args.status or "draft",
+            source_doc=args.source_doc,
+        )
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
         return 1
-    
-    # Parse acceptance criteria
-    criteria = []
-    if args.criteria:
-        criteria = args.criteria
-    
-    # Create specification
-    spec_id = generate_spec_id()
-    spec = Specification(
-        id=spec_id,
-        parent_req=args.req_id,
-        description=description,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        status=args.status or "draft",
-        acceptance_criteria=criteria if criteria else None,
-        source_doc=args.source_doc
-    )
-    
-    # Get embedding
-    embedding = get_embedding(description)
-    store.add_specification(spec, embedding)
-    
-    print(f"✅ Created {spec_id}")
-    print(f"   Parent: {args.req_id}")
-    print(f"   Description: {description[:80]}...")
-    if criteria:
-        print(f"   Criteria: {len(criteria)} item(s)")
-    
+
+    print(f"✅ Created {result['spec_id']}")
+    print(f"   Parent: {result['parent_req']}")
+    print(f"   Description: {result['description'][:80]}...")
+    if result["acceptance_criteria"]:
+        print(f"   Criteria: {len(result['acceptance_criteria'])} item(s)")
     return 0
 
 
 def cmd_spec_list(args):
     """List specifications."""
     store = LoomStore(args.project)
-    
-    if args.req_id:
-        specs = store.get_specifications_for_requirement(args.req_id)
-    else:
-        specs = store.list_specifications(include_superseded=args.all)
-    
-    # JSON output mode - must be before any other output
+    specs = services.spec_list(
+        store,
+        req_id=args.req_id,
+        include_superseded=getattr(args, 'all', False),
+    )
+
     if args.json:
-        output = [s.to_dict() for s in specs]
-        print(json.dumps(output, indent=2))
+        # Use raw dataclass dict for faithful --json output.
+        if args.req_id:
+            raw = store.get_specifications_for_requirement(args.req_id)
+        else:
+            raw = store.list_specifications(include_superseded=args.all)
+        print(json.dumps([s.to_dict() for s in raw], indent=2))
         return 0
-    
-    # Human-readable output
+
     if args.req_id:
         print(f"📋 Specifications for {args.req_id}")
     else:
         print(f"📋 All Specifications — Project: {args.project}")
     print()
-    
+
     if not specs:
         print("No specifications found.")
         return 0
-    
-    for spec in specs:
-        status = f" ({spec.status})" if spec.status != "draft" else ""
-        superseded = " [SUPERSEDED]" if spec.superseded_at else ""
-        print(f"{spec.id} → {spec.parent_req}{status}{superseded}")
-        print(f"  {spec.description[:80]}...")
-        
-        # Show linked implementations
-        impls = store.get_implementations_for_specification(spec.id)
-        if impls:
-            print(f"  📁 {len(impls)} implementation(s)")
-    
+
+    for s in specs:
+        status = f" ({s['status']})" if s['status'] != "draft" else ""
+        superseded = " [SUPERSEDED]" if s['superseded_at'] else ""
+        print(f"{s['id']} → {s['parent_req']}{status}{superseded}")
+        print(f"  {s['description'][:80]}...")
+        if s['implementation_count']:
+            print(f"  📁 {s['implementation_count']} implementation(s)")
+
     print()
     print(f"Total: {len(specs)}")
     return 0
@@ -979,59 +888,22 @@ def cmd_spec_list(args):
 def cmd_spec_link(args):
     """Link code to a specification."""
     store = LoomStore(args.project)
-    
-    # Verify spec exists
-    spec = store.get_specification(args.spec_id)
-    if not spec:
-        print(f"❌ Specification {args.spec_id} not found")
+
+    try:
+        result = services.spec_link(store, args.spec_id, args.file, lines=args.lines)
+    except LookupError as e:
+        print(f"❌ {e}")
         return 1
-    
-    # Read file
-    filepath = Path(args.file).resolve()
-    if not filepath.exists():
-        print(f"❌ File not found: {args.file}")
-        return 1
-    
-    content = filepath.read_text()
-    
-    # Handle line range
-    lines_str = args.lines or f"1-{len(content.splitlines())}"
-    
-    if args.lines:
-        start, end = map(int, args.lines.split('-'))
-        lines = content.splitlines()[start-1:end]
-        content = '\n'.join(lines)
-    
-    # Generate implementation ID
-    impl_id = generate_impl_id(str(filepath), lines_str)
-    
-    # Check if implementation exists
-    existing = store.get_implementation(impl_id)
-    if existing:
-        # Just add the spec link
-        if store.link_implementation_to_spec(impl_id, args.spec_id):
-            print(f"✅ Linked existing implementation to {args.spec_id}")
-        else:
+
+    if result["reused"]:
+        if result["already_linked"]:
             print(f"⚠️  Already linked")
-        return 0
-    
-    # Create new implementation linked to spec
-    impl = Implementation(
-        id=impl_id,
-        file=str(filepath),
-        lines=lines_str,
-        content=content,
-        content_hash=generate_content_hash(content),
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        satisfies=[{"req_id": spec.parent_req, "req_version": "current"}],
-        satisfies_specs=[args.spec_id]
-    )
-    
-    embedding = get_embedding(content)
-    store.add_implementation(impl, embedding)
-    
-    print(f"✅ Linked {filepath.name}:{lines_str} to {args.spec_id}")
-    print(f"   (Also linked to parent requirement {spec.parent_req})")
+        else:
+            print(f"✅ Linked existing implementation to {result['spec_id']}")
+    else:
+        fname = Path(result["file"]).name
+        print(f"✅ Linked {fname}:{result['lines']} to {result['spec_id']}")
+        print(f"   (Also linked to parent requirement {result['parent_req']})")
     return 0
 
 
@@ -1046,85 +918,62 @@ def generate_pattern_id() -> str:
 def cmd_pattern_add(args):
     """Add a shared design pattern."""
     store = LoomStore(args.project)
-    
-    if not args.name:
-        print("❌ Pattern name required (--name)")
-        return 1
-    
-    if not args.description:
+
+    if args.description:
+        description = args.description
+    else:
         print("Enter pattern description:")
         try:
             description = sys.stdin.read().strip()
         except KeyboardInterrupt:
             print("\nCancelled")
             return 1
-    else:
-        description = args.description
-    
-    if not description:
-        print("❌ No description provided")
+
+    try:
+        result = services.pattern_add(
+            store, args.name or "", description, applies_to=args.reqs or []
+        )
+    except ValueError as e:
+        print(f"❌ {e}")
         return 1
-    
-    # Parse requirements
-    applies_to = args.reqs or []
-    
-    # Verify requirements exist
-    for req_id in applies_to:
-        if not store.get_requirement(req_id):
-            print(f"⚠️  Requirement {req_id} not found (continuing anyway)")
-    
-    pattern_id = generate_pattern_id()
-    pattern = Pattern(
-        id=pattern_id,
-        name=args.name,
-        description=description,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        applies_to=applies_to
-    )
-    
-    embedding = get_embedding(f"{args.name}: {description}")
-    store.add_pattern(pattern, embedding)
-    
-    print(f"✅ Created {pattern_id}: {args.name}")
-    print(f"   {description[:80]}...")
-    if applies_to:
-        print(f"   Applies to: {', '.join(applies_to)}")
-    
+
+    for rid in result["missing_reqs"]:
+        print(f"⚠️  Requirement {rid} not found (continuing anyway)")
+
+    print(f"✅ Created {result['pattern_id']}: {result['name']}")
+    print(f"   {result['description'][:80]}...")
+    if result["applies_to"]:
+        print(f"   Applies to: {', '.join(result['applies_to'])}")
     return 0
 
 
 def cmd_pattern_list(args):
     """List patterns."""
     store = LoomStore(args.project)
-    
-    patterns = store.list_patterns(include_deprecated=args.all)
-    
-    # JSON output mode - must be before any other output
+
     if args.json:
-        output = [p.to_dict() for p in patterns]
-        print(json.dumps(output, indent=2))
+        raw = store.list_patterns(include_deprecated=args.all)
+        print(json.dumps([p.to_dict() for p in raw], indent=2))
         return 0
-    
-    # Human-readable output
+
+    patterns = services.pattern_list(store, include_deprecated=args.all)
+
     print(f"🔷 Design Patterns — Project: {args.project}")
     print()
-    
+
     if not patterns:
         print("No patterns found.")
         return 0
-    
-    for pattern in patterns:
-        status = f" [DEPRECATED]" if pattern.status == "deprecated" else ""
-        print(f"{pattern.id}: {pattern.name}{status}")
-        print(f"  {pattern.description[:80]}...")
-        print(f"  Applies to: {len(pattern.applies_to)} requirement(s)")
-        
-        # Show linked implementations
-        impls = store.get_implementations_for_pattern(pattern.id)
-        if impls:
-            print(f"  📁 {len(impls)} implementation(s)")
+
+    for p in patterns:
+        status = f" [DEPRECATED]" if p['status'] == "deprecated" else ""
+        print(f"{p['id']}: {p['name']}{status}")
+        print(f"  {p['description'][:80]}...")
+        print(f"  Applies to: {len(p['applies_to'])} requirement(s)")
+        if p['implementation_count']:
+            print(f"  📁 {p['implementation_count']} implementation(s)")
         print()
-    
+
     print(f"Total: {len(patterns)}")
     return 0
 
@@ -1132,21 +981,19 @@ def cmd_pattern_list(args):
 def cmd_pattern_apply(args):
     """Apply a pattern to additional requirements."""
     store = LoomStore(args.project)
-    
-    pattern = store.get_pattern(args.pattern_id)
-    if not pattern:
-        print(f"❌ Pattern {args.pattern_id} not found")
+
+    try:
+        result = services.pattern_apply(store, args.pattern_id, args.reqs)
+    except LookupError as e:
+        print(f"❌ {e}")
         return 1
-    
-    added = 0
-    for req_id in args.reqs:
-        if store.add_requirement_to_pattern(args.pattern_id, req_id):
-            print(f"✅ Applied {args.pattern_id} to {req_id}")
-            added += 1
-        else:
-            print(f"⚠️  {req_id} already has this pattern or not found")
-    
-    print(f"\nAdded {added} requirement(s) to pattern")
+
+    for rid in result["added"]:
+        print(f"✅ Applied {result['pattern_id']} to {rid}")
+    for rid in result["skipped"]:
+        print(f"⚠️  {rid} already has this pattern or not found")
+
+    print(f"\nAdded {len(result['added'])} requirement(s) to pattern")
     return 0
 
 

@@ -965,3 +965,438 @@ def refine(
         "status": updated.status,
         "is_complete": updated.is_complete(),
     }
+
+
+# ==================== Specifications ====================
+
+def _generate_spec_id() -> str:
+    import uuid
+    return f"SPEC-{uuid.uuid4().hex[:8]}"
+
+
+def spec_add(
+    store: LoomStore,
+    req_id: str,
+    description: str,
+    *,
+    acceptance_criteria: list[str] | None = None,
+    status: str = "draft",
+    source_doc: str | None = None,
+) -> dict[str, Any]:
+    """Add a specification under a parent requirement.
+
+    Returns: {spec_id, parent_req, description, status, acceptance_criteria}.
+
+    Raises:
+        LookupError: parent requirement not found.
+        ValueError: description is empty.
+    """
+    from datetime import datetime, timezone
+    from store import Specification
+    from embedding import get_embedding
+
+    description = (description or "").strip()
+    if not description:
+        raise ValueError("description is required")
+    if store.get_requirement(req_id) is None:
+        raise LookupError(f"Requirement {req_id} not found")
+
+    spec_id = _generate_spec_id()
+    spec = Specification(
+        id=spec_id,
+        parent_req=req_id,
+        description=description,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        status=status,
+        acceptance_criteria=acceptance_criteria or None,
+        source_doc=source_doc,
+    )
+    store.add_specification(spec, get_embedding(description))
+
+    return {
+        "spec_id": spec_id,
+        "parent_req": req_id,
+        "description": description,
+        "status": status,
+        "acceptance_criteria": acceptance_criteria or [],
+    }
+
+
+def spec_list(
+    store: LoomStore,
+    req_id: str | None = None,
+    include_superseded: bool = False,
+) -> list[dict[str, Any]]:
+    """List specifications (optionally filtered by parent req).
+
+    Returns a list of:
+        {id, parent_req, description, status, superseded_at,
+         acceptance_criteria, source_doc, implementation_count}
+    """
+    if req_id:
+        specs = store.get_specifications_for_requirement(req_id)
+    else:
+        specs = store.list_specifications(include_superseded=include_superseded)
+    out: list[dict[str, Any]] = []
+    for s in specs:
+        impls = store.get_implementations_for_specification(s.id)
+        out.append({
+            "id": s.id,
+            "parent_req": s.parent_req,
+            "description": s.description,
+            "status": s.status,
+            "superseded_at": s.superseded_at,
+            "acceptance_criteria": s.acceptance_criteria or [],
+            "source_doc": s.source_doc,
+            "implementation_count": len(impls),
+        })
+    return out
+
+
+def spec_link(
+    store: LoomStore,
+    spec_id: str,
+    file_path: str,
+    lines: str | None = None,
+) -> dict[str, Any]:
+    """Link code to a specification.
+
+    If an Implementation already exists at this (file, lines), it's linked
+    to the spec via `link_implementation_to_spec`. Otherwise a new
+    Implementation is created.
+
+    Returns:
+        {impl_id, spec_id, parent_req, file, lines, reused: bool,
+         already_linked: bool}
+
+    Raises:
+        LookupError: spec or file not found.
+    """
+    from pathlib import Path
+    from datetime import datetime, timezone
+    from store import Implementation, generate_impl_id, generate_content_hash
+    from embedding import get_embedding
+
+    spec = store.get_specification(spec_id)
+    if spec is None:
+        raise LookupError(f"Specification {spec_id} not found")
+
+    filepath = Path(file_path).resolve()
+    if not filepath.exists():
+        raise LookupError(f"File not found: {file_path}")
+
+    content = filepath.read_text()
+    lines_str = lines or f"1-{len(content.splitlines())}"
+    if lines:
+        start, end = (int(x) for x in lines.split("-"))
+        content = "\n".join(content.splitlines()[start - 1:end])
+
+    impl_id = generate_impl_id(str(filepath), lines_str)
+    existing = store.get_implementation(impl_id)
+
+    if existing:
+        already_linked = not store.link_implementation_to_spec(impl_id, spec_id)
+        return {
+            "impl_id": impl_id,
+            "spec_id": spec_id,
+            "parent_req": spec.parent_req,
+            "file": str(filepath),
+            "lines": lines_str,
+            "reused": True,
+            "already_linked": already_linked,
+        }
+
+    impl = Implementation(
+        id=impl_id,
+        file=str(filepath),
+        lines=lines_str,
+        content=content,
+        content_hash=generate_content_hash(content),
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        satisfies=[{"req_id": spec.parent_req, "req_version": "current"}],
+        satisfies_specs=[spec_id],
+    )
+    store.add_implementation(impl, get_embedding(content))
+
+    return {
+        "impl_id": impl_id,
+        "spec_id": spec_id,
+        "parent_req": spec.parent_req,
+        "file": str(filepath),
+        "lines": lines_str,
+        "reused": False,
+        "already_linked": False,
+    }
+
+
+# ==================== Patterns ====================
+
+def _generate_pattern_id() -> str:
+    import uuid
+    return f"PAT-{uuid.uuid4().hex[:8]}"
+
+
+def pattern_add(
+    store: LoomStore,
+    name: str,
+    description: str,
+    applies_to: list[str] | tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Add a shared design pattern.
+
+    Returns:
+        {pattern_id, name, description, applies_to, missing_reqs}
+
+    `missing_reqs` lists any req_ids from `applies_to` that don't exist
+    (pattern is still created with them in its applies_to list — that
+    matches the pre-existing CLI behavior).
+
+    Raises:
+        ValueError: name or description empty.
+    """
+    from datetime import datetime, timezone
+    from store import Pattern
+    from embedding import get_embedding
+
+    name = (name or "").strip()
+    description = (description or "").strip()
+    if not name:
+        raise ValueError("name is required")
+    if not description:
+        raise ValueError("description is required")
+
+    missing_reqs = [
+        rid for rid in applies_to if store.get_requirement(rid) is None
+    ]
+
+    pattern_id = _generate_pattern_id()
+    pattern = Pattern(
+        id=pattern_id,
+        name=name,
+        description=description,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        applies_to=list(applies_to),
+    )
+    store.add_pattern(pattern, get_embedding(f"{name}: {description}"))
+
+    return {
+        "pattern_id": pattern_id,
+        "name": name,
+        "description": description,
+        "applies_to": list(applies_to),
+        "missing_reqs": missing_reqs,
+    }
+
+
+def pattern_list(
+    store: LoomStore, include_deprecated: bool = False
+) -> list[dict[str, Any]]:
+    """List patterns.
+
+    Returns a list of:
+        {id, name, description, status, applies_to, implementation_count}
+    """
+    patterns = store.list_patterns(include_deprecated=include_deprecated)
+    out: list[dict[str, Any]] = []
+    for p in patterns:
+        impls = store.get_implementations_for_pattern(p.id)
+        out.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "status": p.status,
+            "applies_to": list(p.applies_to) if p.applies_to else [],
+            "implementation_count": len(impls),
+        })
+    return out
+
+
+def pattern_apply(
+    store: LoomStore, pattern_id: str, req_ids: list[str] | tuple[str, ...]
+) -> dict[str, Any]:
+    """Attach a pattern to additional requirements.
+
+    Returns:
+        {pattern_id, added: [req_id], skipped: [req_id]}
+
+    `skipped` covers both "already attached" and "req not found" — the
+    underlying `add_requirement_to_pattern` returns False for both and
+    doesn't distinguish. Matches pre-existing CLI behavior.
+
+    Raises:
+        LookupError: pattern not found.
+    """
+    if store.get_pattern(pattern_id) is None:
+        raise LookupError(f"Pattern {pattern_id} not found")
+
+    added: list[str] = []
+    skipped: list[str] = []
+    for rid in req_ids:
+        if store.add_requirement_to_pattern(pattern_id, rid):
+            added.append(rid)
+        else:
+            skipped.append(rid)
+    return {"pattern_id": pattern_id, "added": added, "skipped": skipped}
+
+
+# ==================== Test specs ====================
+
+def test_add(
+    store: LoomStore,
+    req_id: str,
+    *,
+    description: str | None = None,
+    steps: list[str] | tuple[str, ...] = (),
+    expected: str | None = None,
+    automated: bool = False,
+    test_file: str | None = None,
+    private: bool = False,
+) -> dict[str, Any]:
+    """Add or update a TestSpec for a requirement.
+
+    Fields default to the existing TestSpec's values if one exists and the
+    corresponding arg is None/empty. That matches cmd_test_add's
+    merge-with-existing semantics.
+
+    Returns the full TestSpec as a dict.
+
+    Raises:
+        LookupError: req_id not found.
+        ValueError: no description provided and no existing spec to
+                    inherit from.
+    """
+    from testspec import TestSpec, TestSpecStore
+
+    if store.get_requirement(req_id) is None:
+        raise LookupError(f"Requirement {req_id} not found")
+
+    spec_store = TestSpecStore(store.data_dir)
+    existing = spec_store.get_spec(req_id)
+
+    final_description = description if description else (
+        existing.description if existing else ""
+    )
+    if not final_description:
+        raise ValueError("description is required for new test specs")
+
+    spec = TestSpec(
+        req_id=req_id,
+        description=final_description,
+        steps=list(steps) if steps else (existing.steps if existing else []),
+        expected=expected if expected is not None else (
+            existing.expected if existing else ""
+        ),
+        automated=automated if automated else (
+            existing.automated if existing else False
+        ),
+        test_file=test_file if test_file is not None else (
+            existing.test_file if existing else None
+        ),
+        private=private if private else (existing.private if existing else False),
+    )
+    spec_store.add_spec(spec)
+    return spec.to_dict()
+
+
+def test_verify(store: LoomStore, req_id: str) -> dict[str, Any]:
+    """Mark a test as verified. Returns {req_id, last_verified}.
+
+    Raises:
+        LookupError: no test spec for this req.
+    """
+    from testspec import TestSpecStore
+
+    spec_store = TestSpecStore(store.data_dir)
+    if not spec_store.mark_verified(req_id):
+        raise LookupError(f"No test spec found for {req_id}")
+    spec = spec_store.get_spec(req_id)
+    return {"req_id": req_id, "last_verified": spec.last_verified}
+
+
+def test_list(
+    store: LoomStore, include_private: bool = True
+) -> list[dict[str, Any]]:
+    """List test specs as dicts."""
+    from testspec import TestSpecStore
+    spec_store = TestSpecStore(store.data_dir)
+    return [s.to_dict() for s in spec_store.list_specs(include_private=include_private)]
+
+
+def test_generate(store: LoomStore, force: bool = False) -> dict[str, Any]:
+    """Auto-generate TestSpecs from requirements' acceptance criteria.
+
+    Skips:
+        - Requirements with no acceptance_criteria (counted in no_criteria).
+        - Requirements that already have a TestSpec, unless force=True.
+
+    Returns:
+        {generated: [req_id], skipped: [req_id], no_criteria: [req_id]}
+    """
+    from testspec import TestSpec, TestSpecStore
+
+    spec_store = TestSpecStore(store.data_dir)
+    generated: list[str] = []
+    skipped: list[str] = []
+    no_criteria: list[str] = []
+
+    for req in store.list_requirements():
+        ac = req.acceptance_criteria or []
+        # Treat the ChromaDB placeholder as "no real criteria".
+        real_criteria = [c for c in ac if c and c != "TBD"]
+        if not real_criteria:
+            no_criteria.append(req.id)
+            continue
+        if spec_store.get_spec(req.id) is not None and not force:
+            skipped.append(req.id)
+            continue
+
+        steps = [f"Verify: {c}" for c in real_criteria]
+        desc = (
+            f"Test for: {req.value[:100]}..."
+            if len(req.value) > 100
+            else f"Test for: {req.value}"
+        )
+        spec = TestSpec(
+            req_id=req.id,
+            description=desc,
+            steps=steps,
+            expected="All acceptance criteria pass",
+            automated=False,
+            test_file=None,
+            private=False,
+        )
+        spec_store.add_spec(spec)
+        store.link_test_spec(req.id, f"TEST-{req.id}")
+        generated.append(req.id)
+
+    return {
+        "generated": generated,
+        "skipped": skipped,
+        "no_criteria": no_criteria,
+    }
+
+
+# ==================== Misc ====================
+
+def incomplete(store: LoomStore) -> list[dict[str, Any]]:
+    """List requirements that are missing elaboration or acceptance criteria.
+
+    Returns a list of:
+        {id, domain, value, missing: [str]}
+    """
+    out: list[dict[str, Any]] = []
+    for req in store.get_incomplete_requirements():
+        missing: list[str] = []
+        if not req.elaboration:
+            missing.append("elaboration")
+        # ["TBD"] placeholder also counts as missing.
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            missing.append("acceptance criteria")
+        out.append({
+            "id": req.id,
+            "domain": req.domain,
+            "value": req.value,
+            "missing": missing,
+        })
+    return out

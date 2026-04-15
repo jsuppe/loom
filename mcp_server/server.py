@@ -340,6 +340,184 @@ async def list_tools() -> list[Tool]:
                 "required": ["req_id", "elaboration"],
             },
         ),
+        # ----- Entity CRUD: specifications -----
+        Tool(
+            name="loom_spec_add",
+            description=(
+                "Add a specification describing HOW to implement a parent "
+                "requirement. Returns the new SPEC-id."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string", "description": "Parent requirement ID"},
+                    "description": {"type": "string"},
+                    "acceptance_criteria": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["draft", "approved", "implemented", "verified"],
+                        "default": "draft",
+                    },
+                    "source_doc": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id", "description"],
+            },
+        ),
+        Tool(
+            name="loom_spec_list",
+            description="List specifications (optionally filtered by parent req).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string", "description": "Filter by parent req"},
+                    "include_superseded": {"type": "boolean", "default": False},
+                    "project": {"type": "string"},
+                },
+            },
+        ),
+        Tool(
+            name="loom_spec_link",
+            description=(
+                "Link a file (or line range) to a specification. If an "
+                "Implementation already exists at this location it's "
+                "attached to the spec; otherwise a new one is created."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "spec_id": {"type": "string"},
+                    "file": {"type": "string"},
+                    "lines": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["spec_id", "file"],
+            },
+        ),
+        # ----- Entity CRUD: patterns -----
+        Tool(
+            name="loom_pattern_add",
+            description=(
+                "Add a shared design pattern that applies to multiple "
+                "requirements."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "applies_to": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of REQ-ids this pattern applies to",
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["name", "description"],
+            },
+        ),
+        Tool(
+            name="loom_pattern_list",
+            description="List design patterns.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_deprecated": {"type": "boolean", "default": False},
+                    "project": {"type": "string"},
+                },
+            },
+        ),
+        Tool(
+            name="loom_pattern_apply",
+            description="Attach a pattern to additional requirements.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "pattern_id": {"type": "string"},
+                    "req_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "project": {"type": "string"},
+                },
+                "required": ["pattern_id", "req_ids"],
+            },
+        ),
+        # ----- Entity CRUD: test specs -----
+        Tool(
+            name="loom_test_add",
+            description=(
+                "Add or update a TestSpec for a requirement. Fields not "
+                "supplied inherit from an existing TestSpec if one exists."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string"},
+                    "description": {"type": "string"},
+                    "steps": {"type": "array", "items": {"type": "string"}},
+                    "expected": {"type": "string"},
+                    "automated": {"type": "boolean", "default": False},
+                    "test_file": {"type": "string"},
+                    "private": {"type": "boolean", "default": False},
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id"],
+            },
+        ),
+        Tool(
+            name="loom_test_verify",
+            description="Mark a test as verified.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "req_id": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["req_id"],
+            },
+        ),
+        Tool(
+            name="loom_test_list",
+            description="List test specifications.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_private": {"type": "boolean", "default": True},
+                    "project": {"type": "string"},
+                },
+            },
+        ),
+        Tool(
+            name="loom_test_generate",
+            description=(
+                "Auto-generate TestSpecs from requirements' acceptance "
+                "criteria. Skips reqs with existing test specs unless "
+                "force=true."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "force": {"type": "boolean", "default": False},
+                    "project": {"type": "string"},
+                },
+            },
+        ),
+        # ----- Misc -----
+        Tool(
+            name="loom_incomplete",
+            description=(
+                "List requirements missing elaboration or acceptance "
+                "criteria. Read-only."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"project": {"type": "string"}},
+            },
+        ),
     ]
 
 
@@ -371,6 +549,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         "loom_supersede": _handle_supersede,
         "loom_set_status": _handle_set_status,
         "loom_refine": _handle_refine,
+        "loom_spec_add": _handle_spec_add,
+        "loom_spec_list": _handle_spec_list,
+        "loom_spec_link": _handle_spec_link,
+        "loom_pattern_add": _handle_pattern_add,
+        "loom_pattern_list": _handle_pattern_list,
+        "loom_pattern_apply": _handle_pattern_apply,
+        "loom_test_add": _handle_test_add,
+        "loom_test_verify": _handle_test_verify,
+        "loom_test_list": _handle_test_list,
+        "loom_test_generate": _handle_test_generate,
+        "loom_incomplete": _handle_incomplete,
     }
     handler = handlers.get(name)
     if handler is None:
@@ -506,6 +695,113 @@ async def _handle_refine(args: dict[str, Any]) -> dict:
         )
     except (LookupError, ValueError) as e:
         return {"error": str(e)}
+
+
+# ----- Entity CRUD handlers -----
+
+async def _handle_spec_add(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.spec_add(
+            s, args["req_id"], args["description"],
+            acceptance_criteria=args.get("acceptance_criteria"),
+            status=args.get("status", "draft"),
+            source_doc=args.get("source_doc"),
+        )
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
+
+
+async def _handle_spec_list(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return {
+        "specifications": services.spec_list(
+            s,
+            req_id=args.get("req_id"),
+            include_superseded=args.get("include_superseded", False),
+        )
+    }
+
+
+async def _handle_spec_link(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.spec_link(
+            s, args["spec_id"], args["file"], lines=args.get("lines")
+        )
+    except LookupError as e:
+        return {"error": str(e)}
+
+
+async def _handle_pattern_add(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.pattern_add(
+            s, args["name"], args["description"],
+            applies_to=args.get("applies_to", []),
+        )
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+async def _handle_pattern_list(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return {
+        "patterns": services.pattern_list(
+            s, include_deprecated=args.get("include_deprecated", False)
+        )
+    }
+
+
+async def _handle_pattern_apply(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.pattern_apply(s, args["pattern_id"], args["req_ids"])
+    except LookupError as e:
+        return {"error": str(e)}
+
+
+async def _handle_test_add(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.test_add(
+            s, args["req_id"],
+            description=args.get("description"),
+            steps=args.get("steps", ()),
+            expected=args.get("expected"),
+            automated=args.get("automated", False),
+            test_file=args.get("test_file"),
+            private=args.get("private", False),
+        )
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
+
+
+async def _handle_test_verify(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.test_verify(s, args["req_id"])
+    except LookupError as e:
+        return {"error": str(e)}
+
+
+async def _handle_test_list(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return {
+        "tests": services.test_list(
+            s, include_private=args.get("include_private", True)
+        )
+    }
+
+
+async def _handle_test_generate(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return services.test_generate(s, force=args.get("force", False))
+
+
+async def _handle_incomplete(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    return {"incomplete": services.incomplete(s)}
 
 
 # ---------------------------------------------------------------------------

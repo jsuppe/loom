@@ -18,13 +18,14 @@ Before filling in the handlers, two things should be factored out of
    splitting them so MCP handlers can call shared functions without
    re-parsing args or rendering strings.
 
-   **Done:** `status`, `query`, `list_requirements`, `trace`, `chain`,
-   `coverage`, `doctor`, `conflicts`, `extract`, `check`, `link`,
-   `detect_requirements`, `sync`, `supersede`, `set_status`, `refine`.
+   **Done:** all CLI verbs are now services (`status`, `query`,
+   `list_requirements`, `trace`, `chain`, `coverage`, `doctor`,
+   `conflicts`, `extract`, `check`, `link`, `detect_requirements`,
+   `sync`, `supersede`, `set_status`, `refine`, `spec_add`/`spec_list`/
+   `spec_link`, `pattern_add`/`pattern_list`/`pattern_apply`,
+   `test_add`/`test_verify`/`test_list`/`test_generate`, `incomplete`).
    Their `cmd_*` counterparts in `scripts/loom` are thin wrappers over
    `services.py`.
-
-   **Remaining:** spec/pattern/test commands (typed entity CRUD).
 
 Each MCP handler should collapse to 2-3 lines once its service exists.
 
@@ -68,9 +69,9 @@ Add to `.mcp.json` in the repo root:
 - `loom_coverage` — gap analysis
 - `loom_doctor` — health checks
 
-## Phase B tools — partially shipped
+## Phase B tools — shipped
 
-Shipped:
+Requirement-level:
 - `loom_extract` — add a requirement (returns conflicts if any)
 - `loom_check` — drift check for a file
 - `loom_link` — link a file to req(s) and/or spec(s)
@@ -79,9 +80,20 @@ Shipped:
 - `loom_supersede` — mark a requirement as superseded
 - `loom_set_status` — set req status (pending/in_progress/...)
 - `loom_refine` — elaborate a req with criteria, context, status
+- `loom_incomplete` — list reqs missing elaboration/criteria
 
-Planned:
-- `loom_spec_create`, `loom_pattern_create`, `loom_test_*`
+Specifications:
+- `loom_spec_add`, `loom_spec_list`, `loom_spec_link`
+
+Patterns:
+- `loom_pattern_add`, `loom_pattern_list`, `loom_pattern_apply`
+
+Test specs:
+- `loom_test_add`, `loom_test_verify`, `loom_test_list`,
+  `loom_test_generate`
+
+Phase B is complete. Only `init-private` remains CLI-only (it
+writes a template file — not appropriate as an MCP tool).
 
 ## Resources (planned)
 

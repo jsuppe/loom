@@ -496,3 +496,197 @@ class TestRefine:
         # CLAUDE.md ChromaDB metadata rules); is_complete therefore
         # returns True even though no criteria were provided.
         assert result["acceptance_criteria"] == ["TBD"]
+
+
+class TestSpecAdd:
+    def test_creates_spec(self, store, fake_embedding):
+        _mk_req(store, "REQ-p", "behavior", "parent", fake_embedding)
+        result = services.spec_add(
+            store, "REQ-p", "use pydantic for validation",
+            acceptance_criteria=["rejects bad email"],
+        )
+        assert result["spec_id"].startswith("SPEC-")
+        assert result["parent_req"] == "REQ-p"
+        assert result["acceptance_criteria"] == ["rejects bad email"]
+        assert store.get_specification(result["spec_id"]) is not None
+
+    def test_unknown_parent_raises(self, store):
+        with pytest.raises(LookupError):
+            services.spec_add(store, "REQ-missing", "spec text")
+
+    def test_empty_description_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-p", "behavior", "p", fake_embedding)
+        with pytest.raises(ValueError):
+            services.spec_add(store, "REQ-p", "   ")
+
+
+class TestSpecList:
+    def test_empty(self, store):
+        assert services.spec_list(store) == []
+
+    def test_filtered_by_parent(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        _mk_req(store, "REQ-b", "behavior", "b", fake_embedding)
+        services.spec_add(store, "REQ-a", "spec for a")
+        services.spec_add(store, "REQ-b", "spec for b")
+
+        for_a = services.spec_list(store, req_id="REQ-a")
+        assert len(for_a) == 1
+        assert for_a[0]["parent_req"] == "REQ-a"
+
+
+class TestSpecLink:
+    def test_missing_spec_raises(self, store, tmp_path):
+        f = tmp_path / "x.py"
+        f.write_text("x\n")
+        with pytest.raises(LookupError):
+            services.spec_link(store, "SPEC-missing", str(f))
+
+    def test_missing_file_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-p", "behavior", "p", fake_embedding)
+        sp = services.spec_add(store, "REQ-p", "spec")
+        with pytest.raises(LookupError):
+            services.spec_link(store, sp["spec_id"], "/nonexistent/x.py")
+
+    def test_creates_impl(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-p", "behavior", "p", fake_embedding)
+        sp = services.spec_add(store, "REQ-p", "spec")
+        f = tmp_path / "impl.py"
+        f.write_text("code\n")
+
+        result = services.spec_link(store, sp["spec_id"], str(f))
+        assert result["reused"] is False
+        assert result["parent_req"] == "REQ-p"
+        # Impl is now linked to the spec.
+        impls = store.get_implementations_for_specification(sp["spec_id"])
+        assert len(impls) == 1
+
+
+class TestPatternAdd:
+    def test_creates_pattern(self, store):
+        result = services.pattern_add(
+            store, "Retry w/ backoff", "exponential backoff for API calls",
+        )
+        assert result["pattern_id"].startswith("PAT-")
+        assert result["applies_to"] == []
+        assert result["missing_reqs"] == []
+
+    def test_missing_reqs_reported(self, store, fake_embedding):
+        _mk_req(store, "REQ-real", "behavior", "real", fake_embedding)
+        result = services.pattern_add(
+            store, "P", "desc", applies_to=["REQ-real", "REQ-ghost"],
+        )
+        assert result["missing_reqs"] == ["REQ-ghost"]
+        # Pattern still created with both in applies_to.
+        assert set(result["applies_to"]) == {"REQ-real", "REQ-ghost"}
+
+    def test_empty_name_raises(self, store):
+        with pytest.raises(ValueError):
+            services.pattern_add(store, "", "description")
+
+
+class TestPatternList:
+    def test_empty(self, store):
+        assert services.pattern_list(store) == []
+
+    def test_shape(self, store):
+        services.pattern_add(store, "N", "D")
+        patterns = services.pattern_list(store)
+        assert len(patterns) == 1
+        assert set(patterns[0].keys()) >= {
+            "id", "name", "description", "status",
+            "applies_to", "implementation_count",
+        }
+
+
+class TestPatternApply:
+    def test_unknown_pattern_raises(self, store):
+        with pytest.raises(LookupError):
+            services.pattern_apply(store, "PAT-missing", ["REQ-x"])
+
+    def test_adds_and_skips(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        _mk_req(store, "REQ-b", "behavior", "b", fake_embedding)
+        p = services.pattern_add(store, "N", "D", applies_to=["REQ-a"])
+        result = services.pattern_apply(
+            store, p["pattern_id"], ["REQ-a", "REQ-b"]
+        )
+        # REQ-a already on pattern → skipped; REQ-b new → added.
+        assert "REQ-b" in result["added"]
+        assert "REQ-a" in result["skipped"]
+
+
+class TestTestAdd:
+    def test_unknown_req_raises(self, store):
+        with pytest.raises(LookupError):
+            services.test_add(store, "REQ-missing", description="d")
+
+    def test_new_without_description_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError):
+            services.test_add(store, "REQ-x")
+
+    def test_creates_and_merges(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.test_add(store, "REQ-x", description="first", steps=["a"])
+        # Re-add without description: inherits existing description.
+        result = services.test_add(store, "REQ-x", expected="pass")
+        assert result["description"] == "first"
+        assert result["expected"] == "pass"
+        assert result["steps"] == ["a"]  # inherited
+
+
+class TestTestVerify:
+    def test_no_spec_raises(self, store):
+        with pytest.raises(LookupError):
+            services.test_verify(store, "REQ-missing")
+
+    def test_marks_verified(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.test_add(store, "REQ-x", description="d")
+        result = services.test_verify(store, "REQ-x")
+        assert result["last_verified"] is not None
+
+
+class TestTestList:
+    def test_empty(self, store):
+        assert services.test_list(store) == []
+
+    def test_includes_added(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.test_add(store, "REQ-x", description="d")
+        specs = services.test_list(store)
+        assert len(specs) == 1
+        assert specs[0]["req_id"] == "REQ-x"
+
+
+class TestTestGenerate:
+    def test_no_criteria_all_skipped(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.test_generate(store)
+        assert result["generated"] == []
+        assert "REQ-x" in result["no_criteria"]
+
+    def test_generates_from_criteria(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.refine(
+            store, "REQ-x",
+            elaboration="how", acceptance_criteria=["a", "b"],
+        )
+        result = services.test_generate(store)
+        assert "REQ-x" in result["generated"]
+        # Re-running without force → skipped.
+        result2 = services.test_generate(store)
+        assert "REQ-x" in result2["skipped"]
+
+
+class TestIncomplete:
+    def test_empty_store(self, store):
+        assert services.incomplete(store) == []
+
+    def test_missing_elaboration_reported(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        incomplete = services.incomplete(store)
+        assert len(incomplete) == 1
+        assert "elaboration" in incomplete[0]["missing"]
+        assert "acceptance criteria" in incomplete[0]["missing"]
