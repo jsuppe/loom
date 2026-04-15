@@ -435,73 +435,45 @@ def cmd_sync(args):
 
 def cmd_conflicts(args):
     """Check for conflicts with a potential new requirement."""
-    from docs import check_conflicts
-
     store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
 
     if not args.text:
-        if getattr(args, 'json', False):
+        if use_json:
             print(json.dumps({"error": "Provide requirement text with --text"}))
         else:
             print("Provide requirement text with --text")
         return 1
 
-    # Parse domain and value
+    found = services.conflicts(store, args.text)
+
+    # Re-derive the parsed value for the human-readable display below.
     if "|" in args.text:
-        domain, value = args.text.split("|", 1)
-        domain = domain.strip().lower()
+        _, value = args.text.split("|", 1)
         value = value.strip()
     else:
-        domain = "behavior"
         value = args.text.strip()
 
-    # Create temporary requirement for checking
-    temp_req = Requirement(
-        id="TEMP",
-        domain=domain,
-        value=value,
-        source_msg_id="conflict-check",
-        source_session="cli",
-        timestamp=datetime.now(timezone.utc).isoformat()
-    )
-
-    conflicts = check_conflicts(store, temp_req, get_embedding_fn=get_embedding)
-
-    if getattr(args, 'json', False):
-        output = []
-        for c in conflicts:
-            existing = c["existing"]
-            entry = {
-                "existing_id": existing.id,
-                "existing_domain": existing.domain,
-                "existing_value": existing.value,
-                "reason": c["reason"]
-            }
-            if "similarity" in c:
-                entry["similarity"] = c["similarity"]
-            if "overlap" in c:
-                entry["overlap"] = list(c["overlap"])
-            output.append(entry)
+    if use_json:
         print(json.dumps({
-            "conflicts_found": len(output) > 0,
-            "count": len(output),
-            "conflicts": output
+            "conflicts_found": len(found) > 0,
+            "count": len(found),
+            "conflicts": found,
         }, indent=2))
     else:
         print(f"🧵 Loom Conflict Check")
         print()
 
-        if not conflicts:
+        if not found:
             print("✓ No conflicts detected")
             return 0
 
-        print(f"⚠️  Found {len(conflicts)} potential conflict(s):")
+        print(f"⚠️  Found {len(found)} potential conflict(s):")
         print()
 
-        for c in conflicts:
-            existing = c["existing"]
-            print(f"  {existing.id} [{existing.domain}]")
-            print(f"    Existing: {existing.value}")
+        for c in found:
+            print(f"  {c['existing_id']} [{c['existing_domain']}]")
+            print(f"    Existing: {c['existing_value']}")
             print(f"    New:      {value}")
             print(f"    Reason:   {c['reason']}")
             print()
@@ -511,7 +483,7 @@ def cmd_conflicts(args):
         print("  2. Clarify the scope if both should coexist")
         print("  3. Reject the new requirement if it's invalid")
 
-    return 2 if conflicts else 0
+    return 2 if found else 0
 
 
 def cmd_supersede(args):
@@ -731,178 +703,92 @@ def cmd_init_private(args):
 
 def cmd_doctor(args):
     """Run health checks on the Loom installation and project."""
-    from testspec import TestSpecStore
-    import urllib.request
-    import urllib.error
-
     use_json = getattr(args, 'json', False)
+    store = LoomStore(args.project)
+    data = services.doctor(store)
+    checks = data["checks"]
+    issues = data["issues"]
+    warnings = data["warnings"]
 
-    if not use_json:
-        print(f"🧵 Loom Doctor — Project: {args.project}")
-        print()
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 1 if issues else 0
 
-    checks = {}
-    issues = []
-    warnings = []
+    print(f"🧵 Loom Doctor — Project: {args.project}")
+    print()
 
-    # 1. Check Ollama availability
-    if not use_json:
-        print("Checking Ollama...")
-    ollama_ok = False
-    try:
-        req = urllib.request.Request(
-            "http://localhost:11434/api/tags",
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read().decode())
-            models = [m["name"] for m in result.get("models", [])]
-            if "nomic-embed-text" in models or "nomic-embed-text:latest" in models:
-                ollama_ok = True
-                if not use_json:
-                    print("  ✅ Ollama running with nomic-embed-text")
-            else:
-                warnings.append("nomic-embed-text model not found")
-                if not use_json:
-                    print(f"  ⚠️  nomic-embed-text not found. Available: {', '.join(models[:5])}")
-    except Exception as e:
-        issues.append(f"Ollama not reachable: {e}")
-        if not use_json:
-            print(f"  ❌ Ollama not reachable: {e}")
-    checks["ollama"] = {"ok": ollama_ok}
+    # 1. Ollama
+    print("Checking Ollama...")
+    if checks["ollama"]["ok"]:
+        print("  ✅ Ollama running with nomic-embed-text")
+    elif "Ollama not reachable" in " ".join(issues):
+        for issue in issues:
+            if issue.startswith("Ollama"):
+                print(f"  ❌ {issue}")
+    else:
+        models = checks["ollama"].get("models", [])
+        print(f"  ⚠️  nomic-embed-text not found. Available: {', '.join(models)}")
 
-    # 2. Check ChromaDB store
-    if not use_json:
-        print("Checking store...")
-    try:
-        store = LoomStore(args.project)
-        stats = store.stats()
-        checks["store"] = {"ok": True, **stats}
-        if not use_json:
-            print(f"  ✅ Store accessible ({stats['requirements']} reqs, {stats['implementations']} impls)")
-    except Exception as e:
-        issues.append(f"Store error: {e}")
-        checks["store"] = {"ok": False, "error": str(e)}
-        if not use_json:
-            print(f"  ❌ Store error: {e}")
-        if use_json:
-            print(json.dumps({"project": args.project, "healthy": False, "checks": checks, "issues": issues, "warnings": warnings}, indent=2))
+    # 2. Store
+    print("Checking store...")
+    if checks["store"]["ok"]:
+        s = checks["store"]
+        print(f"  ✅ Store accessible ({s['requirements']} reqs, {s['implementations']} impls)")
+    else:
+        print(f"  ❌ Store error: {checks['store']['error']}")
         return 1
 
-    # 3. Check for orphan implementations
-    if not use_json:
-        print("Checking for orphans...")
-    all_impls = store.implementations.get(include=["metadatas"])
-    orphan_count = 0
-    for meta in all_impls.get("metadatas", []):
-        satisfies = json.loads(meta.get("satisfies", "[]"))
-        for sat in satisfies:
-            r = store.get_requirement(sat["req_id"])
-            if r is None:
-                orphan_count += 1
-                warnings.append(f"Impl {meta['id'][:8]}... links to missing {sat['req_id']}")
+    # 3. Orphans
+    print("Checking for orphans...")
+    n = checks["orphans"]["count"]
+    print("  ✅ No orphan implementations" if n == 0 else f"  ⚠️  {n} orphan link(s) found")
 
-    checks["orphans"] = {"count": orphan_count}
-    if not use_json:
-        if orphan_count == 0:
-            print("  ✅ No orphan implementations")
-        else:
-            print(f"  ⚠️  {orphan_count} orphan link(s) found")
-
-    # 4. Check for drift
-    if not use_json:
-        print("Checking for drift...")
-    superseded_reqs = [r for r in store.list_requirements(include_superseded=True) if r.superseded_at]
-    drift_count = 0
-    for sr in superseded_reqs:
-        drift_count += len(store.get_implementations_for_requirement(sr.id))
-
-    checks["drift"] = {"count": drift_count}
-    if drift_count > 0:
-        warnings.append(f"{drift_count} implementation(s) linked to superseded requirements")
-    if not use_json:
-        if drift_count == 0:
-            print("  ✅ No drift detected")
-        else:
-            print(f"  ⚠️  {drift_count} implementation(s) need review (linked to superseded reqs)")
-
-    # 5. Check test spec coverage
-    if not use_json:
-        print("Checking test coverage...")
-    try:
-        spec_store = TestSpecStore(store.data_dir)
-        specs = {s.req_id: s for s in spec_store.list_specs()}
-        active_reqs = store.list_requirements(include_superseded=False)
-
-        missing_specs = [r for r in active_reqs if r.id not in specs]
-        coverage_pct = ((len(active_reqs) - len(missing_specs)) / len(active_reqs) * 100) if active_reqs else 100
-
-        checks["test_coverage"] = {
-            "total": len(active_reqs),
-            "covered": len(active_reqs) - len(missing_specs),
-            "missing": len(missing_specs),
-            "coverage_pct": round(coverage_pct, 1)
-        }
-
-        if not use_json:
-            if len(missing_specs) == 0:
-                print(f"  ✅ 100% test spec coverage")
-            else:
-                print(f"  ⚠️  {len(missing_specs)} requirement(s) missing test specs ({coverage_pct:.0f}% coverage)")
-                if len(missing_specs) <= 5:
-                    for r in missing_specs:
-                        print(f"      - {r.id}: {r.value[:50]}...")
-    except Exception as e:
-        if not use_json:
-            print(f"  ⚠️  Could not check test specs: {e}")
-
-    # 6. Check for domain consistency
-    if not use_json:
-        print("Checking domains...")
-    valid_domains = {"terminology", "behavior", "ui", "data", "architecture"}
-    custom_domains = set()
-    for r in store.list_requirements(include_superseded=True):
-        if r.domain not in valid_domains:
-            custom_domains.add(r.domain)
-
-    if custom_domains:
-        warnings.append(f"Non-standard domains: {', '.join(custom_domains)}")
-    checks["domains"] = {"custom": list(custom_domains)}
-
-    if not use_json:
-        if custom_domains:
-            print(f"  ⚠️  Non-standard domains: {', '.join(custom_domains)}")
-        else:
-            print("  ✅ All domains are standard")
-
-    # Output
-    if use_json:
-        print(json.dumps({
-            "project": args.project,
-            "healthy": len(issues) == 0,
-            "checks": checks,
-            "issues": issues,
-            "warnings": warnings
-        }, indent=2))
+    # 4. Drift
+    print("Checking for drift...")
+    n = checks["drift"]["count"]
+    if n == 0:
+        print("  ✅ No drift detected")
     else:
-        print()
-        print("─" * 40)
-        if issues:
-            print(f"❌ {len(issues)} issue(s) found:")
-            for issue in issues:
-                print(f"   - {issue}")
-            return 1
-        elif warnings:
-            print(f"⚠️  {len(warnings)} warning(s):")
-            for warning in warnings[:5]:
-                print(f"   - {warning}")
-            if len(warnings) > 5:
-                print(f"   ... and {len(warnings) - 5} more")
-            return 0
-        else:
-            print("✅ All checks passed!")
+        print(f"  ⚠️  {n} implementation(s) need review (linked to superseded reqs)")
 
-    return 1 if issues else 0
+    # 5. Test coverage
+    print("Checking test coverage...")
+    tc = checks.get("test_coverage", {})
+    if "error" in tc:
+        print(f"  ⚠️  Could not check test specs: {tc['error']}")
+    elif tc.get("missing", 0) == 0:
+        print(f"  ✅ 100% test spec coverage")
+    else:
+        print(f"  ⚠️  {tc['missing']} requirement(s) missing test specs ({tc['coverage_pct']:.0f}% coverage)")
+        for rid in tc.get("missing_ids", []):
+            print(f"      - {rid}")
+
+    # 6. Domains
+    print("Checking domains...")
+    custom = checks["domains"]["custom"]
+    if custom:
+        print(f"  ⚠️  Non-standard domains: {', '.join(custom)}")
+    else:
+        print("  ✅ All domains are standard")
+
+    print()
+    print("─" * 40)
+    if issues:
+        print(f"❌ {len(issues)} issue(s) found:")
+        for issue in issues:
+            print(f"   - {issue}")
+        return 1
+    elif warnings:
+        print(f"⚠️  {len(warnings)} warning(s):")
+        for warning in warnings[:5]:
+            print(f"   - {warning}")
+        if len(warnings) > 5:
+            print(f"   ... and {len(warnings) - 5} more")
+        return 0
+    else:
+        print("✅ All checks passed!")
+
+    return 0
 
 
 def cmd_trace(args):
@@ -1400,131 +1286,50 @@ def cmd_pattern_apply(args):
 
 def cmd_coverage(args):
     """Three-layer coverage analysis: Requirements → Specs → Implementations/Tests."""
-    from testspec import TestSpecStore
-
     store = LoomStore(args.project)
     use_json = getattr(args, 'json', False)
+    data = services.coverage(store)
 
-    reqs = store.list_requirements(include_superseded=False)
-    spec_store = TestSpecStore(store.data_dir)
-    all_specs = store.list_specifications()
+    l1 = data["layer_1_req_to_spec"]
+    l2 = data["layer_2_spec_to_impl"]
+    l3 = data["layer_3_spec_to_test"]
 
-    # ----- Layer 1: Requirements → Specifications -----
-    reqs_without_specs = []
-    reqs_with_specs = []
-    for req in reqs:
-        specs = store.get_specifications_for_requirement(req.id)
-        entry = {
-            "id": req.id,
-            "domain": req.domain,
-            "value": req.value,
-            "status": req.status,
-            "spec_ids": [s.id for s in specs],
-            "direct_implementations": [
-                {"file": i.file, "lines": i.lines}
-                for i in store.get_implementations_for_requirement(req.id)
-                if not (i.satisfies_specs or [])
-            ],
-        }
-        if specs:
-            reqs_with_specs.append(entry)
-        else:
-            reqs_without_specs.append(entry)
-
-    # ----- Layer 2: Specifications → Implementations -----
-    specs_without_impls = []
-    specs_with_impls = []
-    # ----- Layer 3: Specifications → Tests -----
-    specs_without_tests = []
-    specs_with_tests = []
-
-    for spec in all_specs:
-        if spec.superseded_at:
-            continue
-        impls = store.get_implementations_for_specification(spec.id)
-        tests = spec_store.get_specs_for_spec_id(spec.id)
-
-        spec_entry = {
-            "id": spec.id,
-            "parent_req": spec.parent_req,
-            "description": spec.description[:80],
-            "status": spec.status,
-            "implementation_files": [i.file for i in impls],
-            "test_ids": [t.req_id for t in tests],  # TestSpecs are indexed by req_id
-        }
-        if impls:
-            specs_with_impls.append(spec_entry)
-        else:
-            specs_without_impls.append(spec_entry)
-        if tests:
-            specs_with_tests.append(spec_entry)
-        else:
-            specs_without_tests.append(spec_entry)
-
-    # ----- Aggregates -----
-    total_reqs = len(reqs)
-    active_specs = [s for s in all_specs if not s.superseded_at]
-    total_specs = len(active_specs)
-
-    spec_cov_pct = (len(reqs_with_specs) / total_reqs * 100) if total_reqs else 100
-    impl_cov_pct = (len(specs_with_impls) / total_specs * 100) if total_specs else 0
-    test_cov_pct = (len(specs_with_tests) / total_specs * 100) if total_specs else 0
-
-    # Optional: scan for likely implementations
+    # Optional filesystem scan (CLI-only — depends on cwd).
     scan_suggestions = {}
-    if getattr(args, 'scan', False) and specs_without_impls:
-        # Scan for specs, not requirements
-        scan_suggestions = _scan_project_for_specs(store, active_specs, specs_without_impls, args)
+    if getattr(args, 'scan', False) and l2["without_impls"]:
+        active_specs = [s for s in store.list_specifications() if not s.superseded_at]
+        scan_suggestions = _scan_project_for_specs(
+            store, active_specs, l2["without_impls"], args
+        )
 
     if use_json:
-        output = {
-            "project": args.project,
-            "layer_1_req_to_spec": {
-                "total_requirements": total_reqs,
-                "coverage_pct": round(spec_cov_pct, 1),
-                "with_specs": len(reqs_with_specs),
-                "without_specs": reqs_without_specs,
-            },
-            "layer_2_spec_to_impl": {
-                "total_specs": total_specs,
-                "coverage_pct": round(impl_cov_pct, 1),
-                "with_impls": len(specs_with_impls),
-                "without_impls": specs_without_impls,
-            },
-            "layer_3_spec_to_test": {
-                "total_specs": total_specs,
-                "coverage_pct": round(test_cov_pct, 1),
-                "with_tests": len(specs_with_tests),
-                "without_tests": specs_without_tests,
-            },
-        }
+        output = dict(data)
         if scan_suggestions:
             output["scan_suggestions"] = scan_suggestions
         print(json.dumps(output, indent=2))
         return 0
 
-    # Human-readable
     print(f"🧵 Loom Coverage — Project: {args.project}")
     print()
     print("Three-layer traceability: Requirements → Specs → Implementations/Tests")
     print()
-    print(f"Layer 1 — Requirements have specs:    {len(reqs_with_specs)}/{total_reqs} ({spec_cov_pct:.0f}%)")
-    print(f"Layer 2 — Specs have implementations: {len(specs_with_impls)}/{total_specs} ({impl_cov_pct:.0f}%)")
-    print(f"Layer 3 — Specs have tests:           {len(specs_with_tests)}/{total_specs} ({test_cov_pct:.0f}%)")
+    print(f"Layer 1 — Requirements have specs:    {l1['with_specs']}/{l1['total_requirements']} ({l1['coverage_pct']:.0f}%)")
+    print(f"Layer 2 — Specs have implementations: {l2['with_impls']}/{l2['total_specs']} ({l2['coverage_pct']:.0f}%)")
+    print(f"Layer 3 — Specs have tests:           {l3['with_tests']}/{l3['total_specs']} ({l3['coverage_pct']:.0f}%)")
 
-    if reqs_without_specs:
+    if l1["without_specs"]:
         print()
-        print(f"--- Requirements Without Specs ({len(reqs_without_specs)}) ---")
+        print(f"--- Requirements Without Specs ({len(l1['without_specs'])}) ---")
         print("(These requirements need a specification describing HOW to implement them.)")
-        for e in reqs_without_specs:
+        for e in l1["without_specs"]:
             direct = f"  [{len(e['direct_implementations'])} direct impl link(s)]" if e['direct_implementations'] else ""
             print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}{direct}")
             print(f"    → Run: loom spec {e['id']} -d \"specification text\"")
 
-    if specs_without_impls:
+    if l2["without_impls"]:
         print()
-        print(f"--- Specs Without Implementations ({len(specs_without_impls)}) ---")
-        for e in specs_without_impls:
+        print(f"--- Specs Without Implementations ({len(l2['without_impls'])}) ---")
+        for e in l2["without_impls"]:
             print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
             if e['id'] in scan_suggestions:
                 for s in scan_suggestions[e['id']]:
@@ -1532,15 +1337,15 @@ def cmd_coverage(args):
             else:
                 print(f"    → Run: loom spec-link {e['id']} <file>")
 
-    if specs_without_tests:
+    if l3["without_tests"]:
         print()
-        print(f"--- Specs Without Tests ({len(specs_without_tests)}) ---")
-        for e in specs_without_tests:
+        print(f"--- Specs Without Tests ({len(l3['without_tests'])}) ---")
+        for e in l3["without_tests"]:
             files = ", ".join(e['implementation_files'][:3]) if e['implementation_files'] else "no code linked"
             print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
             print(f"    code: {files}")
 
-    if not reqs_without_specs and not specs_without_impls and not specs_without_tests:
+    if not l1["without_specs"] and not l2["without_impls"] and not l3["without_tests"]:
         print()
         print("All requirements have specs, and all specs have implementations and tests.")
 

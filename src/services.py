@@ -271,3 +271,264 @@ def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
             if test else None
         ),
     }
+
+
+def coverage(store: LoomStore) -> dict[str, Any]:
+    """Three-layer coverage analysis: req→spec, spec→impl, spec→test.
+
+    Result shape:
+        {
+          project: str,
+          layer_1_req_to_spec: {
+            total_requirements, coverage_pct, with_specs, without_specs: [entry]
+          },
+          layer_2_spec_to_impl: {total_specs, coverage_pct, with_impls, without_impls: [entry]},
+          layer_3_spec_to_test: {total_specs, coverage_pct, with_tests, without_tests: [entry]},
+        }
+
+    Without_specs entry: {id, domain, value, status, spec_ids, direct_implementations}.
+    Without_impls / without_tests entry: {id, parent_req, description, status,
+                                         implementation_files, test_ids}.
+
+    Scan-based "likely match" suggestions are NOT returned here — they
+    depend on cwd and the filesystem, which the CLI handles in its
+    own _scan_project_for_specs helper. MCP can layer that on later.
+    """
+    from testspec import TestSpecStore
+
+    reqs = store.list_requirements(include_superseded=False)
+    spec_store = TestSpecStore(store.data_dir)
+    all_specs = store.list_specifications()
+
+    reqs_without_specs: list[dict[str, Any]] = []
+    reqs_with_specs: list[dict[str, Any]] = []
+    for req in reqs:
+        specs = store.get_specifications_for_requirement(req.id)
+        entry = {
+            "id": req.id,
+            "domain": req.domain,
+            "value": req.value,
+            "status": req.status,
+            "spec_ids": [s.id for s in specs],
+            "direct_implementations": [
+                {"file": i.file, "lines": i.lines}
+                for i in store.get_implementations_for_requirement(req.id)
+                if not (i.satisfies_specs or [])
+            ],
+        }
+        (reqs_with_specs if specs else reqs_without_specs).append(entry)
+
+    specs_with_impls: list[dict[str, Any]] = []
+    specs_without_impls: list[dict[str, Any]] = []
+    specs_with_tests: list[dict[str, Any]] = []
+    specs_without_tests: list[dict[str, Any]] = []
+
+    for spec in all_specs:
+        if spec.superseded_at:
+            continue
+        impls = store.get_implementations_for_specification(spec.id)
+        tests = spec_store.get_specs_for_spec_id(spec.id)
+
+        spec_entry = {
+            "id": spec.id,
+            "parent_req": spec.parent_req,
+            "description": spec.description[:80],
+            "status": spec.status,
+            "implementation_files": [i.file for i in impls],
+            "test_ids": [t.req_id for t in tests],
+        }
+        (specs_with_impls if impls else specs_without_impls).append(spec_entry)
+        (specs_with_tests if tests else specs_without_tests).append(spec_entry)
+
+    total_reqs = len(reqs)
+    active_specs = [s for s in all_specs if not s.superseded_at]
+    total_specs = len(active_specs)
+
+    spec_cov_pct = (len(reqs_with_specs) / total_reqs * 100) if total_reqs else 100
+    impl_cov_pct = (len(specs_with_impls) / total_specs * 100) if total_specs else 0
+    test_cov_pct = (len(specs_with_tests) / total_specs * 100) if total_specs else 0
+
+    return {
+        "project": store.project,
+        "layer_1_req_to_spec": {
+            "total_requirements": total_reqs,
+            "coverage_pct": round(spec_cov_pct, 1),
+            "with_specs": len(reqs_with_specs),
+            "without_specs": reqs_without_specs,
+        },
+        "layer_2_spec_to_impl": {
+            "total_specs": total_specs,
+            "coverage_pct": round(impl_cov_pct, 1),
+            "with_impls": len(specs_with_impls),
+            "without_impls": specs_without_impls,
+        },
+        "layer_3_spec_to_test": {
+            "total_specs": total_specs,
+            "coverage_pct": round(test_cov_pct, 1),
+            "with_tests": len(specs_with_tests),
+            "without_tests": specs_without_tests,
+        },
+    }
+
+
+def conflicts(store: LoomStore, text: str) -> list[dict[str, Any]]:
+    """Check whether `text` conflicts with existing requirements.
+
+    `text` is parsed as `domain | value`; if no `|`, defaults to
+    `behavior | <text>`.
+
+    Result is a list of conflict entries; empty list means no conflicts.
+    Each entry: {existing_id, existing_domain, existing_value, reason,
+                 similarity? (float), overlap? (list[str])}.
+    """
+    from datetime import datetime, timezone
+    from docs import check_conflicts
+    from store import Requirement
+    from embedding import get_embedding
+
+    if "|" in text:
+        domain, value = text.split("|", 1)
+        domain = domain.strip().lower()
+        value = value.strip()
+    else:
+        domain, value = "behavior", text.strip()
+
+    temp_req = Requirement(
+        id="TEMP",
+        domain=domain,
+        value=value,
+        source_msg_id="conflict-check",
+        source_session="cli",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+    out: list[dict[str, Any]] = []
+    for c in check_conflicts(store, temp_req, get_embedding_fn=get_embedding):
+        existing = c["existing"]
+        entry = {
+            "existing_id": existing.id,
+            "existing_domain": existing.domain,
+            "existing_value": existing.value,
+            "reason": c["reason"],
+        }
+        if "similarity" in c:
+            entry["similarity"] = c["similarity"]
+        if "overlap" in c:
+            entry["overlap"] = list(c["overlap"])
+        out.append(entry)
+    return out
+
+
+def doctor(store: LoomStore) -> dict[str, Any]:
+    """Run health checks: Ollama, store, orphans, drift, test coverage, domains.
+
+    Result shape:
+        {project, healthy: bool, checks: {...}, issues: [str], warnings: [str]}
+
+    `healthy` is True iff `issues` is empty. The store check is fatal —
+    if it raises, we short-circuit and return immediately.
+    """
+    import urllib.request
+    import json as _json
+    from testspec import TestSpecStore
+
+    checks: dict[str, Any] = {}
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    # 1. Ollama
+    ollama_ok = False
+    ollama_models: list[str] = []
+    try:
+        req = urllib.request.Request(
+            "http://localhost:11434/api/tags",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = _json.loads(resp.read().decode())
+            ollama_models = [m["name"] for m in result.get("models", [])]
+            if any(m.startswith("nomic-embed-text") for m in ollama_models):
+                ollama_ok = True
+            else:
+                warnings.append("nomic-embed-text model not found")
+    except Exception as e:
+        issues.append(f"Ollama not reachable: {e}")
+    checks["ollama"] = {"ok": ollama_ok, "models": ollama_models[:5]}
+
+    # 2. Store (fatal if it fails)
+    try:
+        stats = store.stats()
+        checks["store"] = {"ok": True, **stats}
+    except Exception as e:
+        issues.append(f"Store error: {e}")
+        checks["store"] = {"ok": False, "error": str(e)}
+        return {
+            "project": store.project,
+            "healthy": False,
+            "checks": checks,
+            "issues": issues,
+            "warnings": warnings,
+        }
+
+    # 3. Orphan implementations
+    all_impls = store.implementations.get(include=["metadatas"])
+    orphan_count = 0
+    for meta in all_impls.get("metadatas", []):
+        for sat in _json.loads(meta.get("satisfies", "[]")):
+            if store.get_requirement(sat["req_id"]) is None:
+                orphan_count += 1
+                warnings.append(
+                    f"Impl {meta['id'][:8]}... links to missing {sat['req_id']}"
+                )
+    checks["orphans"] = {"count": orphan_count}
+
+    # 4. Drift (impls linked to superseded reqs)
+    superseded_reqs = [
+        r for r in store.list_requirements(include_superseded=True) if r.superseded_at
+    ]
+    drift_count = sum(
+        len(store.get_implementations_for_requirement(sr.id)) for sr in superseded_reqs
+    )
+    checks["drift"] = {"count": drift_count}
+    if drift_count > 0:
+        warnings.append(
+            f"{drift_count} implementation(s) linked to superseded requirements"
+        )
+
+    # 5. Test spec coverage
+    try:
+        spec_store = TestSpecStore(store.data_dir)
+        specs = {s.req_id: s for s in spec_store.list_specs()}
+        active_reqs = store.list_requirements(include_superseded=False)
+        missing_specs = [r for r in active_reqs if r.id not in specs]
+        coverage_pct = (
+            ((len(active_reqs) - len(missing_specs)) / len(active_reqs) * 100)
+            if active_reqs else 100
+        )
+        checks["test_coverage"] = {
+            "total": len(active_reqs),
+            "covered": len(active_reqs) - len(missing_specs),
+            "missing": len(missing_specs),
+            "missing_ids": [r.id for r in missing_specs[:5]],
+            "coverage_pct": round(coverage_pct, 1),
+        }
+    except Exception as e:
+        checks["test_coverage"] = {"error": str(e)}
+
+    # 6. Domain consistency
+    valid_domains = {"terminology", "behavior", "ui", "data", "architecture"}
+    custom_domains: set[str] = set()
+    for r in store.list_requirements(include_superseded=True):
+        if r.domain not in valid_domains:
+            custom_domains.add(r.domain)
+    if custom_domains:
+        warnings.append(f"Non-standard domains: {', '.join(custom_domains)}")
+    checks["domains"] = {"custom": sorted(custom_domains)}
+
+    return {
+        "project": store.project,
+        "healthy": len(issues) == 0,
+        "checks": checks,
+        "issues": issues,
+        "warnings": warnings,
+    }

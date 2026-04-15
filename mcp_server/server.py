@@ -240,11 +240,11 @@ async def _handle_chain(args: dict[str, Any]) -> dict:
 
 
 async def _handle_coverage(args: dict[str, Any]) -> dict:
-    raise NotImplementedError  # TODO: share cmd_coverage logic
+    return services.coverage(_get_store(args.get("project")))
 
 
 async def _handle_doctor(args: dict[str, Any]) -> dict:
-    raise NotImplementedError  # TODO: share cmd_doctor logic
+    return services.doctor(_get_store(args.get("project")))
 
 
 # ---------------------------------------------------------------------------

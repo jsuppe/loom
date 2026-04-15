@@ -199,3 +199,76 @@ class TestChain:
         assert len(data["direct_implementations"]) == 1
         assert data["direct_implementations"][0]["file"] == "src/a.py"
         assert data["specifications"] == []
+
+
+class TestCoverage:
+    def test_empty_store_full_coverage(self, store):
+        data = services.coverage(store)
+        # 0/0 reqs is treated as 100% by convention
+        assert data["layer_1_req_to_spec"]["coverage_pct"] == 100
+        assert data["layer_1_req_to_spec"]["with_specs"] == 0
+        assert data["layer_1_req_to_spec"]["without_specs"] == []
+        # 0/0 specs is 0% (no specs to be covered)
+        assert data["layer_2_spec_to_impl"]["coverage_pct"] == 0
+        assert data["layer_3_spec_to_test"]["coverage_pct"] == 0
+
+    def test_req_without_spec_lands_in_layer_1_gap(self, store, fake_embedding):
+        _mk_req(store, "REQ-no-spec", "behavior", "uncovered", fake_embedding)
+        data = services.coverage(store)
+        l1 = data["layer_1_req_to_spec"]
+        assert l1["total_requirements"] == 1
+        assert l1["with_specs"] == 0
+        assert l1["coverage_pct"] == 0
+        assert len(l1["without_specs"]) == 1
+        assert l1["without_specs"][0]["id"] == "REQ-no-spec"
+
+
+class TestConflicts:
+    def test_empty_store_no_conflicts(self, store):
+        assert services.conflicts(store, "behavior | brand new req") == []
+
+    def test_parses_text_without_pipe(self, store):
+        # No `|` → defaults to behavior domain. Just check it doesn't crash.
+        result = services.conflicts(store, "no pipe here")
+        assert isinstance(result, list)
+
+
+class TestDoctor:
+    def test_empty_store_returns_shape(self, store):
+        data = services.doctor(store)
+        assert "healthy" in data
+        assert "checks" in data
+        assert "issues" in data
+        assert "warnings" in data
+        # Store check should pass against our temp store
+        assert data["checks"]["store"]["ok"] is True
+        # Test coverage on empty store: 0/0 → 100%
+        assert data["checks"]["test_coverage"]["coverage_pct"] == 100
+        # Domains check passes (no reqs, no custom domains)
+        assert data["checks"]["domains"]["custom"] == []
+
+    def test_orphan_impl_warned(self, store, fake_embedding):
+        # Impl that points at a req that doesn't exist → orphan
+        impl = Implementation(
+            id="IMPL-orphan", file="src/x.py", lines="1-1",
+            content="x", content_hash="h",
+            satisfies=[{"req_id": "REQ-ghost"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        data = services.doctor(store)
+        assert data["checks"]["orphans"]["count"] == 1
+        assert any("REQ-ghost" in w for w in data["warnings"])
+
+    def test_drift_warned_for_superseded_with_impl(self, store, fake_embedding):
+        _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
+        impl = Implementation(
+            id="IMPL-1", file="src/x.py", lines="1-1",
+            content="x", content_hash="h",
+            satisfies=[{"req_id": "REQ-old"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        store.supersede_requirement("REQ-old")
+        data = services.doctor(store)
+        assert data["checks"]["drift"]["count"] == 1
