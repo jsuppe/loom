@@ -1,0 +1,16 @@
+{
+  "model": "qwen2.5-coder:32b",
+  "results": [
+    {
+      "model": "qwen2.5-coder:32b",
+      "passed": 20,
+      "total": 20,
+      "extracted": true,
+      "elapsed_s": 585.78,
+      "input_tokens": 22392,
+      "output_tokens": 1293,
+      "scratch_dir": null,
+      "tail": "experiments/gaps/test_gaps_extend.py::test_limit_cap PASSED              [ 50%]\nexperiments/gaps/test_gaps_extend.py::test_superseded_reqs_excluded_from_req_level_gaps PASSED [ 55%]\nexperiments/gaps/test_gaps_extend.py::test_empty_store_returns_empty_list PASSED [ 60%]\nexperiments/gaps/test_gaps_extend.py::test_complete_reqs_do_not_surface PASSED [ 65%]\nexperiments/gaps/test_gaps_extend.py::test_impl_with_superseded_req_is_orphan PASSED [ 70%]\nexperiments/gaps/test_gaps_extend.py::test_drift_type_exists PASSED      [ 75%]\nexperiments/gaps/test_gaps_extend.py::test_drift_not_surfaced_without_impl PASSED [ 80%]\nexperiments/gaps/test_gaps_extend.py::test_drift_priority_before_missing_criteria PASSED [ 85%]\nexperiments/gaps/test_gaps_extend.py::test_drift_shape_matches_uniform PASSED [ 90%]\nexperiments/gaps/test_gaps_extend.py::test_drift_type_filter PASSED      [ 95%]\nexperiments/gaps/test_gaps_extend.py::test_drift_with_multiple_impls PASSED [100%]\n\n============================= 20 passed in 2.16s ==============================\n"
+    }
+  ]
+}

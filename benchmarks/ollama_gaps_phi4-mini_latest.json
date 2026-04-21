@@ -1,0 +1,38 @@
+{
+  "model": "phi4-mini:latest",
+  "results": [
+    {
+      "model": "phi4-mini:latest",
+      "passed": 7,
+      "total": 14,
+      "extracted": true,
+      "elapsed_s": 7.97,
+      "input_tokens": 21956,
+      "output_tokens": 635,
+      "scratch_dir": null,
+      "tail": "      ...Full output truncated (7 lines hidden), use '-vv' to show\nC:\\Users\\jonsu\\AppData\\Local\\Temp\\ollama_gaps_6r3xz9ex\\experiments\\gaps\\test_gaps_task1.py:200: AssertionError: complete req should not appear in gaps; got [{'type': None, 'entity_id': 'REQ-ok', 'description': 'Requirement REQ-ok is missing criteria or elaboration', 'blocks': [], 'suggested_action': 'loom refine REQ-{req.id}'}]\n=========================== short test summary info ===========================\nFAILED experiments/gaps/test_gaps_task1.py::test_missing_criteria_surfaced - ...\nFAILED experiments/gaps/test_gaps_task1.py::test_missing_elaboration_surfaced\nFAILED experiments/gaps/test_gaps_task1.py::test_orphan_impl_surfaced - Asser...\nFAILED experiments/gaps/test_gaps_task1.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_task1.py::test_uniform_shape - AssertionErr...\nFAILED experiments/gaps/test_gaps_task1.py::test_type_filter - TypeError: 'No...\nFAILED experiments/gaps/test_gaps_task1.py::test_complete_reqs_do_not_surface\n========================= 7 failed, 7 passed in 1.40s =========================\n"
+    },
+    {
+      "model": "phi4-mini:latest",
+      "passed": 2,
+      "total": 14,
+      "extracted": true,
+      "elapsed_s": 2.54,
+      "input_tokens": 21956,
+      "output_tokens": 474,
+      "scratch_dir": null,
+      "tail": "FAILED experiments/gaps/test_gaps_task1.py::test_orphan_impl_surfaced - Attri...\nFAILED experiments/gaps/test_gaps_task1.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_task1.py::test_impl_with_any_live_req_is_not_orphan\nFAILED experiments/gaps/test_gaps_task1.py::test_uniform_shape - AttributeErr...\nFAILED experiments/gaps/test_gaps_task1.py::test_ordering_by_priority - Attri...\nFAILED experiments/gaps/test_gaps_task1.py::test_tie_break_by_entity_id - Att...\nFAILED experiments/gaps/test_gaps_task1.py::test_limit_cap - AttributeError: ...\nFAILED experiments/gaps/test_gaps_task1.py::test_superseded_reqs_excluded_from_req_level_gaps\nFAILED experiments/gaps/test_gaps_task1.py::test_empty_store_returns_empty_list\nFAILED experiments/gaps/test_gaps_task1.py::test_complete_reqs_do_not_surface\n======================== 12 failed, 2 passed in 1.38s =========================\n"
+    },
+    {
+      "model": "phi4-mini:latest",
+      "passed": 2,
+      "total": 14,
+      "extracted": true,
+      "elapsed_s": 2.65,
+      "input_tokens": 21956,
+      "output_tokens": 474,
+      "scratch_dir": null,
+      "tail": "FAILED experiments/gaps/test_gaps_task1.py::test_orphan_impl_surfaced - Attri...\nFAILED experiments/gaps/test_gaps_task1.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_task1.py::test_impl_with_any_live_req_is_not_orphan\nFAILED experiments/gaps/test_gaps_task1.py::test_uniform_shape - AttributeErr...\nFAILED experiments/gaps/test_gaps_task1.py::test_ordering_by_priority - Attri...\nFAILED experiments/gaps/test_gaps_task1.py::test_tie_break_by_entity_id - Att...\nFAILED experiments/gaps/test_gaps_task1.py::test_limit_cap - AttributeError: ...\nFAILED experiments/gaps/test_gaps_task1.py::test_superseded_reqs_excluded_from_req_level_gaps\nFAILED experiments/gaps/test_gaps_task1.py::test_empty_store_returns_empty_list\nFAILED experiments/gaps/test_gaps_task1.py::test_complete_reqs_do_not_surface\n======================== 12 failed, 2 passed in 1.37s =========================\n"
+    }
+  ]
+}

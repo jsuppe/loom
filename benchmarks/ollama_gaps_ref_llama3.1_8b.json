@@ -1,0 +1,44 @@
+{
+  "model": "llama3.1:8b",
+  "results": [
+    {
+      "model": "llama3.1:8b",
+      "passed": 27,
+      "total": 29,
+      "behavior_passed": 20,
+      "structure_passed": 7,
+      "extracted": true,
+      "elapsed_s": 20.01,
+      "input_tokens": 23709,
+      "output_tokens": 2082,
+      "scratch_dir": null,
+      "tail": "experiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_missing_criteria] PASSED [ 72%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_missing_elaboration] PASSED [ 75%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_orphan_impl] PASSED [ 79%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_drift] PASSED [ 82%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_missing_criteria_isolation PASSED [ 86%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_missing_elaboration_isolation PASSED [ 89%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_orphan_impl_isolation FAILED [ 93%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_drift_isolation PASSED [ 96%]\nexperiments/gaps/test_gaps_refactor.py::test_helpers_have_uniform_shape FAILED [100%]\n\n================================== FAILURES ===================================\nE   NameError: name '_json' is not defined. Did you forget to import '_json'?\nC:\\Users\\jonsu\\AppData\\Local\\Temp\\ollama_gaps_ref_nos9c77i\\src\\services.py:2154: NameError: name '_json' is not defined. Did you forget to import '_json'?\nE   NameError: name '_json' is not defined. Did you forget to import '_json'?\nC:\\Users\\jonsu\\AppData\\Local\\Temp\\ollama_gaps_ref_nos9c77i\\src\\services.py:2154: NameError: name '_json' is not defined. Did you forget to import '_json'?\n=========================== short test summary info ===========================\nFAILED experiments/gaps/test_gaps_refactor.py::test_helper_detect_orphan_impl_isolation\nFAILED experiments/gaps/test_gaps_refactor.py::test_helpers_have_uniform_shape\n======================== 2 failed, 27 passed in 2.27s =========================\n"
+    },
+    {
+      "model": "llama3.1:8b",
+      "passed": 14,
+      "total": 29,
+      "behavior_passed": 5,
+      "structure_passed": 9,
+      "extracted": true,
+      "elapsed_s": 7.06,
+      "input_tokens": 23709,
+      "output_tokens": 1077,
+      "scratch_dir": null,
+      "tail": "E   KeyError: '_priority'\nC:\\Users\\jonsu\\AppData\\Local\\Temp\\ollama_gaps_ref_tmcur1_s\\src\\services.py:2229: KeyError: '_priority'\n=========================== short test summary info ===========================\nFAILED experiments/gaps/test_gaps_refactor.py::test_missing_criteria_surfaced\nFAILED experiments/gaps/test_gaps_refactor.py::test_missing_elaboration_surfaced\nFAILED experiments/gaps/test_gaps_refactor.py::test_orphan_impl_surfaced - Ke...\nFAILED experiments/gaps/test_gaps_refactor.py::test_impl_with_any_live_req_is_not_orphan\nFAILED experiments/gaps/test_gaps_refactor.py::test_uniform_shape - KeyError:...\nFAILED experiments/gaps/test_gaps_refactor.py::test_ordering_by_priority - Ke...\nFAILED experiments/gaps/test_gaps_refactor.py::test_tie_break_by_entity_id - ...\nFAILED experiments/gaps/test_gaps_refactor.py::test_type_filter - KeyError: '...\nFAILED experiments/gaps/test_gaps_refactor.py::test_limit_cap - KeyError: '_p...\nFAILED experiments/gaps/test_gaps_refactor.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_type_exists - KeyEr...\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_priority_before_missing_criteria\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_shape_matches_uniform\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_type_filter - KeyEr...\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_with_multiple_impls\n======================== 15 failed, 14 passed in 2.25s ========================\n"
+    },
+    {
+      "model": "llama3.1:8b",
+      "passed": 14,
+      "total": 29,
+      "behavior_passed": 5,
+      "structure_passed": 9,
+      "extracted": true,
+      "elapsed_s": 7.14,
+      "input_tokens": 23709,
+      "output_tokens": 1077,
+      "scratch_dir": null,
+      "tail": "E   KeyError: '_priority'\nC:\\Users\\jonsu\\AppData\\Local\\Temp\\ollama_gaps_ref_3_0ecwjx\\src\\services.py:2229: KeyError: '_priority'\n=========================== short test summary info ===========================\nFAILED experiments/gaps/test_gaps_refactor.py::test_missing_criteria_surfaced\nFAILED experiments/gaps/test_gaps_refactor.py::test_missing_elaboration_surfaced\nFAILED experiments/gaps/test_gaps_refactor.py::test_orphan_impl_surfaced - Ke...\nFAILED experiments/gaps/test_gaps_refactor.py::test_impl_with_any_live_req_is_not_orphan\nFAILED experiments/gaps/test_gaps_refactor.py::test_uniform_shape - KeyError:...\nFAILED experiments/gaps/test_gaps_refactor.py::test_ordering_by_priority - Ke...\nFAILED experiments/gaps/test_gaps_refactor.py::test_tie_break_by_entity_id - ...\nFAILED experiments/gaps/test_gaps_refactor.py::test_type_filter - KeyError: '...\nFAILED experiments/gaps/test_gaps_refactor.py::test_limit_cap - KeyError: '_p...\nFAILED experiments/gaps/test_gaps_refactor.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_type_exists - KeyEr...\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_priority_before_missing_criteria\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_shape_matches_uniform\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_type_filter - KeyEr...\nFAILED experiments/gaps/test_gaps_refactor.py::test_drift_with_multiple_impls\n======================== 15 failed, 14 passed in 2.19s ========================\n"
+    }
+  ]
+}

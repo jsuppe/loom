@@ -1,0 +1,31 @@
+{
+  "model": "gpt-oss:latest",
+  "results": [
+    {
+      "model": "gpt-oss:latest",
+      "passed": 0,
+      "total": 29,
+      "behavior_passed": 0,
+      "structure_passed": 0,
+      "extracted": false,
+      "elapsed_s": 69.88,
+      "input_tokens": 23824,
+      "output_tokens": 10000,
+      "error": "no code block",
+      "content_preview": ""
+    },
+    {
+      "model": "gpt-oss:latest",
+      "passed": 0,
+      "total": 29,
+      "behavior_passed": 0,
+      "structure_passed": 0,
+      "extracted": false,
+      "elapsed_s": 60.77,
+      "input_tokens": 23824,
+      "output_tokens": 10000,
+      "error": "no code block",
+      "content_preview": ""
+    }
+  ]
+}
