@@ -2112,3 +2112,364 @@ def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = N
         gaps_list = gaps_list[:limit]
 
     return gaps_list
+
+
+# ==================== Tasks ====================
+#
+# An atomic, executor-ready unit of work. See src/store.py::Task for the
+# schema. Tasks flow through: pending -> claimed -> complete | rejected.
+# Rejected tasks with escalate=True become escalated (for operator review).
+
+
+def task_add(
+    store: LoomStore,
+    *,
+    parent_spec: str,
+    title: str,
+    files_to_modify: list[str],
+    test_to_write: str,
+    context_reqs: list[str] | None = None,
+    context_specs: list[str] | None = None,
+    context_patterns: list[str] | None = None,
+    context_sidecars: list[str] | None = None,
+    context_files: list[str] | None = None,
+    size_budget_files: int = 2,
+    size_budget_loc: int = 80,
+    depends_on: list[str] | None = None,
+    created_by: str | None = None,
+) -> dict[str, Any]:
+    """Create a new Task.
+
+    Args:
+        parent_spec: SPEC-xxx this task satisfies. Must exist in the store.
+        title: one-line human description.
+        files_to_modify: files the executor may edit.
+        test_to_write: grading test target, e.g. 'tests/test_x.py::TestY'.
+        context_*: pointer lists for on-demand bundle assembly.
+        size_budget_*: atomicity bounds the executor checks.
+        depends_on: other TASK-xxx that must complete first (DAG).
+
+    Returns: task dict shape (see task_get).
+
+    Raises:
+        LookupError: parent_spec does not exist.
+        ValueError: title or files_to_modify empty, or depends_on references
+                    a task that doesn't exist.
+    """
+    from datetime import datetime, timezone
+    from store import Task, generate_task_id
+    from embedding import get_embedding
+
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("title is required")
+    if not files_to_modify:
+        raise ValueError("files_to_modify must be non-empty")
+    if store.get_specification(parent_spec) is None:
+        raise LookupError(f"Specification {parent_spec} not found")
+    if depends_on:
+        for dep in depends_on:
+            if store.get_task(dep) is None:
+                raise ValueError(f"depends_on references unknown task: {dep}")
+
+    task_id = generate_task_id(parent_spec, title)
+    task = Task(
+        id=task_id,
+        parent_spec=parent_spec,
+        title=title,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        files_to_modify=list(files_to_modify),
+        test_to_write=test_to_write,
+        context_reqs=list(context_reqs) if context_reqs else None,
+        context_specs=list(context_specs) if context_specs else None,
+        context_patterns=list(context_patterns) if context_patterns else None,
+        context_sidecars=list(context_sidecars) if context_sidecars else None,
+        context_files=list(context_files) if context_files else None,
+        size_budget_files=size_budget_files,
+        size_budget_loc=size_budget_loc,
+        depends_on=list(depends_on) if depends_on else None,
+        created_by=created_by,
+    )
+    store.add_task(task, get_embedding(f"{title}\n{parent_spec}"))
+    return _task_to_dict(task)
+
+
+def _task_to_dict(task) -> dict[str, Any]:
+    """Stable JSON-serializable shape for a Task."""
+    return {
+        "id": task.id,
+        "parent_spec": task.parent_spec,
+        "title": task.title,
+        "timestamp": task.timestamp,
+        "files_to_modify": task.files_to_modify,
+        "test_to_write": task.test_to_write,
+        "context_reqs": task.context_reqs or [],
+        "context_specs": task.context_specs or [],
+        "context_patterns": task.context_patterns or [],
+        "context_sidecars": task.context_sidecars or [],
+        "context_files": task.context_files or [],
+        "size_budget": {
+            "files": task.size_budget_files,
+            "loc": task.size_budget_loc,
+        },
+        "depends_on": task.depends_on or [],
+        "status": task.status,
+        "claimed_by": task.claimed_by,
+        "claimed_at": task.claimed_at,
+        "completed_at": task.completed_at,
+        "rejection_reason": task.rejection_reason,
+        "escalation_count": task.escalation_count,
+        "created_by": task.created_by,
+        "updated_at": task.updated_at,
+    }
+
+
+def task_list(
+    store: LoomStore,
+    *,
+    status: str | None = None,
+    parent_spec: str | None = None,
+    claimed_by: str | None = None,
+    ready_only: bool = False,
+) -> list[dict[str, Any]]:
+    """List tasks. Filters stack.
+
+    ready_only: only pending tasks whose depends_on are all complete.
+    """
+    if ready_only:
+        tasks = store.list_ready_tasks()
+        if status is not None:
+            tasks = [t for t in tasks if t.status == status]
+        if parent_spec is not None:
+            tasks = [t for t in tasks if t.parent_spec == parent_spec]
+        if claimed_by is not None:
+            tasks = [t for t in tasks if t.claimed_by == claimed_by]
+    else:
+        tasks = store.list_tasks(status=status, parent_spec=parent_spec, claimed_by=claimed_by)
+    return [_task_to_dict(t) for t in tasks]
+
+
+def task_get(store: LoomStore, task_id: str) -> dict[str, Any]:
+    """Get a task's full data. Raises LookupError if not found."""
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    return _task_to_dict(task)
+
+
+def task_claim(store: LoomStore, task_id: str, claimed_by: str) -> dict[str, Any]:
+    """Transition pending -> claimed. Stamps claimed_at and claimed_by.
+
+    Raises:
+        LookupError: task not found.
+        ValueError: task is not in 'pending' status.
+    """
+    from datetime import datetime, timezone
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "pending":
+        raise ValueError(
+            f"Task {task_id} cannot be claimed from status={task.status} (must be pending)"
+        )
+    now = datetime.now(timezone.utc).isoformat()
+    store.update_task(task_id, {
+        "status": "claimed",
+        "claimed_by": claimed_by,
+        "claimed_at": now,
+    })
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_release(store: LoomStore, task_id: str) -> dict[str, Any]:
+    """Transition claimed -> pending (executor gave up cleanly).
+
+    Clears claimed_by/claimed_at. Does NOT count as an escalation.
+    """
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be released from status={task.status} (must be claimed)"
+        )
+    store.update_task(task_id, {
+        "status": "pending",
+        "claimed_by": None,
+        "claimed_at": None,
+    })
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_complete(
+    store: LoomStore,
+    task_id: str,
+    impl_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Transition claimed -> complete. Stamps completed_at.
+
+    impl_ids are returned in the result for audit but not stored on the task
+    (implementations link to specs independently).
+    """
+    from datetime import datetime, timezone
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be completed from status={task.status} (must be claimed)"
+        )
+    store.update_task(task_id, {
+        "status": "complete",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    result = _task_to_dict(store.get_task(task_id))
+    result["linked_impls"] = list(impl_ids) if impl_ids else []
+    return result
+
+
+def task_reject(
+    store: LoomStore,
+    task_id: str,
+    reason: str,
+    *,
+    escalate: bool = False,
+) -> dict[str, Any]:
+    """Transition claimed -> rejected (or escalated).
+
+    escalate=True sets status=escalated and increments escalation_count.
+    Use this when the failure needs human / larger-model attention.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("reason is required")
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be rejected from status={task.status} (must be claimed)"
+        )
+    updates: dict[str, Any] = {"rejection_reason": reason}
+    if escalate:
+        updates["status"] = "escalated"
+        updates["escalation_count"] = task.escalation_count + 1
+    else:
+        updates["status"] = "rejected"
+    store.update_task(task_id, updates)
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_build_prompt(store: LoomStore, task_id: str) -> str:
+    """Assemble the executor prompt on demand from current store state.
+
+    Mirrors the enhanced-condition bundle used by benchmarks/ollama_gaps*.py:
+      - task scope (title, files, grading test, size budget)
+      - linked requirements (value + rationale + elaboration + criteria)
+      - linked specifications (description + criteria)
+      - linked patterns (name + description)
+      - sidecar file contents (inlined)
+      - context files (inlined in full)
+      - output contract + stop tokens
+
+    Raises LookupError if the task is missing. Referenced reqs/specs/patterns
+    that don't exist are silently skipped (graceful degradation).
+    """
+    from pathlib import Path as _Path
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+
+    parts: list[str] = []
+    parts.append(f"# Task {task.id}: {task.title}\n")
+    parts.append(f"Parent specification: {task.parent_spec}")
+    parts.append(f"Files to modify: {', '.join(task.files_to_modify)}")
+    parts.append(f"Grading test: {task.test_to_write}")
+    parts.append(
+        f"Size budget: <= {task.size_budget_files} files, "
+        f"<= {task.size_budget_loc} LoC\n"
+    )
+
+    if task.context_reqs:
+        parts.append("## Requirements\n")
+        for rid in task.context_reqs:
+            req = store.get_requirement(rid)
+            if req is None:
+                continue
+            parts.append(f"### {req.id} [{req.domain}]")
+            parts.append(f"Value: {req.value}")
+            if req.rationale:
+                parts.append(f"Rationale: {req.rationale}")
+            if req.elaboration:
+                parts.append(f"Elaboration: {req.elaboration}")
+            ac = req.acceptance_criteria or []
+            if ac and ac != ["TBD"]:
+                parts.append("Acceptance criteria:")
+                for c in ac:
+                    parts.append(f"  - {c}")
+            parts.append("")
+
+    if task.context_specs:
+        parts.append("## Specifications\n")
+        for sid in task.context_specs:
+            spec = store.get_specification(sid)
+            if spec is None:
+                continue
+            parts.append(f"### {spec.id} (parent: {spec.parent_req}, status: {spec.status})")
+            parts.append(spec.description)
+            ac = spec.acceptance_criteria or []
+            if ac and ac != ["TBD"]:
+                parts.append("Criteria:")
+                for c in ac:
+                    parts.append(f"  - {c}")
+            parts.append("")
+
+    if task.context_patterns:
+        parts.append("## Patterns\n")
+        for pid in task.context_patterns:
+            pat = store.get_pattern(pid)
+            if pat is None:
+                continue
+            parts.append(f"### {pat.id} -- {pat.name}")
+            parts.append(pat.description)
+            parts.append("")
+
+    if task.context_sidecars:
+        parts.append("## Sidecar notes\n")
+        for path_str in task.context_sidecars:
+            p = _Path(path_str)
+            if not p.exists():
+                continue
+            parts.append(f"### {path_str}")
+            parts.append(p.read_text(encoding="utf-8"))
+            parts.append("")
+
+    if task.context_files:
+        parts.append("## Source context\n")
+        for path_str in task.context_files:
+            p = _Path(path_str)
+            if not p.exists():
+                continue
+            parts.append(f"### {path_str}")
+            parts.append("```")
+            parts.append(p.read_text(encoding="utf-8"))
+            parts.append("```")
+            parts.append("")
+
+    parts.append(
+        "## Output contract\n"
+        "Reply with ONE Python code block (```python ... ```) containing your "
+        "changes. Do not include unchanged code from the files above. Do not "
+        "include prose outside the code block.\n\n"
+        "If the task is too large or mixes concerns, reply with "
+        "`TASK_REJECT: <reason>` and stop.\n"
+        "If you need information not provided, reply with "
+        "`NEED_CONTEXT: <what>` and stop.\n"
+        "When complete, begin your final message (after the code block) with "
+        "`DONE: <one-line summary>`."
+    )
+
+    return "\n".join(parts)

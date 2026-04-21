@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from store import LoomStore, Requirement, Implementation, generate_impl_id
+from store import LoomStore, Requirement, Implementation, generate_impl_id, Task, generate_task_id
 
 
 @pytest.fixture
@@ -483,3 +483,129 @@ class TestDocGeneration:
             assert "`src/projects.py` (lines 10-25)" in content
             # Traceability matrix shows spec ID
             assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py` | — |" in content
+
+
+class TestTaskDataclass:
+    def test_generate_task_id_is_stable(self):
+        a = generate_task_id("SPEC-x", "add helper")
+        b = generate_task_id("SPEC-x", "add helper")
+        assert a == b
+        assert a.startswith("TASK-")
+
+    def test_generate_task_id_differs_per_title(self):
+        a = generate_task_id("SPEC-x", "add helper")
+        b = generate_task_id("SPEC-x", "remove helper")
+        assert a != b
+
+    def test_to_from_dict_roundtrip(self):
+        t = Task(
+            id="TASK-abc", parent_spec="SPEC-x", title="t", timestamp="2026-01-01T00:00:00Z",
+            files_to_modify=["src/a.py"], test_to_write="tests/t.py::T",
+            context_reqs=["REQ-a"], depends_on=["TASK-prev"],
+        )
+        d = t.to_dict()
+        t2 = Task.from_dict(d)
+        assert t2.id == t.id
+        assert t2.context_reqs == ["REQ-a"]
+        assert t2.depends_on == ["TASK-prev"]
+
+    def test_empty_lists_become_sentinel(self):
+        t = Task(
+            id="TASK-x", parent_spec="SPEC-x", title="t", timestamp="2026-01-01T00:00:00Z",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+        )
+        d = t.to_dict()
+        # Empty optional lists substituted with ["TBD"] for ChromaDB.
+        assert d["context_reqs"] == ["TBD"]
+        # Round-trip normalizes back to None.
+        assert Task.from_dict(d).context_reqs is None
+
+    def test_is_ready_no_deps(self):
+        t = Task(
+            id="TASK-x", parent_spec="SPEC-x", title="t", timestamp="2026-01-01T00:00:00Z",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+        )
+        assert t.is_ready(set()) is True
+
+    def test_is_ready_with_deps(self):
+        t = Task(
+            id="TASK-x", parent_spec="SPEC-x", title="t", timestamp="2026-01-01T00:00:00Z",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+            depends_on=["TASK-a", "TASK-b"],
+        )
+        assert t.is_ready(set()) is False
+        assert t.is_ready({"TASK-a"}) is False
+        assert t.is_ready({"TASK-a", "TASK-b"}) is True
+
+
+class TestTaskStoreMethods:
+    def test_add_and_get_task(self, temp_store, sample_embedding):
+        t = Task(
+            id="TASK-1", parent_spec="SPEC-x", title="add", timestamp="2026-01-01T00:00:00Z",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+        )
+        temp_store.add_task(t, sample_embedding)
+        got = temp_store.get_task("TASK-1")
+        assert got is not None
+        assert got.id == "TASK-1"
+
+    def test_get_missing_task(self, temp_store):
+        assert temp_store.get_task("TASK-404") is None
+
+    def test_list_tasks_filters(self, temp_store, sample_embedding):
+        for i, status in enumerate(["pending", "pending", "claimed", "complete"]):
+            t = Task(
+                id=f"TASK-{i}", parent_spec="SPEC-x", title=f"t{i}",
+                timestamp="2026-01-01T00:00:00Z",
+                files_to_modify=["src/a.py"], test_to_write="t::T",
+                status=status,
+            )
+            temp_store.add_task(t, sample_embedding)
+        assert len(temp_store.list_tasks()) == 4
+        assert len(temp_store.list_tasks(status="pending")) == 2
+        assert len(temp_store.list_tasks(status="complete")) == 1
+
+    def test_list_ready_tasks_respects_deps(self, temp_store, sample_embedding):
+        t1 = Task(id="TASK-1", parent_spec="SPEC-x", title="t1",
+                  timestamp="2026-01-01T00:00:00Z",
+                  files_to_modify=["src/a.py"], test_to_write="t::T")
+        t2 = Task(id="TASK-2", parent_spec="SPEC-x", title="t2",
+                  timestamp="2026-01-01T00:00:00Z",
+                  files_to_modify=["src/a.py"], test_to_write="t::T",
+                  depends_on=["TASK-1"])
+        temp_store.add_task(t1, sample_embedding)
+        temp_store.add_task(t2, sample_embedding)
+
+        ready = temp_store.list_ready_tasks()
+        assert [t.id for t in ready] == ["TASK-1"]
+
+        temp_store.set_task_status("TASK-1", "complete")
+        ready = temp_store.list_ready_tasks()
+        assert [t.id for t in ready] == ["TASK-2"]
+
+    def test_update_task_stamps_updated_at(self, temp_store, sample_embedding):
+        t = Task(id="TASK-1", parent_spec="SPEC-x", title="t",
+                 timestamp="2026-01-01T00:00:00Z",
+                 files_to_modify=["src/a.py"], test_to_write="t::T")
+        temp_store.add_task(t, sample_embedding)
+        assert temp_store.get_task("TASK-1").updated_at is None
+        temp_store.update_task("TASK-1", {"status": "claimed"})
+        assert temp_store.get_task("TASK-1").updated_at is not None
+
+    def test_set_task_status_rejects_invalid(self, temp_store, sample_embedding):
+        t = Task(id="TASK-1", parent_spec="SPEC-x", title="t",
+                 timestamp="2026-01-01T00:00:00Z",
+                 files_to_modify=["src/a.py"], test_to_write="t::T")
+        temp_store.add_task(t, sample_embedding)
+        assert temp_store.set_task_status("TASK-1", "bogus") is False
+        assert temp_store.set_task_status("TASK-1", "claimed") is True
+
+    def test_stats_includes_tasks(self, temp_store, sample_embedding):
+        stats = temp_store.stats()
+        assert "tasks" in stats
+        assert stats["tasks"] == 0
+        t = Task(id="TASK-1", parent_spec="SPEC-x", title="t",
+                 timestamp="2026-01-01T00:00:00Z",
+                 files_to_modify=["src/a.py"], test_to_write="t::T")
+        temp_store.add_task(t, sample_embedding)
+        assert temp_store.stats()["tasks"] == 1

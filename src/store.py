@@ -115,7 +115,7 @@ class Pattern:
         return cls(**d)
 
 
-@dataclass 
+@dataclass
 class Implementation:
     """A code chunk linked to requirements and specifications."""
     id: str
@@ -127,7 +127,7 @@ class Implementation:
     satisfies: List[Dict[str, str]]  # [{"req_id": "...", "req_version": "..."}]
     satisfies_specs: Optional[List[str]] = None  # [SPEC-xxx, SPEC-yyy]
     satisfies_patterns: Optional[List[str]] = None  # [PAT-xxx]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         if d.get('satisfies_specs') is None:
@@ -135,12 +135,90 @@ class Implementation:
         if d.get('satisfies_patterns') is None:
             d['satisfies_patterns'] = []
         return d
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Implementation":
         d.setdefault('satisfies_specs', None)
         d.setdefault('satisfies_patterns', None)
         return cls(**d)
+
+
+@dataclass
+class Task:
+    """An atomic, executor-ready unit of work.
+
+    A Task is small enough for a small-model executor (qwen3.5:latest or
+    similar) to complete in a single turn given the context bundle.  Tasks
+    are the output of spec decomposition and the input to the exec runner.
+    """
+    id: str                           # TASK-xxx
+    parent_spec: str                  # SPEC-xxx this task implements
+    title: str                        # one-line human description
+    timestamp: str                    # creation ISO timestamp
+    # Execution scope
+    files_to_modify: List[str]        # files the executor may edit
+    test_to_write: str                # "path/to/test.py::TestClass" grading target
+    # Context pointers (on-demand bundle assembly at claim time)
+    context_reqs: Optional[List[str]] = None       # REQ-xxx to include
+    context_specs: Optional[List[str]] = None      # SPEC-xxx to include
+    context_patterns: Optional[List[str]] = None   # PAT-xxx to include
+    context_sidecars: Optional[List[str]] = None   # sidecar .md paths to inline
+    context_files: Optional[List[str]] = None      # source files to inline in full
+    # Atomicity
+    size_budget_files: int = 2
+    size_budget_loc: int = 80
+    depends_on: Optional[List[str]] = None          # other TASK-xxx that must complete first
+    # Lifecycle
+    status: str = "pending"            # pending | claimed | complete | rejected | escalated
+    claimed_by: Optional[str] = None   # e.g., "qwen3.5:latest"
+    claimed_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    escalation_count: int = 0
+    # Provenance
+    created_by: Optional[str] = None   # decomposer (e.g., "opus", "jon")
+    updated_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        # ChromaDB rejects empty lists in metadata; use ["TBD"] sentinel.
+        for k in ("context_reqs", "context_specs", "context_patterns",
+                  "context_sidecars", "context_files", "depends_on",
+                  "files_to_modify"):
+            if not d.get(k):
+                d[k] = ["TBD"]
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Task":
+        d.setdefault("context_reqs", None)
+        d.setdefault("context_specs", None)
+        d.setdefault("context_patterns", None)
+        d.setdefault("context_sidecars", None)
+        d.setdefault("context_files", None)
+        d.setdefault("depends_on", None)
+        d.setdefault("size_budget_files", 2)
+        d.setdefault("size_budget_loc", 80)
+        d.setdefault("status", "pending")
+        d.setdefault("claimed_by", None)
+        d.setdefault("claimed_at", None)
+        d.setdefault("completed_at", None)
+        d.setdefault("rejection_reason", None)
+        d.setdefault("escalation_count", 0)
+        d.setdefault("created_by", None)
+        d.setdefault("updated_at", None)
+        # Normalize ["TBD"] sentinel back to None for round-trip cleanliness.
+        for k in ("context_reqs", "context_specs", "context_patterns",
+                  "context_sidecars", "context_files", "depends_on"):
+            if d.get(k) == ["TBD"]:
+                d[k] = None
+        return cls(**d)
+
+    def is_ready(self, completed_task_ids: set) -> bool:
+        """True if all dependencies (if any) are in the completed set."""
+        if not self.depends_on:
+            return True
+        return all(dep in completed_task_ids for dep in self.depends_on)
 
 
 class LoomStore:
@@ -193,6 +271,11 @@ class LoomStore:
         self.chat_messages = self.client.get_or_create_collection(
             name="chat_messages",
             metadata={"description": "Raw chat messages for context"}
+        )
+
+        self.tasks = self.client.get_or_create_collection(
+            name="tasks",
+            metadata={"description": "Atomic work items — executable by small-model runners"}
         )
     
     # ==================== Requirements ====================
@@ -581,8 +664,92 @@ class LoomStore:
                 return True
         return False
     
+    # ==================== Tasks ====================
+
+    def add_task(self, task: Task, embedding: List[float]) -> None:
+        """Add or update a task."""
+        self.tasks.upsert(
+            ids=[task.id],
+            embeddings=[embedding],
+            metadatas=[task.to_dict()],
+            documents=[f"{task.title}\n{task.parent_spec}"],
+        )
+
+    def get_task(self, task_id: str) -> Optional[Task]:
+        """Get a task by ID."""
+        result = self.tasks.get(ids=[task_id], include=["metadatas"])
+        if result["ids"]:
+            return Task.from_dict(result["metadatas"][0])
+        return None
+
+    def list_tasks(
+        self,
+        status: Optional[str] = None,
+        parent_spec: Optional[str] = None,
+        claimed_by: Optional[str] = None,
+    ) -> List[Task]:
+        """List tasks, optionally filtered by status / parent_spec / claimer."""
+        result = self.tasks.get(include=["metadatas"])
+        tasks = [Task.from_dict(m) for m in result["metadatas"]]
+        if status is not None:
+            tasks = [t for t in tasks if t.status == status]
+        if parent_spec is not None:
+            tasks = [t for t in tasks if t.parent_spec == parent_spec]
+        if claimed_by is not None:
+            tasks = [t for t in tasks if t.claimed_by == claimed_by]
+        # Deterministic ordering by id
+        tasks.sort(key=lambda t: t.id)
+        return tasks
+
+    def list_ready_tasks(self) -> List[Task]:
+        """Pending tasks whose dependencies are all complete."""
+        all_tasks = self.list_tasks()
+        completed_ids = {t.id for t in all_tasks if t.status == "complete"}
+        return [
+            t for t in all_tasks
+            if t.status == "pending" and t.is_ready(completed_ids)
+        ]
+
+    def update_task(self, task_id: str, updates: Dict[str, Any]) -> Optional[Task]:
+        """Update specific fields of a task. Stamps updated_at automatically."""
+        task = self.get_task(task_id)
+        if not task:
+            return None
+        for key, value in updates.items():
+            if hasattr(task, key):
+                setattr(task, key, value)
+        task.updated_at = datetime.now(timezone.utc).isoformat()
+
+        result = self.tasks.get(ids=[task_id], include=["embeddings"])
+        if result["embeddings"] is not None and len(result["embeddings"]) > 0:
+            self.add_task(task, result["embeddings"][0])
+        return task
+
+    def set_task_status(self, task_id: str, status: str) -> bool:
+        """Update task status. Valid: pending/claimed/complete/rejected/escalated."""
+        valid = {"pending", "claimed", "complete", "rejected", "escalated"}
+        if status not in valid:
+            return False
+        return self.update_task(task_id, {"status": status}) is not None
+
+    def search_tasks(self, query_embedding: List[float], n: int = 10) -> List[Dict]:
+        """Search tasks by semantic similarity over title + parent_spec."""
+        results = self.tasks.query(
+            query_embeddings=[query_embedding],
+            n_results=n,
+            include=["metadatas", "documents", "distances"],
+        )
+        return [
+            {
+                "id": results["ids"][0][i],
+                "task": Task.from_dict(results["metadatas"][0][i]),
+                "distance": results["distances"][0][i] if results["distances"] else None,
+            }
+            for i in range(len(results["ids"][0]))
+        ]
+
     # ==================== Chat Messages ====================
-    
+
     def add_chat_message(
         self, 
         msg_id: str, 
@@ -628,8 +795,11 @@ class LoomStore:
         """Get collection statistics."""
         return {
             "requirements": self.requirements.count(),
+            "specifications": self.specifications.count(),
+            "patterns": self.patterns.count(),
             "implementations": self.implementations.count(),
-            "chat_messages": self.chat_messages.count()
+            "tasks": self.tasks.count(),
+            "chat_messages": self.chat_messages.count(),
         }
 
 
@@ -641,3 +811,9 @@ def generate_impl_id(file: str, lines: str) -> str:
 def generate_content_hash(content: str) -> str:
     """Generate a hash of content for change detection."""
     return hashlib.sha256(content.encode()).hexdigest()
+
+
+def generate_task_id(parent_spec: str, title: str) -> str:
+    """Generate a stable ID for a task: TASK-<12 hex chars>."""
+    digest = hashlib.sha256(f"{parent_spec}:{title}".encode()).hexdigest()[:12]
+    return f"TASK-{digest}"

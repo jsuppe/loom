@@ -1293,6 +1293,158 @@ def cmd_chain(args):
     return 0
 
 
+# ============================================================
+# Task subcommand group: loom task <verb> ...
+# ============================================================
+
+
+def cmd_task(args):
+    """Dispatch `loom task <verb>` to the right sub-handler."""
+    verb = getattr(args, "task_verb", None)
+    handlers = {
+        "add": cmd_task_add,
+        "list": cmd_task_list,
+        "show": cmd_task_show,
+        "claim": cmd_task_claim,
+        "release": cmd_task_release,
+        "complete": cmd_task_complete,
+        "reject": cmd_task_reject,
+        "prompt": cmd_task_prompt,
+    }
+    if verb not in handlers:
+        print("Usage: loom task {add|list|show|claim|release|complete|reject|prompt} ...")
+        return 1
+    return handlers[verb](args)
+
+
+def cmd_task_add(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_add(
+            store,
+            parent_spec=args.spec,
+            title=args.title,
+            files_to_modify=args.files or [],
+            test_to_write=args.test,
+            context_reqs=args.context_req or None,
+            context_specs=args.context_spec or None,
+            context_patterns=args.context_pattern or None,
+            context_sidecars=args.context_sidecar or None,
+            context_files=args.context_file or None,
+            size_budget_files=args.budget_files,
+            size_budget_loc=args.budget_loc,
+            depends_on=args.depends_on or None,
+            created_by=args.created_by,
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"✓ {result['id']}: {result['title']} (parent: {result['parent_spec']})")
+    return 0
+
+
+def cmd_task_list(args):
+    store = LoomStore(args.project)
+    tasks = services.task_list(
+        store,
+        status=args.status,
+        parent_spec=args.spec,
+        claimed_by=args.claimed_by,
+        ready_only=args.ready,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(tasks, indent=2))
+        return 0
+
+    if not tasks:
+        print("(no tasks)")
+        return 0
+
+    print(f"🧵 Tasks — {args.project}  ({len(tasks)})")
+    for t in tasks:
+        deps = f"  deps: {','.join(t['depends_on'])}" if t["depends_on"] else ""
+        claimed = f"  [{t['claimed_by']}]" if t["claimed_by"] else ""
+        print(f"  {t['id']}  [{t['status']:>10}]{claimed}  {t['title']}{deps}")
+    return 0
+
+
+def cmd_task_show(args):
+    store = LoomStore(args.project)
+    try:
+        task = services.task_get(store, args.task_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(json.dumps(task, indent=2))
+    return 0
+
+
+def cmd_task_claim(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_claim(store, args.task_id, claimed_by=args.as_worker)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {result['id']} claimed by {result['claimed_by']}")
+    return 0
+
+
+def cmd_task_release(args):
+    store = LoomStore(args.project)
+    try:
+        services.task_release(store, args.task_id)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {args.task_id} released (status: pending)")
+    return 0
+
+
+def cmd_task_complete(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_complete(store, args.task_id, impl_ids=args.impl or None)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {result['id']} complete at {result['completed_at']}")
+    if result["linked_impls"]:
+        print(f"  linked impls: {', '.join(result['linked_impls'])}")
+    return 0
+
+
+def cmd_task_reject(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_reject(
+            store, args.task_id, reason=args.reason, escalate=args.escalate
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    marker = "↑ ESCALATED" if result["status"] == "escalated" else "✗ rejected"
+    print(f"{marker} {result['id']}: {result['rejection_reason']}")
+    if result["status"] == "escalated":
+        print(f"  escalation_count now {result['escalation_count']}")
+    return 0
+
+
+def cmd_task_prompt(args):
+    store = LoomStore(args.project)
+    try:
+        prompt = services.task_build_prompt(store, args.task_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(prompt)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Loom - Requirements traceability")
     parser.add_argument("--project", "-p", default=None, help="Project name")
@@ -1472,7 +1624,56 @@ def main():
     )
     p_cost.add_argument("--tail", type=int, default=None, help="Only consider the last N log entries")
     p_cost.add_argument("--json", "-j", action="store_true", help="Output as JSON")
-    
+
+    # task subcommand group
+    p_task = subparsers.add_parser("task", help="Manage atomic work items (Task entity)")
+    task_subs = p_task.add_subparsers(dest="task_verb", required=True)
+
+    p_ta = task_subs.add_parser("add", help="Create a new task")
+    p_ta.add_argument("--spec", required=True, help="Parent specification id (SPEC-xxx)")
+    p_ta.add_argument("--title", required=True, help="One-line task title")
+    p_ta.add_argument("--files", nargs="+", required=True, help="Files the task may modify")
+    p_ta.add_argument("--test", required=True, help="Grading test target (e.g., tests/test_x.py::TestY)")
+    p_ta.add_argument("--context-req", action="append", help="Requirement id to include in bundle")
+    p_ta.add_argument("--context-spec", action="append", help="Spec id to include in bundle")
+    p_ta.add_argument("--context-pattern", action="append", help="Pattern id to include in bundle")
+    p_ta.add_argument("--context-sidecar", action="append", help="Sidecar file path to inline")
+    p_ta.add_argument("--context-file", action="append", help="Source file to inline in full")
+    p_ta.add_argument("--budget-files", type=int, default=2, help="Max files the task may touch")
+    p_ta.add_argument("--budget-loc", type=int, default=80, help="Max LoC the task may change")
+    p_ta.add_argument("--depends-on", action="append", help="Task id this task depends on")
+    p_ta.add_argument("--created-by", default=None, help="Who created this task (e.g., 'opus', 'jon')")
+    p_ta.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    p_tl = task_subs.add_parser("list", help="List tasks")
+    p_tl.add_argument("--status", default=None, help="Filter by status")
+    p_tl.add_argument("--spec", default=None, help="Filter by parent spec id")
+    p_tl.add_argument("--claimed-by", default=None, help="Filter by claimer")
+    p_tl.add_argument("--ready", action="store_true", help="Only ready-to-execute tasks")
+    p_tl.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    p_ts = task_subs.add_parser("show", help="Show full task details as JSON")
+    p_ts.add_argument("task_id")
+
+    p_tc = task_subs.add_parser("claim", help="Transition pending -> claimed")
+    p_tc.add_argument("task_id")
+    p_tc.add_argument("--as", dest="as_worker", required=True, help="Executor name")
+
+    p_tre = task_subs.add_parser("release", help="Transition claimed -> pending")
+    p_tre.add_argument("task_id")
+
+    p_tco = task_subs.add_parser("complete", help="Transition claimed -> complete")
+    p_tco.add_argument("task_id")
+    p_tco.add_argument("--impl", action="append", help="Implementation id(s) produced")
+
+    p_trj = task_subs.add_parser("reject", help="Transition claimed -> rejected/escalated")
+    p_trj.add_argument("task_id")
+    p_trj.add_argument("--reason", required=True)
+    p_trj.add_argument("--escalate", action="store_true", help="Mark as escalated (operator needed)")
+
+    p_tp = task_subs.add_parser("prompt", help="Print the assembled executor prompt for a task")
+    p_tp.add_argument("task_id")
+
     args = parser.parse_args()
     
     if not args.project:
@@ -1508,6 +1709,7 @@ def main():
         "coverage": cmd_coverage,
         "chain": cmd_chain,
         "cost": cmd_cost,
+        "task": cmd_task,
     }
     
     return commands[args.command](args)

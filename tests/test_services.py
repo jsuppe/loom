@@ -1057,3 +1057,200 @@ class TestGaps:
         gaps = services.gaps(store)
         related = [g for g in gaps if g["entity_id"] == "REQ-ok"]
         assert related == [], f"complete req should not appear in gaps; got {related}"
+
+
+def _mk_spec(store, spec_id, parent_req, fake_embedding):
+    from store import Specification
+    spec = Specification(
+        id=spec_id, parent_req=parent_req,
+        description=f"spec for {parent_req}",
+        timestamp="2026-01-01T00:00:00Z",
+        acceptance_criteria=["c1"],
+    )
+    store.add_specification(spec, fake_embedding)
+    return spec
+
+
+class TestTaskAdd:
+    def test_basic_task_created(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "must X", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="implement X",
+            files_to_modify=["src/a.py"],
+            test_to_write="tests/test_a.py::TestX",
+        )
+        assert result["id"].startswith("TASK-")
+        assert result["status"] == "pending"
+        assert result["parent_spec"] == "SPEC-a"
+
+    def test_missing_spec_raises(self, store):
+        with pytest.raises(LookupError):
+            services.task_add(
+                store, parent_spec="SPEC-ghost", title="x",
+                files_to_modify=["a"], test_to_write="t::T",
+            )
+
+    def test_empty_title_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="",
+                files_to_modify=["a"], test_to_write="t::T",
+            )
+
+    def test_empty_files_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="t",
+                files_to_modify=[], test_to_write="t::T",
+            )
+
+    def test_unknown_dep_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="t",
+                files_to_modify=["a"], test_to_write="t::T",
+                depends_on=["TASK-ghost"],
+            )
+
+
+class TestTaskLifecycle:
+    def _seed(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="do thing",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+        )
+        return result["id"]
+
+    def test_claim_then_complete(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="qwen3.5:latest")
+        t = services.task_get(store, tid)
+        assert t["status"] == "claimed"
+        assert t["claimed_by"] == "qwen3.5:latest"
+        services.task_complete(store, tid, impl_ids=["IMPL-xyz"])
+        t = services.task_get(store, tid)
+        assert t["status"] == "complete"
+        assert t["completed_at"] is not None
+
+    def test_cannot_claim_claimed(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        with pytest.raises(ValueError):
+            services.task_claim(store, tid, claimed_by="b")
+
+    def test_release_returns_to_pending(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_release(store, tid)
+        t = services.task_get(store, tid)
+        assert t["status"] == "pending"
+        assert t["claimed_by"] is None
+
+    def test_reject_non_escalated(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_reject(store, tid, reason="too broad")
+        t = services.task_get(store, tid)
+        assert t["status"] == "rejected"
+        assert t["rejection_reason"] == "too broad"
+        assert t["escalation_count"] == 0
+
+    def test_reject_escalated(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_reject(store, tid, reason="NEED_CONTEXT: foo", escalate=True)
+        t = services.task_get(store, tid)
+        assert t["status"] == "escalated"
+        assert t["escalation_count"] == 1
+
+    def test_reject_requires_reason(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        with pytest.raises(ValueError):
+            services.task_reject(store, tid, reason="")
+
+    def test_complete_from_non_claimed_raises(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_complete(store, tid)
+
+    def test_task_get_missing(self, store):
+        with pytest.raises(LookupError):
+            services.task_get(store, "TASK-404")
+
+
+class TestTaskList:
+    def test_ready_only_excludes_blocked(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        t1 = services.task_add(store, parent_spec="SPEC-a", title="first",
+                               files_to_modify=["a"], test_to_write="t::T")
+        t2 = services.task_add(store, parent_spec="SPEC-a", title="second",
+                               files_to_modify=["a"], test_to_write="t::T",
+                               depends_on=[t1["id"]])
+
+        ready = services.task_list(store, ready_only=True)
+        assert {t["id"] for t in ready} == {t1["id"]}
+
+        services.task_claim(store, t1["id"], claimed_by="w")
+        services.task_complete(store, t1["id"])
+
+        ready = services.task_list(store, ready_only=True)
+        assert {t["id"] for t in ready} == {t2["id"]}
+
+    def test_filter_by_status(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        a = services.task_add(store, parent_spec="SPEC-a", title="a",
+                              files_to_modify=["x"], test_to_write="t::T")
+        b = services.task_add(store, parent_spec="SPEC-a", title="b",
+                              files_to_modify=["x"], test_to_write="t::T")
+        services.task_claim(store, a["id"], claimed_by="w")
+        pending = services.task_list(store, status="pending")
+        assert {t["id"] for t in pending} == {b["id"]}
+
+
+class TestTaskBuildPrompt:
+    def test_prompt_assembles_context(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        store.update_requirement("REQ-a", {
+            "elaboration": "how to do X",
+            "acceptance_criteria": ["criterion1"],
+        })
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="do thing",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+            context_reqs=["REQ-a"], context_specs=["SPEC-a"],
+        )
+        prompt = services.task_build_prompt(store, result["id"])
+        assert "# Task" in prompt
+        assert "REQ-a" in prompt
+        assert "SPEC-a" in prompt
+        assert "how to do X" in prompt
+        assert "criterion1" in prompt
+        assert "Output contract" in prompt
+
+    def test_prompt_missing_refs_are_skipped_silently(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="x",
+            files_to_modify=["a"], test_to_write="t::T",
+            context_reqs=["REQ-ghost", "REQ-a"],
+        )
+        prompt = services.task_build_prompt(store, result["id"])
+        assert "REQ-a" in prompt
+
+    def test_prompt_for_missing_task_raises(self, store):
+        with pytest.raises(LookupError):
+            services.task_build_prompt(store, "TASK-404")
