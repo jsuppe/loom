@@ -25,6 +25,8 @@ build/
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+# Claude Code subagent worktrees (transient experiment artifacts)
+.claude/worktrees/
 
 # OS
 .DS_Store

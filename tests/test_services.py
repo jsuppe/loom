@@ -916,3 +916,144 @@ class TestIncomplete:
         assert len(incomplete) == 1
         assert "elaboration" in incomplete[0]["missing"]
         assert "acceptance criteria" in incomplete[0]["missing"]
+
+
+class TestGaps:
+    """Tests for services.gaps()."""
+
+    def _mk_req(self, store, req_id, value="placeholder", elaboration=None, criteria=None, fake_embedding=None):
+        """Create a requirement with optional elaboration and criteria."""
+        req = Requirement(
+            id=req_id,
+            domain="behavior",
+            value=value,
+            source_msg_id="m1",
+            source_session="s1",
+            timestamp="2026-01-01T00:00:00Z",
+            elaboration=elaboration,
+            acceptance_criteria=criteria,
+        )
+        store.add_requirement(req, fake_embedding or [0.1] * 768)
+        return req
+
+    def _mk_impl(self, store, impl_id_file, impl_id_lines, satisfies_req_ids, fake_embedding=None):
+        """Create an implementation with satisfies list."""
+        from store import generate_impl_id
+        impl = Implementation(
+            id=generate_impl_id(impl_id_file, impl_id_lines),
+            file=impl_id_file,
+            lines=impl_id_lines,
+            content="pass\n",
+            content_hash="h",
+            satisfies=[{"req_id": r} for r in satisfies_req_ids],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding or [0.1] * 768)
+        return impl
+
+    def test_empty_store_returns_empty_list(self, store):
+        assert services.gaps(store) == []
+
+    def test_missing_criteria_surfaced(self, store, fake_embedding):
+        self._mk_req(store, "REQ-nc", elaboration="some elaboration text", fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        matches = [g for g in gaps if g["entity_id"] == "REQ-nc"]
+        assert any(g["type"] == "missing_criteria" for g in matches), \
+            f"Expected missing_criteria gap for REQ-nc; got {matches}"
+
+    def test_missing_elaboration_surfaced(self, store, fake_embedding):
+        self._mk_req(store, "REQ-ne", criteria=["criterion one"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        matches = [g for g in gaps if g["entity_id"] == "REQ-ne"]
+        assert any(g["type"] == "missing_elaboration" for g in matches), \
+            f"Expected missing_elaboration gap for REQ-ne; got {matches}"
+
+    def test_orphan_impl_surfaced(self, store, fake_embedding):
+        self._mk_impl(store, "/tmp/a.py", "1-5", ["REQ-does-not-exist"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        assert any(g["type"] == "orphan_impl" for g in gaps), \
+            f"Expected orphan_impl gap; got {gaps}"
+
+    def test_impl_with_superseded_req_is_orphan(self, store, fake_embedding):
+        self._mk_req(store, "REQ-old", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        store.supersede_requirement("REQ-old")
+        self._mk_impl(store, "/tmp/b.py", "1-5", ["REQ-old"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        # An impl whose only linked req is superseded is orphan-adjacent.
+        assert any(g["type"] == "orphan_impl" for g in gaps), \
+            f"Expected orphan_impl gap for superseded-only impl; got {gaps}"
+
+    def test_impl_with_any_live_req_is_not_orphan(self, store, fake_embedding):
+        self._mk_req(store, "REQ-live", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        self._mk_req(store, "REQ-dead", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        store.supersede_requirement("REQ-dead")
+        self._mk_impl(store, "/tmp/c.py", "1-5", ["REQ-live", "REQ-dead"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        orphans = [g for g in gaps if g["type"] == "orphan_impl"]
+        assert orphans == [], \
+            f"Impl with at least one live linked req should not be orphan; got {orphans}"
+
+    def test_uniform_shape(self, store, fake_embedding):
+        self._mk_req(store, "REQ-a", fake_embedding=fake_embedding)
+        self._mk_impl(store, "/tmp/d.py", "1-5", ["REQ-missing"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        assert gaps, "expected at least one gap"
+        required = {"type", "entity_id", "description", "blocks", "suggested_action"}
+        for g in gaps:
+            missing_keys = required - set(g.keys())
+            assert not missing_keys, f"gap missing keys {missing_keys}: {g}"
+            for k in required:
+                assert g[k] is not None, f"field {k} was None in gap {g}"
+            assert isinstance(g["blocks"], list), f"blocks must be list; got {type(g['blocks'])}"
+            assert isinstance(g["suggested_action"], str), "suggested_action must be string"
+            assert g["suggested_action"].strip(), "suggested_action must be non-empty"
+
+    def test_ordering_by_priority(self, store, fake_embedding):
+        # Two reqs: one needs criteria (higher priority), one needs elaboration.
+        self._mk_req(store, "REQ-crit", elaboration="has elab", fake_embedding=fake_embedding)   # missing_criteria
+        self._mk_req(store, "REQ-elab", criteria=["c1"], fake_embedding=fake_embedding)          # missing_elaboration
+        self._mk_impl(store, "/tmp/e.py", "1-5", ["REQ-absent"], fake_embedding=fake_embedding)  # orphan_impl
+        gaps = services.gaps(store)
+        types_in_order = [g["type"] for g in gaps]
+        # Every missing_criteria entry must appear before any missing_elaboration entry.
+        if "missing_criteria" in types_in_order and "missing_elaboration" in types_in_order:
+            assert types_in_order.index("missing_criteria") < types_in_order.index("missing_elaboration")
+        # Every missing_elaboration must appear before any orphan_impl.
+        if "missing_elaboration" in types_in_order and "orphan_impl" in types_in_order:
+            assert types_in_order.index("missing_elaboration") < types_in_order.index("orphan_impl")
+
+    def test_tie_break_by_entity_id(self, store, fake_embedding):
+        self._mk_req(store, "REQ-b", elaboration="e", fake_embedding=fake_embedding)  # missing_criteria
+        self._mk_req(store, "REQ-a", elaboration="e", fake_embedding=fake_embedding)  # missing_criteria
+        gaps = services.gaps(store)
+        mc = [g for g in gaps if g["type"] == "missing_criteria"]
+        assert [g["entity_id"] for g in mc] == sorted(g["entity_id"] for g in mc), \
+            "tie-break should be ascending entity_id"
+
+    def test_type_filter(self, store, fake_embedding):
+        self._mk_req(store, "REQ-x", fake_embedding=fake_embedding)  # both elab AND criteria missing
+        self._mk_impl(store, "/tmp/f.py", "1-5", ["REQ-absent"], fake_embedding=fake_embedding)  # orphan_impl
+        only_orphan = services.gaps(store, types=["orphan_impl"])
+        assert all(g["type"] == "orphan_impl" for g in only_orphan), \
+            f"types filter leaked other types: {only_orphan}"
+
+    def test_limit_cap(self, store, fake_embedding):
+        for i in range(5):
+            self._mk_req(store, f"REQ-{i:02d}", elaboration="e", fake_embedding=fake_embedding)
+        gaps = services.gaps(store, limit=3)
+        assert len(gaps) <= 3
+
+    def test_superseded_reqs_excluded_from_req_level_gaps(self, store, fake_embedding):
+        self._mk_req(store, "REQ-sup", fake_embedding=fake_embedding)  # both elab + criteria missing
+        store.supersede_requirement("REQ-sup")
+        gaps = services.gaps(store)
+        bad = [g for g in gaps
+               if g["entity_id"] == "REQ-sup"
+               and g["type"] in {"missing_criteria", "missing_elaboration"}]
+        assert bad == [], f"superseded reqs must not surface as missing_* gaps; got {bad}"
+
+    def test_complete_reqs_do_not_surface(self, store, fake_embedding):
+        self._mk_req(store, "REQ-ok", elaboration="fully elaborated", criteria=["c1", "c2"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        related = [g for g in gaps if g["entity_id"] == "REQ-ok"]
+        assert related == [], f"complete req should not appear in gaps; got {related}"
