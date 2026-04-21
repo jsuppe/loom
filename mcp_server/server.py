@@ -192,6 +192,24 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="loom_context",
+            description=(
+                "Pre-edit briefing for a file. Returns every requirement "
+                "and specification linked to any implementation at that "
+                "path, plus a drift flag and a one-line summary suitable "
+                "for a system-reminder. Broader than loom_check — matches "
+                "by file path, not by exact line range."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "project": {"type": "string"},
+                },
+                "required": ["file"],
+            },
+        ),
+        Tool(
             name="loom_check",
             description=(
                 "Check whether a file (or line range) has drifted from "
@@ -243,13 +261,28 @@ async def list_tools() -> list[Tool]:
                 "Check whether a candidate requirement text would conflict "
                 "with existing requirements. Read-only — does NOT add the "
                 "requirement. Pass `text` as 'domain | requirement text' "
-                "(or just the text; defaults to 'behavior' domain)."
+                "(or just the text; defaults to 'behavior' domain). Set "
+                "`verify=true` to run an LLM verifier over the candidate "
+                "pool — higher precision + catches logic-only contradictions, "
+                "but adds ~1s of latency per check."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "text": {"type": "string"},
                     "project": {"type": "string"},
+                    "verify": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Run LLM verifier (requires Ollama).",
+                    },
+                    "verify_model": {
+                        "type": "string",
+                        "description": (
+                            "Ollama model name for verification "
+                            "(default: qwen3.5:latest)."
+                        ),
+                    },
                 },
                 "required": ["text"],
             },
@@ -542,6 +575,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         "loom_coverage": _handle_coverage,
         "loom_doctor": _handle_doctor,
         "loom_extract": _handle_extract,
+        "loom_context": _handle_context,
         "loom_check": _handle_check,
         "loom_link": _handle_link,
         "loom_conflicts": _handle_conflicts,
@@ -631,6 +665,14 @@ async def _handle_extract(args: dict[str, Any]) -> dict:
     )
 
 
+async def _handle_context(args: dict[str, Any]) -> dict:
+    s = _get_store(args.get("project"))
+    try:
+        return services.context(s, args["file"])
+    except LookupError as e:
+        return {"error": str(e)}
+
+
 async def _handle_check(args: dict[str, Any]) -> dict:
     s = _get_store(args.get("project"))
     try:
@@ -654,7 +696,14 @@ async def _handle_link(args: dict[str, Any]) -> dict:
 
 async def _handle_conflicts(args: dict[str, Any]) -> dict:
     s = _get_store(args.get("project"))
-    found = services.conflicts(s, args["text"])
+    try:
+        found = services.conflicts(
+            s, args["text"],
+            verify=args.get("verify", False),
+            verify_model=args.get("verify_model"),
+        )
+    except RuntimeError as e:
+        return {"error": str(e)}
     return {
         "conflicts_found": len(found) > 0,
         "count": len(found),

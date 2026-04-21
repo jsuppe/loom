@@ -232,6 +232,51 @@ class TestConflicts:
         result = services.conflicts(store, "no pipe here")
         assert isinstance(result, list)
 
+    def test_verify_confirms_via_stub(self, store, fake_embedding):
+        """verify=True + stub verify_fn that flags only REQ-a should return just it."""
+        _mk_req(store, "REQ-a", "behavior", "sessions last 30 days", fake_embedding)
+        _mk_req(store, "REQ-b", "behavior", "sessions last forever", fake_embedding)
+
+        seen_pairs: list[tuple[str, str]] = []
+
+        def stub(candidate: str, existing: str, model):
+            seen_pairs.append((candidate, existing))
+            # Stub: only flag the 30-days req as a conflict.
+            return ("30 days" in existing, "YES" if "30 days" in existing else "NO")
+
+        result = services.conflicts(
+            store, "behavior | sessions last 60 days",
+            verify=True, verify_fn=stub,
+        )
+        ids = [r["existing_id"] for r in result]
+        assert "REQ-a" in ids
+        assert "REQ-b" not in ids
+        # Verifier should have been invoked at least once per candidate in the pool.
+        assert len(seen_pairs) >= 1
+        # LLM-verified reason surfaces in the result.
+        assert all("LLM-verified" in r["reason"] for r in result)
+
+    def test_verify_returns_empty_when_stub_rejects_all(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "something", fake_embedding)
+        stub = lambda c, e, m: (False, "NO")  # noqa: E731
+        result = services.conflicts(
+            store, "behavior | unrelated candidate",
+            verify=True, verify_fn=stub,
+        )
+        assert result == []
+
+    def test_verify_raises_on_verifier_error(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "rule A", fake_embedding)
+        # Stub that simulates Ollama connection failure via the <error:...>
+        # sentinel that src/conflict_verify.py emits.
+        stub = lambda c, e, m: (False, "<error: connection refused>")  # noqa: E731
+        import pytest
+        with pytest.raises(RuntimeError, match="connection refused"):
+            services.conflicts(
+                store, "behavior | some candidate",
+                verify=True, verify_fn=stub,
+            )
+
 
 class TestDoctor:
     def test_empty_store_returns_shape(self, store):
@@ -678,6 +723,98 @@ class TestTestGenerate:
         # Re-running without force → skipped.
         result2 = services.test_generate(store)
         assert "REQ-x" in result2["skipped"]
+
+
+class TestContext:
+    def test_missing_file_raises(self, store):
+        with pytest.raises(LookupError):
+            services.context(store, "/nonexistent/path.py")
+
+    def test_unlinked_file_returns_empty_briefing(self, store, tmp_path):
+        f = tmp_path / "untracked.py"
+        f.write_text("x = 1\n")
+        data = services.context(store, str(f))
+        assert data["linked"] is False
+        assert data["drift_detected"] is False
+        assert data["requirements"] == []
+        assert data["specifications"] == []
+        assert data["summary"] == ""
+
+    def test_linked_file_lists_requirements(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-a", "behavior", "must do A", fake_embedding)
+        _mk_req(store, "REQ-b", "data", "data rule B", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("pass\n")
+
+        impl = Implementation(
+            id=generate_impl_id(str(f), "1-5"),
+            file=str(f), lines="1-5",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-a"}, {"req_id": "REQ-b"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        data = services.context(store, str(f))
+        assert data["linked"] is True
+        assert data["drift_detected"] is False
+        ids = {r["id"] for r in data["requirements"]}
+        assert ids == {"REQ-a", "REQ-b"}
+        # Domain and lines are surfaced for the agent to reason about scope.
+        assert all(r["lines"] == "1-5" for r in data["requirements"])
+        assert "2 req(s)" in data["summary"]
+        assert "DRIFT" not in data["summary"]
+
+    def test_drift_flagged_and_in_summary(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-stale", "behavior", "stale rule", fake_embedding)
+        f = tmp_path / "x.py"
+        f.write_text("pass\n")
+
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-stale"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        store.supersede_requirement("REQ-stale")
+
+        data = services.context(store, str(f))
+        assert data["drift_detected"] is True
+        assert data["requirements"][0]["superseded"] is True
+        assert "DRIFT" in data["summary"]
+        assert "REQ-stale" in data["summary"]
+
+    def test_aggregates_across_multiple_impls(self, store, fake_embedding, tmp_path):
+        """`check()` wants an exact (file, lines) match; `context()` must not."""
+        from store import generate_impl_id
+        _mk_req(store, "REQ-a", "behavior", "A", fake_embedding)
+        _mk_req(store, "REQ-b", "behavior", "B", fake_embedding)
+        f = tmp_path / "wide.py"
+        f.write_text("line1\nline2\nline3\n")
+
+        impl1 = Implementation(
+            id=generate_impl_id(str(f), "1-2"),
+            file=str(f), lines="1-2",
+            content="line1\nline2\n", content_hash="h1",
+            satisfies=[{"req_id": "REQ-a"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        impl2 = Implementation(
+            id=generate_impl_id(str(f), "3-3"),
+            file=str(f), lines="3-3",
+            content="line3\n", content_hash="h2",
+            satisfies=[{"req_id": "REQ-b"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl1, fake_embedding)
+        store.add_implementation(impl2, fake_embedding)
+
+        data = services.context(store, str(f))
+        assert {r["id"] for r in data["requirements"]} == {"REQ-a", "REQ-b"}
 
 
 class TestIncomplete:
