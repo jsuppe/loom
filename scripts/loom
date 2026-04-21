@@ -153,6 +153,54 @@ def cmd_check(args):
     return 2 if data["drift_detected"] else 0
 
 
+def cmd_context(args):
+    """Briefing for a file: linked reqs, specs, and drift. JSON by default.
+
+    This is the hook-friendly form of `check` + `trace`: it matches every
+    implementation that touches the file (not just exact line ranges) so
+    a PreToolUse hook can surface links the agent didn't know existed.
+    """
+    store = LoomStore(args.project)
+    use_pretty = getattr(args, 'pretty', False)
+
+    try:
+        data = services.context(store, args.file)
+    except LookupError as e:
+        if use_pretty:
+            print(str(e))
+        else:
+            print(json.dumps({"error": str(e)}))
+        return 1
+
+    if not use_pretty:
+        print(json.dumps(data, indent=2))
+        return 2 if data["drift_detected"] else 0
+
+    print(f"🧵 Loom Context — {args.file}")
+    print()
+    if not data["linked"]:
+        print("No requirements or specs linked to this file.")
+        return 0
+
+    if data["requirements"]:
+        print("Requirements:")
+        for r in data["requirements"]:
+            marker = "⚠️ superseded" if r["superseded"] else "✓"
+            print(f"  {marker} {r['id']} [{r['domain']}] ({r['lines']})")
+            print(f"     {r['value']}")
+    if data["specifications"]:
+        print()
+        print("Specifications:")
+        for s in data["specifications"]:
+            print(f"  {s['id']} [{s['status']}] → {s['parent_req']} ({s['lines']})")
+            print(f"     {s['description']}")
+    if data["drift_detected"]:
+        print()
+        print("⚠️  Drift detected — review before editing.")
+
+    return 2 if data["drift_detected"] else 0
+
+
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
@@ -343,7 +391,19 @@ def cmd_conflicts(args):
             print("Provide requirement text with --text")
         return 1
 
-    found = services.conflicts(store, args.text)
+    try:
+        found = services.conflicts(
+            store, args.text,
+            verify=getattr(args, 'verify', False),
+            verify_model=getattr(args, 'verify_model', None),
+        )
+    except RuntimeError as e:
+        # LLM-verifier blew up (Ollama down, model missing, etc).
+        if use_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"Verify error: {e}")
+        return 1
 
     # Re-derive the parsed value for the human-readable display below.
     if "|" in args.text:
@@ -1200,6 +1260,14 @@ def main():
     p_check.add_argument("file", help="File to check")
     p_check.add_argument("--lines", help="Line range (e.g., 42-78)")
     p_check.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    # context (pre-edit briefing — JSON by default for agent/hook consumption)
+    p_context = subparsers.add_parser(
+        "context",
+        help="Pre-edit briefing: linked reqs, specs, and drift for a file",
+    )
+    p_context.add_argument("file", help="File to brief on")
+    p_context.add_argument("--pretty", action="store_true", help="Human-readable output (default: JSON)")
     
     # link
     p_link = subparsers.add_parser("link", help="Link code to requirements or specifications")
@@ -1232,6 +1300,14 @@ def main():
     p_conflicts = subparsers.add_parser("conflicts", help="Check for conflicts")
     p_conflicts.add_argument("--text", "-t", required=True, help="Requirement to check")
     p_conflicts.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    p_conflicts.add_argument(
+        "--verify", action="store_true",
+        help="Use LLM verifier for higher precision (adds ~1s/check; requires Ollama)",
+    )
+    p_conflicts.add_argument(
+        "--verify-model", default=None,
+        help="Ollama model for verification (default: qwen3.5:latest, or $LOOM_VERIFY_MODEL)",
+    )
     
     # supersede
     p_supersede = subparsers.add_parser("supersede", help="Supersede a requirement")
@@ -1346,6 +1422,7 @@ def main():
     commands = {
         "extract": cmd_extract,
         "check": cmd_check,
+        "context": cmd_context,
         "link": cmd_link,
         "status": cmd_status,
         "query": cmd_query,

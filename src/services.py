@@ -36,17 +36,30 @@ def status(store: LoomStore) -> dict[str, Any]:
     Drift item shape:
         {file, lines, req_id, req_value, superseded_at}
     """
+    import json as _json
+
     stats = store.stats()
     all_reqs = store.list_requirements(include_superseded=True)
     superseded = [r for r in all_reqs if r.superseded_at]
     active = [r for r in all_reqs if not r.superseded_at]
 
+    # Single metadata scan + local index instead of calling
+    # get_implementations_for_requirement (which re-scans) once per
+    # superseded req — the old shape was O(superseded * all_impls).
+    impls_by_req: dict[str, list[dict]] = {}
+    all_impls = store.implementations.get(include=["metadatas"])
+    for meta in all_impls.get("metadatas", []):
+        for sat in _json.loads(meta.get("satisfies", "[]")):
+            rid = sat.get("req_id")
+            if rid:
+                impls_by_req.setdefault(rid, []).append(meta)
+
     drift: list[dict[str, Any]] = []
     for req in superseded:
-        for impl in store.get_implementations_for_requirement(req.id):
+        for meta in impls_by_req.get(req.id, []):
             drift.append({
-                "file": impl.file,
-                "lines": impl.lines,
+                "file": meta.get("file", ""),
+                "lines": meta.get("lines", "all"),
                 "req_id": req.id,
                 "req_value": req.value,
                 "superseded_at": req.superseded_at,
@@ -177,14 +190,23 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
     if not filepath.exists():
         raise LookupError(f"File not found: {target}")
 
-    result = store.implementations.get(include=["metadatas"])
+    # Same O(matches) treatment as services.context — use Chroma's `where`
+    # filter on `file` instead of scanning every impl. See that function
+    # for the trade-off around relative-stored paths.
+    resolved_str = str(filepath)
+    metadatas = store.implementations.get(
+        where={"file": resolved_str}, include=["metadatas"],
+    ).get("metadatas", [])
+    if not metadatas and resolved_str != target:
+        metadatas = store.implementations.get(
+            where={"file": target}, include=["metadatas"],
+        ).get("metadatas", [])
+
     file_impls = []
-    for meta in result.get("metadatas", []):
-        impl_path = meta.get("file", "")
-        if impl_path and Path(impl_path).resolve() == filepath:
-            meta = dict(meta)  # don't mutate the stored metadata
-            meta["satisfies"] = _json.loads(meta.get("satisfies", "[]"))
-            file_impls.append(meta)
+    for meta in metadatas:
+        meta = dict(meta)  # don't mutate the stored metadata
+        meta["satisfies"] = _json.loads(meta.get("satisfies", "[]"))
+        file_impls.append(meta)
 
     all_reqs: set[str] = set()
     for meta in file_impls:
@@ -371,11 +393,35 @@ def coverage(store: LoomStore) -> dict[str, Any]:
     }
 
 
-def conflicts(store: LoomStore, text: str) -> list[dict[str, Any]]:
+def conflicts(
+    store: LoomStore,
+    text: str,
+    *,
+    verify: bool = False,
+    verify_model: str | None = None,
+    pool_top_n: int = 7,
+    verify_fn=None,
+) -> list[dict[str, Any]]:
     """Check whether `text` conflicts with existing requirements.
 
     `text` is parsed as `domain | value`; if no `|`, defaults to
     `behavior | <text>`.
+
+    When `verify=False` (default, backward-compatible): uses the
+    similarity-based heuristic in docs.check_conflicts.
+
+    When `verify=True`: builds a broader candidate pool (top-N semantic
+    neighbors plus same-domain keyword-overlap hits) and runs each
+    through a local LLM verifier (see src/conflict_verify.py). This
+    trades ~1s of latency per check for substantially higher precision
+    and the ability to catch logic-only contradictions the similarity
+    heuristic misses (e.g. "guests are not permitted" vs "guests may
+    check out"). Benchmark: benchmarks/conflicts_verified.py.
+
+    `verify_fn` is an injection seam for tests — pass a stub matching
+    the src.conflict_verify.verify signature: (candidate, existing,
+    model) -> (bool, str). Raises RuntimeError if the verifier errors
+    on any pool member (so the caller doesn't silently drop results).
 
     Result is a list of conflict entries; empty list means no conflicts.
     Each entry: {existing_id, existing_domain, existing_value, reason,
@@ -402,20 +448,72 @@ def conflicts(store: LoomStore, text: str) -> list[dict[str, Any]]:
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
-    out: list[dict[str, Any]] = []
-    for c in check_conflicts(store, temp_req, get_embedding_fn=get_embedding):
-        existing = c["existing"]
-        entry = {
+    if not verify:
+        # Baseline: similarity + keyword heuristic only.
+        out: list[dict[str, Any]] = []
+        for c in check_conflicts(store, temp_req, get_embedding_fn=get_embedding):
+            existing = c["existing"]
+            entry = {
+                "existing_id": existing.id,
+                "existing_domain": existing.domain,
+                "existing_value": existing.value,
+                "reason": c["reason"],
+            }
+            if "similarity" in c:
+                entry["similarity"] = c["similarity"]
+            if "overlap" in c:
+                entry["overlap"] = list(c["overlap"])
+            out.append(entry)
+        return out
+
+    # ------- Verified path -------
+    # Pool: unfiltered top-N semantic + same-domain keyword-overlap hits.
+    # We want recall here; precision comes from the LLM verifier.
+    if verify_fn is None:
+        from conflict_verify import verify as verify_fn  # type: ignore
+
+    new_embedding = get_embedding(value)
+    similar = store.search_requirements(new_embedding, n=pool_top_n)
+    pool: dict[str, dict[str, Any]] = {}  # req_id -> {req, similarity?}
+    for match in similar:
+        existing = match["requirement"]
+        if existing.id == "TEMP" or existing.superseded_at:
+            continue
+        distance = match.get("distance", 1.0)
+        similarity = max(0.0, 1.0 - (distance / 2.0))
+        pool[existing.id] = {"req": existing, "similarity": similarity}
+
+    # Keyword-overlap hits (same domain, >=3 non-stopword words in common).
+    stopwords = {"the", "a", "an", "is", "are", "should", "be", "to",
+                 "for", "with", "and", "or"}
+    new_words = set(value.lower().split()) - stopwords
+    for existing in store.list_requirements(include_superseded=False):
+        if existing.id in pool or existing.domain != domain:
+            continue
+        overlap_words = new_words & (set(existing.value.lower().split()) - stopwords)
+        if len(overlap_words) >= 3:
+            pool[existing.id] = {"req": existing, "overlap": overlap_words}
+
+    # Verify each pool member with the LLM.
+    out = []
+    for rid, entry in sorted(pool.items()):
+        existing = entry["req"]
+        is_conflict, raw = verify_fn(value, existing.value, verify_model)
+        if raw.startswith("<error:"):
+            raise RuntimeError(f"Verifier failed on {rid}: {raw}")
+        if not is_conflict:
+            continue
+        result: dict[str, Any] = {
             "existing_id": existing.id,
             "existing_domain": existing.domain,
             "existing_value": existing.value,
-            "reason": c["reason"],
+            "reason": f"LLM-verified (model={verify_model or 'default'})",
         }
-        if "similarity" in c:
-            entry["similarity"] = c["similarity"]
-        if "overlap" in c:
-            entry["overlap"] = list(c["overlap"])
-        out.append(entry)
+        if "similarity" in entry:
+            result["similarity"] = entry["similarity"]
+        if "overlap" in entry:
+            result["overlap"] = list(entry["overlap"])
+        out.append(result)
     return out
 
 
@@ -676,6 +774,116 @@ def check(
         "linked": True,
         "drift_detected": drift_found,
         "requirements": results,
+    }
+
+
+def context(store: LoomStore, file_path: str) -> dict[str, Any]:
+    """File-scoped briefing for pre-edit agent hooks.
+
+    Aggregates every requirement, specification, and drift signal linked
+    to any implementation at `file_path`. Unlike `check()` — which keys
+    on an exact (file, line-range) match — this surfaces all links that
+    touch the file, because a PreToolUse hook usually doesn't know which
+    range an earlier `link` call used.
+
+    Result shape:
+        {file, linked, drift_detected,
+         requirements: [{id, domain, value, status, superseded,
+                         superseded_at, lines}],
+         specifications: [{id, description, status, parent_req, lines}],
+         summary: str}
+
+    `summary` is a one-line message suitable for direct injection as a
+    system-reminder. Empty when `linked=False`.
+
+    Raises:
+        LookupError: file not found.
+    """
+    from pathlib import Path
+    import json as _json
+
+    filepath = Path(file_path).resolve()
+    if not filepath.exists():
+        raise LookupError(f"File not found: {file_path}")
+
+    # Query by exact string match on both the resolved absolute path and
+    # the caller's original spelling. Impls stored with relative paths
+    # whose resolved form happens to match `filepath` won't be found —
+    # that's an accepted trade to keep this O(matches) instead of O(N).
+    # Callers that need bulletproof path matching should store absolute
+    # paths at link time (spec_link already does; link should too).
+    resolved_str = str(filepath)
+    metadatas = store.implementations.get(
+        where={"file": resolved_str}, include=["metadatas"],
+    ).get("metadatas", [])
+    if not metadatas and resolved_str != file_path:
+        metadatas = store.implementations.get(
+            where={"file": file_path}, include=["metadatas"],
+        ).get("metadatas", [])
+
+    req_entries: dict[str, dict[str, Any]] = {}
+    spec_entries: dict[str, dict[str, Any]] = {}
+
+    for meta in metadatas:
+        lines = meta.get("lines", "all")
+
+        for sat in _json.loads(meta.get("satisfies", "[]")):
+            rid = sat.get("req_id")
+            if not rid or rid in req_entries:
+                continue
+            req = store.get_requirement(rid)
+            if not req:
+                continue
+            req_entries[rid] = {
+                "id": rid,
+                "domain": req.domain,
+                "value": req.value,
+                "status": req.status,
+                "superseded": req.superseded_at is not None,
+                "superseded_at": req.superseded_at,
+                "lines": lines,
+            }
+
+        for sid in _json.loads(meta.get("satisfies_specs", "[]")):
+            if sid in spec_entries:
+                continue
+            spec = store.get_specification(sid)
+            if not spec:
+                continue
+            spec_entries[sid] = {
+                "id": sid,
+                "description": spec.description,
+                "status": spec.status,
+                "parent_req": spec.parent_req,
+                "lines": lines,
+            }
+
+    reqs = sorted(req_entries.values(), key=lambda r: r["id"])
+    specs = sorted(spec_entries.values(), key=lambda s: s["id"])
+    drift = [r for r in reqs if r["superseded"]]
+    linked = bool(reqs or specs)
+
+    if not linked:
+        summary = ""
+    else:
+        parts: list[str] = []
+        if reqs:
+            parts.append(f"{len(reqs)} req(s)")
+        if specs:
+            parts.append(f"{len(specs)} spec(s)")
+        summary = f"Loom: {file_path} linked to {', '.join(parts)}"
+        if drift:
+            summary += " — DRIFT on " + ", ".join(d["id"] for d in drift[:3])
+            if len(drift) > 3:
+                summary += f" (+{len(drift) - 3} more)"
+
+    return {
+        "file": file_path,
+        "linked": linked,
+        "drift_detected": bool(drift),
+        "requirements": reqs,
+        "specifications": specs,
+        "summary": summary,
     }
 
 
