@@ -817,6 +817,95 @@ class TestContext:
         assert {r["id"] for r in data["requirements"]} == {"REQ-a", "REQ-b"}
 
 
+class TestCost:
+    def _write_log(self, store, entries):
+        import json as _json
+        path = store.data_dir / ".hook-log.jsonl"
+        with path.open("w", encoding="utf-8") as f:
+            for e in entries:
+                if isinstance(e, str):
+                    f.write(e + "\n")
+                else:
+                    f.write(_json.dumps(e) + "\n")
+        return path
+
+    def test_missing_log_returns_empty_stats(self, store):
+        data = services.cost(store)
+        assert data["exists"] is False
+        assert data["fires"] == 0
+        assert data["latency_ms"]["p50"] == 0.0
+
+    def test_empty_log_flags_exists_true(self, store):
+        (store.data_dir / ".hook-log.jsonl").write_text("", encoding="utf-8")
+        data = services.cost(store)
+        assert data["exists"] is True
+        assert data["fires"] == 0
+
+    def test_counts_fires_injections_and_overhead(self, store):
+        self._write_log(store, [
+            {"tool": "Edit", "fired": True, "latency_ms": 1.0, "bytes": 200,
+             "reqs": 2, "specs": 0, "drift": False, "skipped": None},
+            {"tool": "Edit", "fired": False, "latency_ms": 2.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "no_link"},
+            {"tool": "Write", "fired": True, "latency_ms": 3.0, "bytes": 100,
+             "reqs": 1, "specs": 0, "drift": True, "skipped": None},
+            {"tool": "Write", "fired": False, "latency_ms": 5.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "cli_error"},
+        ])
+        data = services.cost(store)
+        assert data["fires"] == 4
+        assert data["injections"] == 2
+        assert data["empty_fires"] == 2
+        assert data["overhead_pct"] == 50.0
+        assert data["drift_events"] == 1
+        assert data["by_tool"] == {"Edit": 2, "Write": 2}
+        assert data["skipped"] == {"no_link": 1, "cli_error": 1}
+        assert data["bytes"]["total"] == 300
+        # Token estimate is bytes / 4 (integer total, rounded avg).
+        assert data["tokens_est"]["total"] == 75
+        assert data["latency_ms"]["max"] == 5.0
+        # With 4 entries, p50 ≈ the 2nd-smallest (2.0); p99 ≈ max (5.0).
+        assert data["latency_ms"]["p50"] == 2.0
+        assert data["latency_ms"]["p99"] == 5.0
+
+    def test_tail_limits_window(self, store):
+        entries = [
+            {"tool": "Edit", "fired": True, "latency_ms": float(i), "bytes": 10,
+             "reqs": 1, "specs": 0, "drift": False, "skipped": None}
+            for i in range(10)
+        ]
+        self._write_log(store, entries)
+        data = services.cost(store, tail=3)
+        assert data["fires"] == 3
+        # Last 3 entries have latencies 7,8,9.
+        assert data["latency_ms"]["max"] == 9.0
+
+    def test_malformed_lines_are_skipped(self, store):
+        self._write_log(store, [
+            {"tool": "Edit", "fired": True, "latency_ms": 1.0, "bytes": 40,
+             "reqs": 1, "specs": 0, "drift": False, "skipped": None},
+            "this is not json",
+            "",
+            {"tool": "Edit", "fired": False, "latency_ms": 2.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "no_link"},
+        ])
+        data = services.cost(store)
+        assert data["fires"] == 2
+        assert data["injections"] == 1
+
+    def test_log_path_override(self, store, tmp_path):
+        import json as _json
+        alt = tmp_path / "elsewhere.jsonl"
+        alt.write_text(_json.dumps({
+            "tool": "Edit", "fired": True, "latency_ms": 7.0, "bytes": 80,
+            "reqs": 1, "specs": 0, "drift": False, "skipped": None,
+        }) + "\n", encoding="utf-8")
+        data = services.cost(store, log_path=alt)
+        assert data["log_path"] == str(alt)
+        assert data["fires"] == 1
+        assert data["bytes"]["total"] == 80
+
+
 class TestIncomplete:
     def test_empty_store(self, store):
         assert services.incomplete(store) == []

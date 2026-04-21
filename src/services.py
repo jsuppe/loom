@@ -887,6 +887,137 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     }
 
 
+def cost(
+    store: LoomStore,
+    *,
+    tail: int | None = None,
+    log_path: "Any" = None,
+) -> dict[str, Any]:
+    """Aggregate PreToolUse hook activity from the JSONL log.
+
+    The hook (hooks/loom_pretool.py) appends one line per fire to
+    `<store.data_dir>/.hook-log.jsonl`. This reads that log and returns
+    stats the user can compare against the effectiveness side of the
+    equation: latency percentiles, total bytes/tokens injected, and the
+    fraction of fires that produced no context (pure overhead).
+
+    Args:
+        store: LoomStore whose data_dir hosts the log.
+        tail: if set, only consider the last N entries (after filtering
+            to well-formed lines). Useful for "last session only".
+        log_path: explicit override for the log location (Path or str).
+            Overrides the default `store.data_dir / .hook-log.jsonl`.
+            Mostly for tests and cross-project rollups.
+
+    Returns:
+        {
+          "log_path": str,
+          "exists": bool,
+          "fires": int,                 # watched-tool invocations recorded
+          "injections": int,            # fires where additionalContext was sent
+          "empty_fires": int,           # fires that logged but fired=False
+          "overhead_pct": float,        # empty_fires / fires * 100
+          "drift_events": int,
+          "latency_ms": {"p50", "p95", "p99", "max"},
+          "bytes": {"avg", "total"},
+          "tokens_est": {"avg", "total"},   # bytes / 4 (rough llama/claude estimate)
+          "by_tool": {tool_name: count},
+          "skipped": {reason: count},   # reasons fires produced no injection
+        }
+
+    A missing log file returns `exists: False` with zero-valued stats.
+    """
+    import json as _json
+    from pathlib import Path
+
+    path = Path(log_path) if log_path is not None else store.data_dir / ".hook-log.jsonl"
+
+    empty = {
+        "log_path": str(path),
+        "exists": False,
+        "fires": 0,
+        "injections": 0,
+        "empty_fires": 0,
+        "overhead_pct": 0.0,
+        "drift_events": 0,
+        "latency_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0, "max": 0.0},
+        "bytes": {"avg": 0.0, "total": 0},
+        "tokens_est": {"avg": 0.0, "total": 0},
+        "by_tool": {},
+        "skipped": {},
+    }
+    if not path.exists():
+        return empty
+
+    entries: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                continue
+    if tail is not None and tail > 0:
+        entries = entries[-tail:]
+    if not entries:
+        out = dict(empty)
+        out["exists"] = True
+        return out
+
+    fires = len(entries)
+    injections = sum(1 for e in entries if e.get("fired"))
+    empty_fires = fires - injections
+    drift_events = sum(1 for e in entries if e.get("drift"))
+
+    import math
+    latencies = sorted(float(e.get("latency_ms", 0.0)) for e in entries)
+
+    def _pct(p: float) -> float:
+        if not latencies:
+            return 0.0
+        # Nearest-rank percentile: the smallest value at or above the cutoff.
+        idx = max(0, min(len(latencies) - 1, math.ceil(p * len(latencies)) - 1))
+        return round(latencies[idx], 2)
+
+    total_bytes = sum(int(e.get("bytes", 0)) for e in entries)
+    avg_bytes = total_bytes / fires if fires else 0.0
+
+    by_tool: dict[str, int] = {}
+    skipped: dict[str, int] = {}
+    for e in entries:
+        tool = e.get("tool") or ""
+        if tool:
+            by_tool[tool] = by_tool.get(tool, 0) + 1
+        reason = e.get("skipped")
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+
+    return {
+        "log_path": str(path),
+        "exists": True,
+        "fires": fires,
+        "injections": injections,
+        "empty_fires": empty_fires,
+        "overhead_pct": round(empty_fires / fires * 100.0, 1) if fires else 0.0,
+        "drift_events": drift_events,
+        "latency_ms": {
+            "p50": _pct(0.50),
+            "p95": _pct(0.95),
+            "p99": _pct(0.99),
+            "max": round(latencies[-1], 2) if latencies else 0.0,
+        },
+        "bytes": {"avg": round(avg_bytes, 1), "total": total_bytes},
+        "tokens_est": {
+            "avg": round(avg_bytes / 4.0, 1),
+            "total": total_bytes // 4,
+        },
+        "by_tool": by_tool,
+        "skipped": skipped,
+    }
+
+
 def detect_requirements(
     store: LoomStore, file_path: str, lines: str | None = None, n: int = 3
 ) -> list[dict[str, Any]]:

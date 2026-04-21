@@ -201,6 +201,57 @@ def cmd_context(args):
     return 2 if data["drift_detected"] else 0
 
 
+def cmd_cost(args):
+    """Summarize PreToolUse hook cost from the JSONL log.
+
+    Shows latency percentiles, bytes/tokens injected, and overhead %
+    (fires where the hook ran but had nothing to inject). Pairs with
+    effectiveness measurement done separately (dogfooding notes, A/B).
+    """
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+    tail = getattr(args, 'tail', None)
+
+    data = services.cost(store, tail=tail)
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Cost — {args.project}")
+    print(f"   log: {data['log_path']}")
+    if not data["exists"]:
+        print("   (no hook log yet — run some tool calls with the hook enabled)")
+        return 0
+    if data["fires"] == 0:
+        print("   (log is empty)")
+        return 0
+
+    fires = data["fires"]
+    print()
+    print(f"Fires:         {fires}")
+    print(f"  injected:    {data['injections']} ({100 - data['overhead_pct']:.1f}%)")
+    print(f"  empty:       {data['empty_fires']} ({data['overhead_pct']:.1f}% overhead)")
+    if data["drift_events"]:
+        print(f"  drift hits:  {data['drift_events']}")
+    print()
+    lat = data["latency_ms"]
+    print(f"Latency (ms):  p50={lat['p50']}  p95={lat['p95']}  p99={lat['p99']}  max={lat['max']}")
+    b = data["bytes"]; t = data["tokens_est"]
+    print(f"Injected:      {b['total']} bytes total, {b['avg']} avg  (~{t['total']} tokens total, ~{t['avg']} avg)")
+    if data["by_tool"]:
+        print()
+        print("By tool:")
+        for tool, count in sorted(data["by_tool"].items(), key=lambda kv: -kv[1]):
+            print(f"  {tool:<14} {count}")
+    if data["skipped"]:
+        print()
+        print("Skipped reasons:")
+        for reason, count in sorted(data["skipped"].items(), key=lambda kv: -kv[1]):
+            print(f"  {reason:<16} {count}")
+    return 0
+
+
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
@@ -1413,6 +1464,14 @@ def main():
     p_chain = subparsers.add_parser("chain", help="Show full traceability chain for a requirement")
     p_chain.add_argument("req_id", help="Requirement ID")
     p_chain.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    # cost (PreToolUse hook activity)
+    p_cost = subparsers.add_parser(
+        "cost",
+        help="Summarize PreToolUse hook cost (latency, tokens, overhead)",
+    )
+    p_cost.add_argument("--tail", type=int, default=None, help="Only consider the last N log entries")
+    p_cost.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     args = parser.parse_args()
     
@@ -1448,6 +1507,7 @@ def main():
         "pattern-apply": cmd_pattern_apply,
         "coverage": cmd_coverage,
         "chain": cmd_chain,
+        "cost": cmd_cost,
     }
     
     return commands[args.command](args)
