@@ -1739,3 +1739,231 @@ def incomplete(store: LoomStore) -> list[dict[str, Any]]:
             "missing": missing,
         })
     return out
+
+
+def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    """Surface outstanding gaps in a Loom project.
+
+    Each returned dict has the uniform shape:
+        {
+          "type": str,             # one of: missing_criteria, missing_elaboration, orphan_impl
+          "entity_id": str,        # REQ-xxx or IMPL-xxx
+          "description": str,      # short human-readable
+          "blocks": list[str],     # entity_ids this gap blocks (may be empty list)
+          "suggested_action": str  # a single runnable command, e.g., "loom refine REQ-abc"
+        }
+
+    Gap types implemented:
+    - missing_criteria: active requirement with empty acceptance_criteria
+    - missing_elaboration: active requirement with empty elaboration
+    - orphan_impl: implementation whose every satisfies[*].req_id either
+      doesn't exist or is superseded
+
+    Sort by priority (higher first), ties by entity_id ascending:
+        priority 3: missing_criteria
+        priority 5: missing_elaboration
+        priority 6: orphan_impl
+
+    Args:
+        store: LoomStore instance
+        types: if provided, only return gaps whose type is in the list
+        limit: if provided, cap the returned list at limit entries (after sorting)
+
+    Returns:
+        list of gap dicts, sorted by priority and entity_id
+    """
+    gaps_list: list[dict[str, Any]] = []
+
+    # Detect missing_criteria and missing_elaboration (only from non-superseded reqs)
+    for req in store.list_requirements(include_superseded=False):
+        # Check for missing_criteria
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            gaps_list.append({
+                "type": "missing_criteria",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no acceptance criteria",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 3,  # for sorting
+            })
+
+        # Check for missing_elaboration
+        if not req.elaboration:
+            gaps_list.append({
+                "type": "missing_elaboration",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no elaboration",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 5,  # for sorting
+            })
+
+    # Detect orphan_impl
+    result = store.implementations.get(include=["metadatas"])
+    for meta in result.get("metadatas", []):
+        impl_id = meta.get("id")
+        if not impl_id:
+            continue
+
+        # Parse satisfies list
+        import json as _json
+        satisfies = _json.loads(meta.get("satisfies", "[]"))
+        req_ids = [s.get("req_id") for s in satisfies if s.get("req_id")]
+
+        # Check if this impl is orphan: every req_id is either missing or superseded
+        is_orphan = True
+        if req_ids:
+            for req_id in req_ids:
+                req = store.get_requirement(req_id)
+                # If requirement exists and is NOT superseded, impl is not orphan
+                if req and not req.superseded_at:
+                    is_orphan = False
+                    break
+        else:
+            # No satisfies entries means it's orphan-like
+            is_orphan = True
+
+        if is_orphan:
+            file_str = meta.get("file", "unknown")
+            lines_str = meta.get("lines", "?")
+            gaps_list.append({
+                "type": "orphan_impl",
+                "entity_id": impl_id,
+                "description": f"Implementation {impl_id} ({file_str}:{lines_str}) is orphaned",
+                "blocks": [],
+                "suggested_action": f"loom trace {file_str}",
+                "_priority": 6,  # for sorting
+            })
+
+    # Filter by types if provided
+    if types is not None:
+        gaps_list = [g for g in gaps_list if g["type"] in types]
+
+    # Sort by priority (ascending = higher priority first) then entity_id (ascending)
+    gaps_list.sort(key=lambda g: (g["_priority"], g["entity_id"]))
+
+    # Remove the internal _priority field
+    for gap in gaps_list:
+        del gap["_priority"]
+
+    # Apply limit if provided
+    if limit is not None:
+        gaps_list = gaps_list[:limit]
+
+    return gaps_list
+
+
+def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    """Surface outstanding gaps in a Loom project.
+
+    Each returned dict has the uniform shape:
+        {
+          "type": str,             # one of: missing_criteria, missing_elaboration, orphan_impl
+          "entity_id": str,        # REQ-xxx or IMPL-xxx
+          "description": str,      # short human-readable
+          "blocks": list[str],     # entity_ids this gap blocks (may be empty list)
+          "suggested_action": str  # a single runnable command, e.g., "loom refine REQ-abc"
+        }
+
+    Gap types implemented:
+    - missing_criteria: active requirement with empty acceptance_criteria
+    - missing_elaboration: active requirement with empty elaboration
+    - orphan_impl: implementation whose every satisfies[*].req_id either
+      doesn't exist or is superseded
+
+    Sort by priority (higher first), ties by entity_id ascending:
+        priority 3: missing_criteria
+        priority 5: missing_elaboration
+        priority 6: orphan_impl
+
+    Args:
+        store: LoomStore instance
+        types: if provided, only return gaps whose type is in the list
+        limit: if provided, cap the returned list at limit entries (after sorting)
+
+    Returns:
+        list of gap dicts, sorted by priority and entity_id
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    gaps_list: list[dict[str, Any]] = []
+
+    # Detect missing_criteria and missing_elaboration (only from non-superseded reqs)
+    for req in store.list_requirements(include_superseded=False):
+        # Check for missing_criteria
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            gaps_list.append({
+                "type": "missing_criteria",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no acceptance criteria",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 3,  # for sorting
+            })
+
+        # Check for missing_elaboration
+        if not req.elaboration:
+            gaps_list.append({
+                "type": "missing_elaboration",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no elaboration",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 5,  # for sorting
+            })
+
+    # Detect orphan_impl
+    result = store.implementations.get(include=["metadatas"])
+    for meta in result.get("metadatas", []):
+        impl_id = meta.get("id")
+        if not impl_id:
+            continue
+
+        # Parse satisfies list
+        satisfies = _json.loads(meta.get("satisfies", "[]"))
+        req_ids = [s.get("req_id") for s in satisfies if s.get("req_id")]
+
+        # Check if this impl is orphan: every req_id is either missing or superseded
+        is_orphan = True
+        if req_ids:
+            for req_id in req_ids:
+                req = store.get_requirement(req_id)
+                # If requirement exists and is NOT superseded, impl is not orphan
+                if req and not req.superseded_at:
+                    is_orphan = False
+                    break
+        else:
+            # No satisfies entries means it's orphan-like
+            is_orphan = True
+
+        if is_orphan:
+            file_str = meta.get("file", "unknown")
+            lines_str = meta.get("lines", "?")
+            gaps_list.append({
+                "type": "orphan_impl",
+                "entity_id": impl_id,
+                "description": f"Implementation {impl_id} ({file_str}:{lines_str}) is orphaned",
+                "blocks": [],
+                "suggested_action": f"loom trace {file_str}",
+                "_priority": 6,  # for sorting
+            })
+
+    # Filter by types if provided
+    if types is not None:
+        gaps_list = [g for g in gaps_list if g["type"] in types]
+
+    # Sort by priority (ascending = higher priority first) then entity_id (ascending)
+    gaps_list.sort(key=lambda g: (g["_priority"], g["entity_id"]))
+
+    # Remove the internal _priority field
+    for gap in gaps_list:
+        del gap["_priority"]
+
+    # Apply limit if provided
+    if limit is not None:
+        gaps_list = gaps_list[:limit]
+
+    return gaps_list
