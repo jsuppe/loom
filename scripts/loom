@@ -1445,6 +1445,56 @@ def cmd_task_prompt(args):
     return 0
 
 
+def cmd_decompose(args):
+    """Decompose a spec into proposed tasks; optionally persist them."""
+    store = LoomStore(args.project)
+    try:
+        result = services.decompose(store, args.spec_id, model=args.model)
+    except (LookupError, ValueError, RuntimeError) as e:
+        print(str(e))
+        return 1
+
+    if result["outcome"] != "tasks":
+        print(f"decomposer {result['outcome']}: {result['reason']}")
+        if args.verbose:
+            print("--- raw response (first 400 chars) ---")
+            print((result.get("raw_response") or "")[:400])
+        return 2
+
+    # Dump tasks as YAML so the user can edit before --apply.
+    import yaml as _yaml
+
+    tasks_yaml = _yaml.safe_dump(
+        {"spec_id": args.spec_id, "model": result["model"], "tasks": result["tasks"]},
+        sort_keys=False, default_flow_style=False,
+    )
+    if args.out:
+        from pathlib import Path as _P
+        _P(args.out).write_text(tasks_yaml, encoding="utf-8")
+        print(f"✓ wrote {len(result['tasks'])} proposed task(s) to {args.out}")
+    else:
+        print(tasks_yaml)
+
+    for w in result["warnings"]:
+        print(f"warning: {w}")
+
+    tok_in, tok_out = result["input_tokens"], result["output_tokens"]
+    print(f"[decompose] {result['elapsed_s']}s  in={tok_in}  out={tok_out}  "
+          f"model={result['model']}")
+
+    if args.apply:
+        applied = services.apply_decomposition(
+            store, result["tasks"], created_by=result["model"]
+        )
+        for t in applied["created"]:
+            print(f"✓ created {t['id']}: {t['title']}")
+        for s in applied["skipped"]:
+            print(f"✗ skipped {s['title']}: {s['error']}")
+    else:
+        print("(re-run with --apply to persist these tasks into the store)")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Loom - Requirements traceability")
     parser.add_argument("--project", "-p", default=None, help="Project name")
@@ -1674,6 +1724,22 @@ def main():
     p_tp = task_subs.add_parser("prompt", help="Print the assembled executor prompt for a task")
     p_tp.add_argument("task_id")
 
+    # decompose (spec -> proposed tasks via LLM)
+    p_dec = subparsers.add_parser(
+        "decompose",
+        help="Propose an atomic-task decomposition for a specification",
+    )
+    p_dec.add_argument("spec_id", help="Specification id (SPEC-xxx)")
+    p_dec.add_argument("--model", default=None,
+                       help="Override decomposer model. Format: "
+                            "'ollama:<name>' or 'anthropic:<name>'. "
+                            "Default: $LOOM_DECOMPOSER_MODEL, or "
+                            "anthropic:claude-opus-4-7 if ANTHROPIC_API_KEY set, "
+                            "else ollama:qwen2.5-coder:32b.")
+    p_dec.add_argument("--out", default=None, help="Write YAML to file instead of stdout")
+    p_dec.add_argument("--apply", action="store_true", help="Persist proposed tasks to the store")
+    p_dec.add_argument("--verbose", action="store_true", help="Show raw LLM response on error")
+
     args = parser.parse_args()
     
     if not args.project:
@@ -1710,6 +1776,7 @@ def main():
         "chain": cmd_chain,
         "cost": cmd_cost,
         "task": cmd_task,
+        "decompose": cmd_decompose,
     }
     
     return commands[args.command](args)

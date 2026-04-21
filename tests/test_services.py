@@ -1254,3 +1254,224 @@ class TestTaskBuildPrompt:
     def test_prompt_for_missing_task_raises(self, store):
         with pytest.raises(LookupError):
             services.task_build_prompt(store, "TASK-404")
+
+
+class TestDecomposeParsing:
+    def test_spec_too_big_stop_token(self):
+        out, data = services._parse_decompose_response(
+            "SPEC_TOO_BIG: mixes auth and UI concerns"
+        )
+        assert out == "spec_too_big"
+        assert "auth" in data
+
+    def test_need_context_stop_token(self):
+        out, data = services._parse_decompose_response(
+            "NEED_CONTEXT: no acceptance criteria on parent req"
+        )
+        assert out == "need_context"
+
+    def test_yaml_tasks_parsed(self):
+        resp = (
+            "```yaml\n"
+            "tasks:\n"
+            "  - title: t1\n"
+            "    files_to_modify: [src/a.py]\n"
+            "    test_to_write: tests/a.py::T\n"
+            "```"
+        )
+        out, data = services._parse_decompose_response(resp)
+        assert out == "tasks"
+        assert len(data) == 1
+        assert data[0]["title"] == "t1"
+
+    def test_no_yaml_block(self):
+        out, _ = services._parse_decompose_response("just prose, no yaml")
+        assert out == "no_yaml"
+
+    def test_malformed_yaml(self):
+        out, _ = services._parse_decompose_response("```yaml\n::::: bad\n```")
+        # Malformed YAML may either fail to parse (yaml_error) or produce a
+        # non-dict scalar (also yaml_error per our strict top-level check).
+        assert out == "yaml_error"
+
+
+class TestValidateProposals:
+    def test_minimum_fields_accepted(self):
+        proposals = [{
+            "title": "t1",
+            "files_to_modify": ["src/a.py"],
+            "test_to_write": "tests/a.py::T",
+        }]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 1
+        assert norm[0]["parent_spec"] == "SPEC-a"
+        assert norm[0]["size_budget_files"] == 2   # default
+        assert norm[0]["size_budget_loc"] == 80    # default
+        assert warns == []
+
+    def test_missing_title_skipped(self):
+        norm, warns = services._validate_task_proposals(
+            [{"files_to_modify": ["a"], "test_to_write": "t::T"}],
+            parent_spec="SPEC-a",
+        )
+        assert norm == []
+        assert any("title" in w for w in warns)
+
+    def test_duplicate_title_skipped(self):
+        proposals = [
+            {"title": "dup", "files_to_modify": ["a"], "test_to_write": "t::T"},
+            {"title": "dup", "files_to_modify": ["b"], "test_to_write": "t::T"},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 1
+        assert any("duplicate" in w for w in warns)
+
+    def test_empty_files_skipped(self):
+        norm, warns = services._validate_task_proposals(
+            [{"title": "t", "files_to_modify": [], "test_to_write": "t::T"}],
+            parent_spec="SPEC-a",
+        )
+        assert norm == []
+
+    def test_atomicity_warning_for_oversize_files(self):
+        norm, warns = services._validate_task_proposals(
+            [{"title": "huge", "files_to_modify": ["a", "b", "c", "d"],
+              "test_to_write": "t::T", "size_budget_files": 2}],
+            parent_spec="SPEC-a",
+        )
+        # Still normalized (we warn, don't drop — let the caller decide).
+        assert len(norm) == 1
+        assert any("exceeds budget" in w for w in warns)
+
+    def test_unknown_deps_are_dropped_with_warning(self):
+        proposals = [
+            {"title": "a", "files_to_modify": ["x"], "test_to_write": "t::T"},
+            {"title": "b", "files_to_modify": ["x"], "test_to_write": "t::T",
+             "depends_on": ["a", "ghost"]},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 2
+        assert norm[1]["depends_on_titles"] == ["a"]  # ghost dropped
+        assert any("not found" in w for w in warns)
+
+    def test_forward_dep_treated_as_unknown(self):
+        # Deps must reference EARLIER tasks; forward references dropped.
+        proposals = [
+            {"title": "a", "files_to_modify": ["x"], "test_to_write": "t::T",
+             "depends_on": ["b"]},   # forward ref to later task
+            {"title": "b", "files_to_modify": ["x"], "test_to_write": "t::T"},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert norm[0]["depends_on_titles"] == []
+        assert any("not found" in w for w in warns)
+
+
+class TestApplyDecomposition:
+    def test_applies_tasks_and_wires_deps(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        proposals = [
+            {"title": "t1", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/a.py"], "test_to_write": "tests/a.py::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+            {"title": "t2", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/b.py"], "test_to_write": "tests/b.py::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": ["t1"]},
+        ]
+        result = services.apply_decomposition(store, proposals)
+        assert len(result["created"]) == 2
+        assert result["skipped"] == []
+        # t2 should have t1's id as its dependency
+        t1_id = result["created"][0]["id"]
+        assert result["created"][1]["depends_on"] == [t1_id]
+
+    def test_skips_bad_proposal_without_halting(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        proposals = [
+            {"title": "good", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/a.py"], "test_to_write": "t::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+            {"title": "bad", "parent_spec": "SPEC-ghost",  # parent missing
+             "files_to_modify": ["src/b.py"], "test_to_write": "t::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+        ]
+        result = services.apply_decomposition(store, proposals)
+        assert len(result["created"]) == 1
+        assert len(result["skipped"]) == 1
+        assert result["skipped"][0]["title"] == "bad"
+
+
+class TestDecomposeService:
+    def test_missing_spec_raises(self, store):
+        with pytest.raises(LookupError):
+            services.decompose(store, "SPEC-ghost")
+
+    def test_dispatches_to_model_and_returns_parsed(
+        self, store, fake_embedding, monkeypatch
+    ):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+
+        # Stub the LLM call to avoid any network traffic.
+        fake = {
+            "content": (
+                "```yaml\n"
+                "tasks:\n"
+                "  - title: t1\n"
+                "    files_to_modify: [src/a.py]\n"
+                "    test_to_write: tests/a.py::T\n"
+                "```"
+            ),
+            "elapsed_s": 0.1,
+            "input_tokens": 500,
+            "output_tokens": 50,
+        }
+        monkeypatch.setattr(services, "_call_decomposer_llm",
+                            lambda model, prompt, **kw: fake)
+
+        result = services.decompose(store, "SPEC-a", model="ollama:fake-model")
+        assert result["outcome"] == "tasks"
+        assert len(result["tasks"]) == 1
+        assert result["tasks"][0]["title"] == "t1"
+        assert result["model"] == "ollama:fake-model"
+        assert result["input_tokens"] == 500
+
+    def test_propagates_spec_too_big(
+        self, store, fake_embedding, monkeypatch
+    ):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+
+        fake = {
+            "content": "SPEC_TOO_BIG: combines auth and UI",
+            "elapsed_s": 0.1, "input_tokens": 500, "output_tokens": 10,
+        }
+        monkeypatch.setattr(services, "_call_decomposer_llm",
+                            lambda model, prompt, **kw: fake)
+
+        result = services.decompose(store, "SPEC-a", model="ollama:fake")
+        assert result["outcome"] == "spec_too_big"
+        assert "auth" in result["reason"]
+        assert result["tasks"] == []
+
+
+class TestDefaultModelSelection:
+    def test_env_override_wins(self, monkeypatch):
+        monkeypatch.setenv("LOOM_DECOMPOSER_MODEL", "ollama:custom")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+        assert services._default_decomposer_model() == "ollama:custom"
+
+    def test_anthropic_default_when_key_set(self, monkeypatch):
+        monkeypatch.delenv("LOOM_DECOMPOSER_MODEL", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+        assert services._default_decomposer_model() == "anthropic:claude-opus-4-7"
+
+    def test_ollama_fallback(self, monkeypatch):
+        monkeypatch.delenv("LOOM_DECOMPOSER_MODEL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        assert services._default_decomposer_model() == "ollama:qwen2.5-coder:32b"

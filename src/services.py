@@ -2473,3 +2473,363 @@ def task_build_prompt(store: LoomStore, task_id: str) -> str:
     )
 
     return "\n".join(parts)
+
+
+# ==================== Decomposer ====================
+#
+# Turns a specification + its Loom context into a proposed Task list.
+# Opus-class models are the default for the reasoning; a 32B local model
+# (qwen2.5-coder:32b) is the fallback ceiling.
+#
+# Model selection:
+#   - LOOM_DECOMPOSER_MODEL env var overrides everything.
+#     Format: "anthropic:<model>" or "ollama:<model>".
+#   - Else if ANTHROPIC_API_KEY is set: "anthropic:claude-opus-4-7".
+#   - Else: "ollama:qwen2.5-coder:32b".
+#
+# The command-level --model flag overrides the env default.
+
+
+def _default_decomposer_model() -> str:
+    import os
+    override = os.environ.get("LOOM_DECOMPOSER_MODEL")
+    if override:
+        return override
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic:claude-opus-4-7"
+    return "ollama:qwen2.5-coder:32b"
+
+
+def _call_decomposer_llm(model: str, prompt: str, timeout: int = 900) -> dict:
+    """Dispatch to Ollama or Anthropic based on the model prefix.
+
+    Returns {content, elapsed_s, input_tokens, output_tokens}. Raises
+    RuntimeError on transport failure.
+    """
+    import json as _json
+    import os as _os
+    import time as _time
+    import urllib.request as _urlreq
+
+    if ":" not in model:
+        raise ValueError(
+            f"model {model!r} must be 'anthropic:<name>' or 'ollama:<name>'"
+        )
+    provider, name = model.split(":", 1)
+    t0 = _time.perf_counter()
+
+    if provider == "ollama":
+        url = _os.environ.get("OLLAMA_URL", "http://localhost:11434")
+        payload = _json.dumps({
+            "model": name,
+            "stream": False,
+            "think": False,
+            "messages": [{"role": "user", "content": prompt}],
+            "options": {"temperature": 0.0, "num_predict": 8000},
+        }).encode()
+        req = _urlreq.Request(
+            f"{url}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                body = _json.loads(resp.read().decode())
+        except Exception as e:
+            raise RuntimeError(f"Ollama call failed: {e}") from e
+        msg = body.get("message", {}) or {}
+        return {
+            "content": msg.get("content", ""),
+            "elapsed_s": round(_time.perf_counter() - t0, 2),
+            "input_tokens": body.get("prompt_eval_count", 0),
+            "output_tokens": body.get("eval_count", 0),
+        }
+
+    if provider == "anthropic":
+        api_key = _os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY env var required for anthropic provider")
+        payload = _json.dumps({
+            "model": name,
+            "max_tokens": 8000,
+            "temperature": 0.0,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = _urlreq.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                body = _json.loads(resp.read().decode())
+        except Exception as e:
+            raise RuntimeError(f"Anthropic call failed: {e}") from e
+        content_blocks = body.get("content", []) or []
+        text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
+        usage = body.get("usage", {}) or {}
+        return {
+            "content": "\n".join(text_parts),
+            "elapsed_s": round(_time.perf_counter() - t0, 2),
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        }
+
+    raise ValueError(f"unknown provider: {provider!r}")
+
+
+def _build_decompose_prompt(spec, parent_req, patterns: list) -> str:
+    """Assemble the decomposer user message from the spec + related context."""
+    from pathlib import Path as _Path
+
+    repo_root = _Path(__file__).resolve().parent.parent
+    template_path = repo_root / "prompts" / "decompose.md"
+    try:
+        system = template_path.read_text(encoding="utf-8")
+    except OSError:
+        system = "You are a decomposer. Output YAML tasks or SPEC_TOO_BIG:/NEED_CONTEXT:."
+
+    parts: list[str] = []
+    parts.append(system)
+    parts.append("\n---\n")
+    parts.append("## Input specification to decompose\n")
+    parts.append(f"### {spec.id} (parent: {spec.parent_req})")
+    parts.append(spec.description)
+    ac = spec.acceptance_criteria or []
+    if ac and ac != ["TBD"]:
+        parts.append("Acceptance criteria:")
+        for c in ac:
+            parts.append(f"  - {c}")
+    parts.append("")
+
+    if parent_req is not None:
+        parts.append("## Parent requirement\n")
+        parts.append(f"### {parent_req.id} [{parent_req.domain}]")
+        parts.append(f"Value: {parent_req.value}")
+        if parent_req.rationale:
+            parts.append(f"Rationale: {parent_req.rationale}")
+        if parent_req.elaboration:
+            parts.append(f"Elaboration: {parent_req.elaboration}")
+        rac = parent_req.acceptance_criteria or []
+        if rac and rac != ["TBD"]:
+            parts.append("Acceptance criteria:")
+            for c in rac:
+                parts.append(f"  - {c}")
+        parts.append("")
+
+    if patterns:
+        parts.append("## Applicable patterns\n")
+        for p in patterns:
+            parts.append(f"### {p.id} -- {p.name}")
+            parts.append(p.description)
+            parts.append("")
+
+    parts.append("\nNow produce the task decomposition per the rules above.\n")
+    return "\n".join(parts)
+
+
+def _parse_decompose_response(content: str) -> tuple[str, Any]:
+    """Classify + parse a decomposer response.
+
+    Returns:
+        ("spec_too_big", reason)
+        ("need_context", what)
+        ("tasks", list_of_dicts)
+        ("no_yaml", raw_content_preview)
+        ("yaml_error", error_message)
+    """
+    import re as _re
+    import yaml as _yaml
+
+    content = content or ""
+    stop_re = _re.compile(r"^(SPEC_TOO_BIG|NEED_CONTEXT)\s*:\s*(.*)$", _re.MULTILINE)
+    stop = stop_re.search(content)
+    if stop:
+        kind = stop.group(1).lower()
+        reason = stop.group(2).strip()
+        if kind == "spec_too_big":
+            return ("spec_too_big", reason)
+        return ("need_context", reason)
+
+    yaml_re = _re.compile(r"```yaml\s*\n(.*?)\n```", _re.DOTALL)
+    m = yaml_re.search(content)
+    if not m:
+        return ("no_yaml", content[:400])
+    yaml_text = m.group(1)
+    try:
+        data = _yaml.safe_load(yaml_text)
+    except Exception as e:
+        return ("yaml_error", f"{e}\n---raw---\n{yaml_text[:400]}")
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        return ("yaml_error", f"expected top-level 'tasks' list; got {type(data).__name__}")
+    return ("tasks", data["tasks"])
+
+
+def _validate_task_proposals(
+    proposals: list[dict],
+    parent_spec: str,
+    default_budget_files: int = 2,
+    default_budget_loc: int = 80,
+) -> tuple[list[dict], list[str]]:
+    """Shape-check + atomicity-check proposals. Returns (normalized, warnings)."""
+    normalized: list[dict] = []
+    warnings: list[str] = []
+    titles_seen: set[str] = set()
+
+    for idx, raw in enumerate(proposals):
+        if not isinstance(raw, dict):
+            warnings.append(f"task #{idx}: not a dict, skipped")
+            continue
+        title = (raw.get("title") or "").strip()
+        if not title:
+            warnings.append(f"task #{idx}: missing title, skipped")
+            continue
+        if title in titles_seen:
+            warnings.append(f"task #{idx}: duplicate title {title!r}, skipped")
+            continue
+        titles_seen.add(title)
+        files = raw.get("files_to_modify") or []
+        if not isinstance(files, list) or not files:
+            warnings.append(f"task {title!r}: files_to_modify empty, skipped")
+            continue
+        test = (raw.get("test_to_write") or "").strip()
+        if not test:
+            warnings.append(f"task {title!r}: test_to_write missing, skipped")
+            continue
+
+        budget_files = int(raw.get("size_budget_files", default_budget_files))
+        budget_loc = int(raw.get("size_budget_loc", default_budget_loc))
+        if len(files) > budget_files:
+            warnings.append(
+                f"task {title!r}: touches {len(files)} files, exceeds budget {budget_files}"
+            )
+
+        normalized.append({
+            "title": title,
+            "parent_spec": parent_spec,
+            "files_to_modify": list(files),
+            "test_to_write": test,
+            "context_reqs": raw.get("context_reqs") or [],
+            "context_specs": raw.get("context_specs") or [],
+            "context_patterns": raw.get("context_patterns") or [],
+            "context_sidecars": raw.get("context_sidecars") or [],
+            "context_files": raw.get("context_files") or [],
+            "size_budget_files": budget_files,
+            "size_budget_loc": budget_loc,
+            "depends_on_titles": list(raw.get("depends_on") or []),
+        })
+
+    for i, t in enumerate(normalized):
+        earlier_titles = {n["title"] for n in normalized[:i]}
+        bad = [d for d in t["depends_on_titles"] if d not in earlier_titles]
+        if bad:
+            warnings.append(
+                f"task {t['title']!r}: depends_on refs {bad} not found earlier"
+            )
+            t["depends_on_titles"] = [d for d in t["depends_on_titles"] if d in earlier_titles]
+
+    return normalized, warnings
+
+
+def decompose(
+    store: LoomStore,
+    spec_id: str,
+    *,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Propose a Task decomposition for a Specification. Does NOT persist.
+
+    Returns:
+        {spec_id, model, outcome, tasks, warnings, reason, elapsed_s,
+         input_tokens, output_tokens, raw_response}
+
+        outcome is one of: tasks | spec_too_big | need_context | no_yaml | yaml_error
+
+    Raises:
+        LookupError: spec_id not found.
+        RuntimeError: LLM transport failure.
+        ValueError: bad model spec.
+    """
+    spec = store.get_specification(spec_id)
+    if spec is None:
+        raise LookupError(f"Specification {spec_id} not found")
+    parent_req = store.get_requirement(spec.parent_req) if spec.parent_req else None
+    patterns = store.get_patterns_for_requirement(spec.parent_req) if spec.parent_req else []
+
+    model = model or _default_decomposer_model()
+    prompt = _build_decompose_prompt(spec, parent_req, patterns)
+    llm = _call_decomposer_llm(model, prompt)
+
+    outcome, payload = _parse_decompose_response(llm["content"])
+    base = {
+        "spec_id": spec_id,
+        "model": model,
+        "outcome": outcome,
+        "tasks": [],
+        "warnings": [],
+        "reason": None,
+        "elapsed_s": llm["elapsed_s"],
+        "input_tokens": llm["input_tokens"],
+        "output_tokens": llm["output_tokens"],
+        "raw_response": llm["content"],
+    }
+
+    if outcome == "tasks":
+        normalized, warnings = _validate_task_proposals(payload, parent_spec=spec_id)
+        base["tasks"] = normalized
+        base["warnings"] = warnings
+    elif outcome in ("spec_too_big", "need_context"):
+        base["reason"] = payload
+    else:
+        base["reason"] = payload if isinstance(payload, str) else str(payload)
+
+    return base
+
+
+def apply_decomposition(
+    store: LoomStore,
+    proposals: list[dict],
+    *,
+    created_by: str = "decomposer",
+) -> dict[str, Any]:
+    """Persist accepted task proposals to the store.
+
+    Maps each proposal's depends_on_titles to task IDs by creating earlier
+    tasks first.
+    """
+    created_by_title: dict[str, str] = {}
+    created: list[dict] = []
+    skipped: list[dict] = []
+
+    for p in proposals:
+        title = p["title"]
+        dep_titles = p.get("depends_on_titles") or []
+        dep_ids = [created_by_title[d] for d in dep_titles if d in created_by_title]
+        try:
+            result = task_add(
+                store,
+                parent_spec=p["parent_spec"],
+                title=title,
+                files_to_modify=p["files_to_modify"],
+                test_to_write=p["test_to_write"],
+                context_reqs=p.get("context_reqs") or None,
+                context_specs=p.get("context_specs") or None,
+                context_patterns=p.get("context_patterns") or None,
+                context_sidecars=p.get("context_sidecars") or None,
+                context_files=p.get("context_files") or None,
+                size_budget_files=p.get("size_budget_files", 2),
+                size_budget_loc=p.get("size_budget_loc", 80),
+                depends_on=dep_ids or None,
+                created_by=created_by,
+            )
+        except (LookupError, ValueError) as e:
+            skipped.append({"title": title, "error": str(e)})
+            continue
+        created_by_title[title] = result["id"]
+        created.append(result)
+
+    return {"created": created, "skipped": skipped}
