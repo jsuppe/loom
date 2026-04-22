@@ -63,8 +63,10 @@ echo "REQUIREMENT: behavior | Users must confirm before deleting" \
   | python3 scripts/loom extract -p test-dev --rationale "Prevent accidental data loss"
 
 # Add a spec
-python3 scripts/loom spec REQ-xxx -t "Confirmation modal" \
-  -d "Show modal before delete; require Type-to-confirm for > 10 items" -p test-dev
+python3 scripts/loom -p test-dev spec REQ-xxx \
+  -d "Confirmation modal: show modal before delete; require Type-to-confirm for > 10 items" \
+  -c "Modal appears on delete click" \
+  -c "Type-to-confirm required when deleting > 10 items"
 
 # Decompose (Opus if ANTHROPIC_API_KEY; else Ollama)
 python3 scripts/loom decompose SPEC-xxx --apply -p test-dev

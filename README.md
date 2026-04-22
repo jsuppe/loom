@@ -104,8 +104,10 @@ echo "REQUIREMENT: behavior | Users must confirm before deleting" \
   | loom extract -p myproject --rationale "Prevent accidental data loss"
 
 # Expand it into a spec
-loom spec REQ-abc12345 -t "Confirmation modal" \
-  -d "Show modal on delete button; require Type-to-confirm for > 10 items"
+loom spec REQ-abc12345 \
+  -d "Confirmation modal: show modal on delete button; require Type-to-confirm for > 10 items" \
+  -c "Modal appears on delete click" \
+  -c "Type-to-confirm required when deleting > 10 items"
 
 # Decompose spec into atomic tasks (Opus by default if ANTHROPIC_API_KEY is set)
 loom decompose SPEC-xxx --apply

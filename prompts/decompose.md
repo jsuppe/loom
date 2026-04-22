@@ -50,7 +50,9 @@ tasks:
     context_specs: [SPEC-xyz]        # usually just the parent spec
     context_patterns: [PAT-foo]      # optional; only if a pattern applies
     context_sidecars: []             # optional; relative paths to .loom.md files
-    context_files: []                # optional; source files to inline in full
+    context_files:                   # source files inlined in full for the executor
+      - src/path/to/file.py          # ALWAYS include every file in files_to_modify
+      - src/path/to/helper.py        # plus any module the task directly calls into
     size_budget_files: 2             # inherit from task defaults if omitted
     size_budget_loc: 80
     depends_on: []                   # list of task titles from earlier in this list
@@ -63,6 +65,12 @@ Rules for the YAML:
 - Order tasks topologically: dependencies before their dependents.
 - No prose outside the ```yaml``` code block.
 - Each task's `files_to_modify` must be under the size budget.
+- **`context_files` must include every file in `files_to_modify` that
+  already exists in the target repo** (the executor is a single-turn
+  model with no tool access and will hallucinate without the source it's
+  modifying). Include any module the task calls into (service, helper,
+  store) as well. Pure-create tasks (new file, no siblings to match) are
+  the only case where `context_files` may be empty.
 
 ## Decomposition strategy
 

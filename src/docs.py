@@ -174,7 +174,7 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
     lines.append("")
 
     output_path = output_dir / "REQUIREMENTS.md"
-    output_path.write_text("\n".join(lines))
+    output_path.write_text("\n".join(lines), encoding="utf-8")
     return output_path
 
 
@@ -285,7 +285,7 @@ def generate_test_spec_doc(store: LoomStore, output_dir: Path, specs: Dict[str, 
     lines.insert(9, "")
     
     output_path = output_dir / "TEST_SPEC.md"
-    output_path.write_text("\n".join(lines))
+    output_path.write_text("\n".join(lines), encoding="utf-8")
     return output_path
 
 
