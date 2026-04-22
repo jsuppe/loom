@@ -114,13 +114,11 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 ## Documentation
 
-### D1. README.md and SKILL.md don't mention the three-layer model
+### D1. README.md and SKILL.md don't mention the three-layer model — **RESOLVED**
 
-**Observed:** The refactor made specs central to the workflow, but README.md and SKILL.md still describe the direct req→impl flow.
+**Observed:** The refactor made specs central to the workflow, but README.md and SKILL.md still described the direct req→impl flow.
 
-**Why deferred:** User-facing docs outside of CLAUDE.md and ROADMAP.md weren't the scope of the refactor.
-
-**Fix:** Update README.md's "Usage Patterns" and SKILL.md's "Example Flow" to show the three-layer workflow (`extract` → `spec` → `link --spec` → `test`).
+**Resolution:** README.md and SKILL.md were rewritten to cover the full three-layer model (requirements → specifications → implementations) plus the new task/execution layer (`loom decompose` → `loom_exec`). Both files now include the validated small-model capability results.
 
 ### D2. MCP server skeleton has no handler implementations
 

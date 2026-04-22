@@ -1,5 +1,53 @@
 # Loom Roadmap
 
+## Milestone 0: Small-model execution pipeline (DONE)
+
+Capability-substitution thesis validated empirically. See
+[`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md).
+
+- [x] **0.1 Hook instrumentation** — `hooks/loom_pretool.py` injects linked
+      reqs/specs/drift on Edit/Write as a system-reminder; logs per-fire
+      `{latency_ms, bytes, reqs, specs, drift, fired, skipped}` to
+      `<project>/.hook-log.jsonl`.
+- [x] **0.2 `loom cost`** — Aggregates the hook log. Reports p50/p95/p99
+      latency, total injected bytes, overhead percentage, skipped-vs-fired.
+- [x] **0.3 LLM-verified conflict detection** — `src/conflict_verify.py`
+      adds an LLM confirmation pass over embedding-overlap candidates so
+      `loom conflicts` reports real conflicts only.
+- [x] **0.4 Task entity** — `Task` dataclass + `tasks` ChromaDB collection +
+      `add_task`/`list_tasks`/`list_ready_tasks`/`update_task`/
+      `set_task_status`/`search_tasks` store methods. Lifecycle: pending →
+      claimed → complete | rejected | escalated. Atomicity budget (≤2 files,
+      ≤80 LoC default) and dep DAG enforced at validation time.
+- [x] **0.5 `loom task` CLI** — add/list/show/claim/release/complete/reject/
+      prompt verbs. `loom task prompt` emits the assembled executor prompt
+      for a task (context bundle included).
+- [x] **0.6 `loom decompose`** — Propose atomic-task decomposition for a
+      spec. Dispatches to Anthropic or Ollama by `provider:model` prefix.
+      Defaults: `anthropic:claude-opus-4-7` if `ANTHROPIC_API_KEY` set, else
+      `ollama:qwen2.5-coder:32b`. Validates atomicity + dep graph before
+      persisting. `--apply` writes to the store.
+- [x] **0.7 `scripts/loom_exec`** — End-to-end runner: claim next ready
+      task, assemble context bundle, call Ollama, extract code, apply to
+      scratch copy, run grading test, promote on pass. Logs to
+      `<project>/.exec-log.jsonl`. Default model `LOOM_EXECUTOR_MODEL`
+      falling back to `qwen3.5:latest`.
+- [x] **0.8 Capability validation** — `benchmarks/ollama_gaps*.py` runners
+      across three task shapes (write, extend, behavior-preserving
+      refactor). `qwen3.5:latest` (9.7B, local) matched Opus 4.7 on every
+      trial; findings documented in `experiments/gaps/FINDINGS.md`.
+
+**Headline:** `qwen3.5:latest` local execution at `temperature=0` is
+byte-deterministic and matches frontier cloud models on atomic Loom-specced
+tasks at effectively zero marginal cost.
+
+**Carry-overs (not blockers):**
+- Cross-module tasks are untested — benchmark covers single-file mods only.
+- Ambiguous specs (require design judgment) are untested.
+- Non-Python codebases untested.
+- `loom_exec` currently supports a single grading-test-runs-pytest
+  criterion; multi-criteria grading (lint + type + test) is future work.
+
 ## Milestone 1: CLI Foundations (DONE)
 
 Make Loom reliable for tool use by AI agents.
@@ -35,8 +83,8 @@ Remove hard dependency on local Ollama.
 
 First-class tool integration with Claude Code sessions.
 
-- [x] **4.1 Hooks** — `.claude/settings.json` with SessionStart (doctor + status), PostToolUse on Edit/Write (drift check), PostToolUse on Bash git commit (sync docs).
-- [ ] **4.2 MCP server** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Replaces Bash-subprocess + `--json`-parsing with first-class tool calls.
+- [x] **4.1 Hooks** — `.claude/settings.json` with SessionStart (doctor + status), PostToolUse on Edit/Write (drift check), PostToolUse on Bash git commit (sync docs). Plus `hooks/loom_pretool.py` (Milestone 0.1) with JSONL telemetry.
+- [x] **4.2 MCP server (Phase A + B)** — Thin Python MCP server wrapping `LoomStore` as typed MCP tools. Phase A (read) and Phase B (write) tools are shipped. Only `init-private` remains CLI-only. See `mcp_server/README.md`.
 
 ### 4.2 MCP server — design
 

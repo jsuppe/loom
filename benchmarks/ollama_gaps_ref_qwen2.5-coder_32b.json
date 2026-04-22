@@ -1,0 +1,18 @@
+{
+  "model": "qwen2.5-coder:32b",
+  "results": [
+    {
+      "model": "qwen2.5-coder:32b",
+      "passed": 29,
+      "total": 29,
+      "behavior_passed": 20,
+      "structure_passed": 9,
+      "extracted": true,
+      "elapsed_s": 454.76,
+      "input_tokens": 23782,
+      "output_tokens": 924,
+      "scratch_dir": null,
+      "tail": "experiments/gaps/test_gaps_refactor.py::test_complete_reqs_do_not_surface PASSED [ 44%]\nexperiments/gaps/test_gaps_refactor.py::test_impl_with_superseded_req_is_orphan PASSED [ 48%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_type_exists PASSED    [ 51%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_not_surfaced_without_impl PASSED [ 55%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_priority_before_missing_criteria PASSED [ 58%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_shape_matches_uniform PASSED [ 62%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_type_filter PASSED    [ 65%]\nexperiments/gaps/test_gaps_refactor.py::test_drift_with_multiple_impls PASSED [ 68%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_missing_criteria] PASSED [ 72%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_missing_elaboration] PASSED [ 75%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_orphan_impl] PASSED [ 79%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_exists_and_callable[_detect_drift] PASSED [ 82%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_missing_criteria_isolation PASSED [ 86%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_missing_elaboration_isolation PASSED [ 89%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_orphan_impl_isolation PASSED [ 93%]\nexperiments/gaps/test_gaps_refactor.py::test_helper_detect_drift_isolation PASSED [ 96%]\nexperiments/gaps/test_gaps_refactor.py::test_helpers_have_uniform_shape PASSED [100%]\n\n============================= 29 passed in 2.51s ==============================\n"
+    }
+  ]
+}

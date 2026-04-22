@@ -887,6 +887,137 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     }
 
 
+def cost(
+    store: LoomStore,
+    *,
+    tail: int | None = None,
+    log_path: "Any" = None,
+) -> dict[str, Any]:
+    """Aggregate PreToolUse hook activity from the JSONL log.
+
+    The hook (hooks/loom_pretool.py) appends one line per fire to
+    `<store.data_dir>/.hook-log.jsonl`. This reads that log and returns
+    stats the user can compare against the effectiveness side of the
+    equation: latency percentiles, total bytes/tokens injected, and the
+    fraction of fires that produced no context (pure overhead).
+
+    Args:
+        store: LoomStore whose data_dir hosts the log.
+        tail: if set, only consider the last N entries (after filtering
+            to well-formed lines). Useful for "last session only".
+        log_path: explicit override for the log location (Path or str).
+            Overrides the default `store.data_dir / .hook-log.jsonl`.
+            Mostly for tests and cross-project rollups.
+
+    Returns:
+        {
+          "log_path": str,
+          "exists": bool,
+          "fires": int,                 # watched-tool invocations recorded
+          "injections": int,            # fires where additionalContext was sent
+          "empty_fires": int,           # fires that logged but fired=False
+          "overhead_pct": float,        # empty_fires / fires * 100
+          "drift_events": int,
+          "latency_ms": {"p50", "p95", "p99", "max"},
+          "bytes": {"avg", "total"},
+          "tokens_est": {"avg", "total"},   # bytes / 4 (rough llama/claude estimate)
+          "by_tool": {tool_name: count},
+          "skipped": {reason: count},   # reasons fires produced no injection
+        }
+
+    A missing log file returns `exists: False` with zero-valued stats.
+    """
+    import json as _json
+    from pathlib import Path
+
+    path = Path(log_path) if log_path is not None else store.data_dir / ".hook-log.jsonl"
+
+    empty = {
+        "log_path": str(path),
+        "exists": False,
+        "fires": 0,
+        "injections": 0,
+        "empty_fires": 0,
+        "overhead_pct": 0.0,
+        "drift_events": 0,
+        "latency_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0, "max": 0.0},
+        "bytes": {"avg": 0.0, "total": 0},
+        "tokens_est": {"avg": 0.0, "total": 0},
+        "by_tool": {},
+        "skipped": {},
+    }
+    if not path.exists():
+        return empty
+
+    entries: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                continue
+    if tail is not None and tail > 0:
+        entries = entries[-tail:]
+    if not entries:
+        out = dict(empty)
+        out["exists"] = True
+        return out
+
+    fires = len(entries)
+    injections = sum(1 for e in entries if e.get("fired"))
+    empty_fires = fires - injections
+    drift_events = sum(1 for e in entries if e.get("drift"))
+
+    import math
+    latencies = sorted(float(e.get("latency_ms", 0.0)) for e in entries)
+
+    def _pct(p: float) -> float:
+        if not latencies:
+            return 0.0
+        # Nearest-rank percentile: the smallest value at or above the cutoff.
+        idx = max(0, min(len(latencies) - 1, math.ceil(p * len(latencies)) - 1))
+        return round(latencies[idx], 2)
+
+    total_bytes = sum(int(e.get("bytes", 0)) for e in entries)
+    avg_bytes = total_bytes / fires if fires else 0.0
+
+    by_tool: dict[str, int] = {}
+    skipped: dict[str, int] = {}
+    for e in entries:
+        tool = e.get("tool") or ""
+        if tool:
+            by_tool[tool] = by_tool.get(tool, 0) + 1
+        reason = e.get("skipped")
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+
+    return {
+        "log_path": str(path),
+        "exists": True,
+        "fires": fires,
+        "injections": injections,
+        "empty_fires": empty_fires,
+        "overhead_pct": round(empty_fires / fires * 100.0, 1) if fires else 0.0,
+        "drift_events": drift_events,
+        "latency_ms": {
+            "p50": _pct(0.50),
+            "p95": _pct(0.95),
+            "p99": _pct(0.99),
+            "max": round(latencies[-1], 2) if latencies else 0.0,
+        },
+        "bytes": {"avg": round(avg_bytes, 1), "total": total_bytes},
+        "tokens_est": {
+            "avg": round(avg_bytes / 4.0, 1),
+            "total": total_bytes // 4,
+        },
+        "by_tool": by_tool,
+        "skipped": skipped,
+    }
+
+
 def detect_requirements(
     store: LoomStore, file_path: str, lines: str | None = None, n: int = 3
 ) -> list[dict[str, Any]]:
@@ -1608,3 +1739,1097 @@ def incomplete(store: LoomStore) -> list[dict[str, Any]]:
             "missing": missing,
         })
     return out
+
+
+def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    """Surface outstanding gaps in a Loom project.
+
+    Each returned dict has the uniform shape:
+        {
+          "type": str,             # one of: missing_criteria, missing_elaboration, orphan_impl
+          "entity_id": str,        # REQ-xxx or IMPL-xxx
+          "description": str,      # short human-readable
+          "blocks": list[str],     # entity_ids this gap blocks (may be empty list)
+          "suggested_action": str  # a single runnable command, e.g., "loom refine REQ-abc"
+        }
+
+    Gap types implemented:
+    - missing_criteria: active requirement with empty acceptance_criteria
+    - missing_elaboration: active requirement with empty elaboration
+    - orphan_impl: implementation whose every satisfies[*].req_id either
+      doesn't exist or is superseded
+
+    Sort by priority (higher first), ties by entity_id ascending:
+        priority 3: missing_criteria
+        priority 5: missing_elaboration
+        priority 6: orphan_impl
+
+    Args:
+        store: LoomStore instance
+        types: if provided, only return gaps whose type is in the list
+        limit: if provided, cap the returned list at limit entries (after sorting)
+
+    Returns:
+        list of gap dicts, sorted by priority and entity_id
+    """
+    gaps_list: list[dict[str, Any]] = []
+
+    # Detect missing_criteria and missing_elaboration (only from non-superseded reqs)
+    for req in store.list_requirements(include_superseded=False):
+        # Check for missing_criteria
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            gaps_list.append({
+                "type": "missing_criteria",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no acceptance criteria",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 3,  # for sorting
+            })
+
+        # Check for missing_elaboration
+        if not req.elaboration:
+            gaps_list.append({
+                "type": "missing_elaboration",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no elaboration",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 5,  # for sorting
+            })
+
+    # Detect orphan_impl
+    result = store.implementations.get(include=["metadatas"])
+    for meta in result.get("metadatas", []):
+        impl_id = meta.get("id")
+        if not impl_id:
+            continue
+
+        # Parse satisfies list
+        import json as _json
+        satisfies = _json.loads(meta.get("satisfies", "[]"))
+        req_ids = [s.get("req_id") for s in satisfies if s.get("req_id")]
+
+        # Check if this impl is orphan: every req_id is either missing or superseded
+        is_orphan = True
+        if req_ids:
+            for req_id in req_ids:
+                req = store.get_requirement(req_id)
+                # If requirement exists and is NOT superseded, impl is not orphan
+                if req and not req.superseded_at:
+                    is_orphan = False
+                    break
+        else:
+            # No satisfies entries means it's orphan-like
+            is_orphan = True
+
+        if is_orphan:
+            file_str = meta.get("file", "unknown")
+            lines_str = meta.get("lines", "?")
+            gaps_list.append({
+                "type": "orphan_impl",
+                "entity_id": impl_id,
+                "description": f"Implementation {impl_id} ({file_str}:{lines_str}) is orphaned",
+                "blocks": [],
+                "suggested_action": f"loom trace {file_str}",
+                "_priority": 6,  # for sorting
+            })
+
+    # Filter by types if provided
+    if types is not None:
+        gaps_list = [g for g in gaps_list if g["type"] in types]
+
+    # Sort by priority (ascending = higher priority first) then entity_id (ascending)
+    gaps_list.sort(key=lambda g: (g["_priority"], g["entity_id"]))
+
+    # Remove the internal _priority field
+    for gap in gaps_list:
+        del gap["_priority"]
+
+    # Apply limit if provided
+    if limit is not None:
+        gaps_list = gaps_list[:limit]
+
+    return gaps_list
+
+
+def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    """Surface outstanding gaps in a Loom project.
+
+    Each returned dict has the uniform shape:
+        {
+          "type": str,             # one of: missing_criteria, missing_elaboration, orphan_impl
+          "entity_id": str,        # REQ-xxx or IMPL-xxx
+          "description": str,      # short human-readable
+          "blocks": list[str],     # entity_ids this gap blocks (may be empty list)
+          "suggested_action": str  # a single runnable command, e.g., "loom refine REQ-abc"
+        }
+
+    Gap types implemented:
+    - missing_criteria: active requirement with empty acceptance_criteria
+    - missing_elaboration: active requirement with empty elaboration
+    - orphan_impl: implementation whose every satisfies[*].req_id either
+      doesn't exist or is superseded
+
+    Sort by priority (higher first), ties by entity_id ascending:
+        priority 3: missing_criteria
+        priority 5: missing_elaboration
+        priority 6: orphan_impl
+
+    Args:
+        store: LoomStore instance
+        types: if provided, only return gaps whose type is in the list
+        limit: if provided, cap the returned list at limit entries (after sorting)
+
+    Returns:
+        list of gap dicts, sorted by priority and entity_id
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    gaps_list: list[dict[str, Any]] = []
+
+    # Detect missing_criteria and missing_elaboration (only from non-superseded reqs)
+    for req in store.list_requirements(include_superseded=False):
+        # Check for missing_criteria
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            gaps_list.append({
+                "type": "missing_criteria",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no acceptance criteria",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 3,  # for sorting
+            })
+
+        # Check for missing_elaboration
+        if not req.elaboration:
+            gaps_list.append({
+                "type": "missing_elaboration",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no elaboration",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 5,  # for sorting
+            })
+
+    # Detect orphan_impl
+    result = store.implementations.get(include=["metadatas"])
+    for meta in result.get("metadatas", []):
+        impl_id = meta.get("id")
+        if not impl_id:
+            continue
+
+        # Parse satisfies list
+        satisfies = _json.loads(meta.get("satisfies", "[]"))
+        req_ids = [s.get("req_id") for s in satisfies if s.get("req_id")]
+
+        # Check if this impl is orphan: every req_id is either missing or superseded
+        is_orphan = True
+        if req_ids:
+            for req_id in req_ids:
+                req = store.get_requirement(req_id)
+                # If requirement exists and is NOT superseded, impl is not orphan
+                if req and not req.superseded_at:
+                    is_orphan = False
+                    break
+        else:
+            # No satisfies entries means it's orphan-like
+            is_orphan = True
+
+        if is_orphan:
+            file_str = meta.get("file", "unknown")
+            lines_str = meta.get("lines", "?")
+            gaps_list.append({
+                "type": "orphan_impl",
+                "entity_id": impl_id,
+                "description": f"Implementation {impl_id} ({file_str}:{lines_str}) is orphaned",
+                "blocks": [],
+                "suggested_action": f"loom trace {file_str}",
+                "_priority": 6,  # for sorting
+            })
+
+    # Filter by types if provided
+    if types is not None:
+        gaps_list = [g for g in gaps_list if g["type"] in types]
+
+    # Sort by priority (ascending = higher priority first) then entity_id (ascending)
+    gaps_list.sort(key=lambda g: (g["_priority"], g["entity_id"]))
+
+    # Remove the internal _priority field
+    for gap in gaps_list:
+        del gap["_priority"]
+
+    # Apply limit if provided
+    if limit is not None:
+        gaps_list = gaps_list[:limit]
+
+    return gaps_list
+
+
+def gaps(store: LoomStore, types: list[str] | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    """Surface outstanding gaps in a Loom project.
+
+    Each returned dict has the uniform shape:
+        {
+          "type": str,             # one of: missing_criteria, missing_elaboration, orphan_impl, drift
+          "entity_id": str,        # REQ-xxx or IMPL-xxx
+          "description": str,      # short human-readable
+          "blocks": list[str],     # entity_ids this gap blocks (may be empty list)
+          "suggested_action": str  # a single runnable command, e.g., "loom refine REQ-abc"
+        }
+
+    Gap types implemented:
+    - missing_criteria: active requirement with empty acceptance_criteria
+    - missing_elaboration: active requirement with empty elaboration
+    - orphan_impl: implementation whose every satisfies[*].req_id either
+      doesn't exist or is superseded
+    - drift: a superseded requirement that still has at least one linked
+      implementation. The implementation may also point at live reqs
+      (it need NOT be an orphan_impl); what matters is that the
+      superseded req's id appears in some Implementation's `satisfies`
+      list.
+
+    Sort by priority (higher first), ties by entity_id ascending:
+        priority 2: drift
+        priority 3: missing_criteria
+        priority 5: missing_elaboration
+        priority 6: orphan_impl
+
+    Args:
+        store: LoomStore instance
+        types: if provided, only return gaps whose type is in the list
+        limit: if provided, cap the returned list at limit entries (after sorting)
+
+    Returns:
+        list of gap dicts, sorted by priority and entity_id
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    gaps_list: list[dict[str, Any]] = []
+
+    # Detect missing_criteria and missing_elaboration (only from non-superseded reqs)
+    for req in store.list_requirements(include_superseded=False):
+        # Check for missing_criteria
+        real_crit = [c for c in (req.acceptance_criteria or []) if c and c != "TBD"]
+        if not real_crit:
+            gaps_list.append({
+                "type": "missing_criteria",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no acceptance criteria",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 3,  # for sorting
+            })
+
+        # Check for missing_elaboration
+        if not req.elaboration:
+            gaps_list.append({
+                "type": "missing_elaboration",
+                "entity_id": req.id,
+                "description": f"Requirement {req.id} has no elaboration",
+                "blocks": [],
+                "suggested_action": f"loom refine {req.id}",
+                "_priority": 5,  # for sorting
+            })
+
+    # Detect orphan_impl
+    result = store.implementations.get(include=["metadatas"])
+    for meta in result.get("metadatas", []):
+        impl_id = meta.get("id")
+        if not impl_id:
+            continue
+
+        # Parse satisfies list
+        satisfies = _json.loads(meta.get("satisfies", "[]"))
+        req_ids = [s.get("req_id") for s in satisfies if s.get("req_id")]
+
+        # Check if this impl is orphan: every req_id is either missing or superseded
+        is_orphan = True
+        if req_ids:
+            for req_id in req_ids:
+                req = store.get_requirement(req_id)
+                # If requirement exists and is NOT superseded, impl is not orphan
+                if req and not req.superseded_at:
+                    is_orphan = False
+                    break
+        else:
+            # No satisfies entries means it's orphan-like
+            is_orphan = True
+
+        if is_orphan:
+            file_str = meta.get("file", "unknown")
+            lines_str = meta.get("lines", "?")
+            gaps_list.append({
+                "type": "orphan_impl",
+                "entity_id": impl_id,
+                "description": f"Implementation {impl_id} ({file_str}:{lines_str}) is orphaned",
+                "blocks": [],
+                "suggested_action": f"loom trace {file_str}",
+                "_priority": 6,  # for sorting
+            })
+
+    # Detect drift: superseded requirements that still have linked implementations
+    all_reqs = store.list_requirements(include_superseded=True)
+    superseded_reqs = [r for r in all_reqs if r.superseded_at]
+    
+    # Build a map of superseded req_id -> list of impl_ids that link to it
+    drift_map: dict[str, list[str]] = {}
+    for req in superseded_reqs:
+        impls = store.get_implementations_for_requirement(req.id)
+        if impls:
+            drift_map[req.id] = [i.id for i in impls]
+
+    # Emit exactly ONE drift gap per superseded req (dedupe by req.id)
+    for req in superseded_reqs:
+        if req.id in drift_map:
+            impl_ids = drift_map[req.id]
+            gaps_list.append({
+                "type": "drift",
+                "entity_id": req.id,
+                "description": f"REQ-{req.id} is superseded but still has linked implementations",
+                "blocks": impl_ids,
+                "suggested_action": f"loom link --req {req.id}",
+                "_priority": 2,  # for sorting
+            })
+
+    # Filter by types if provided
+    if types is not None:
+        gaps_list = [g for g in gaps_list if g["type"] in types]
+
+    # Sort by priority (ascending = higher priority first) then entity_id (ascending)
+    gaps_list.sort(key=lambda g: (g["_priority"], g["entity_id"]))
+
+    # Remove the internal _priority field
+    for gap in gaps_list:
+        del gap["_priority"]
+
+    # Apply limit if provided
+    if limit is not None:
+        gaps_list = gaps_list[:limit]
+
+    return gaps_list
+
+
+# ==================== Tasks ====================
+#
+# An atomic, executor-ready unit of work. See src/store.py::Task for the
+# schema. Tasks flow through: pending -> claimed -> complete | rejected.
+# Rejected tasks with escalate=True become escalated (for operator review).
+
+
+def task_add(
+    store: LoomStore,
+    *,
+    parent_spec: str,
+    title: str,
+    files_to_modify: list[str],
+    test_to_write: str,
+    context_reqs: list[str] | None = None,
+    context_specs: list[str] | None = None,
+    context_patterns: list[str] | None = None,
+    context_sidecars: list[str] | None = None,
+    context_files: list[str] | None = None,
+    size_budget_files: int = 2,
+    size_budget_loc: int = 80,
+    depends_on: list[str] | None = None,
+    created_by: str | None = None,
+) -> dict[str, Any]:
+    """Create a new Task.
+
+    Args:
+        parent_spec: SPEC-xxx this task satisfies. Must exist in the store.
+        title: one-line human description.
+        files_to_modify: files the executor may edit.
+        test_to_write: grading test target, e.g. 'tests/test_x.py::TestY'.
+        context_*: pointer lists for on-demand bundle assembly.
+        size_budget_*: atomicity bounds the executor checks.
+        depends_on: other TASK-xxx that must complete first (DAG).
+
+    Returns: task dict shape (see task_get).
+
+    Raises:
+        LookupError: parent_spec does not exist.
+        ValueError: title or files_to_modify empty, or depends_on references
+                    a task that doesn't exist.
+    """
+    from datetime import datetime, timezone
+    from store import Task, generate_task_id
+    from embedding import get_embedding
+
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("title is required")
+    if not files_to_modify:
+        raise ValueError("files_to_modify must be non-empty")
+    if store.get_specification(parent_spec) is None:
+        raise LookupError(f"Specification {parent_spec} not found")
+    if depends_on:
+        for dep in depends_on:
+            if store.get_task(dep) is None:
+                raise ValueError(f"depends_on references unknown task: {dep}")
+
+    task_id = generate_task_id(parent_spec, title)
+    task = Task(
+        id=task_id,
+        parent_spec=parent_spec,
+        title=title,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        files_to_modify=list(files_to_modify),
+        test_to_write=test_to_write,
+        context_reqs=list(context_reqs) if context_reqs else None,
+        context_specs=list(context_specs) if context_specs else None,
+        context_patterns=list(context_patterns) if context_patterns else None,
+        context_sidecars=list(context_sidecars) if context_sidecars else None,
+        context_files=list(context_files) if context_files else None,
+        size_budget_files=size_budget_files,
+        size_budget_loc=size_budget_loc,
+        depends_on=list(depends_on) if depends_on else None,
+        created_by=created_by,
+    )
+    store.add_task(task, get_embedding(f"{title}\n{parent_spec}"))
+    return _task_to_dict(task)
+
+
+def _task_to_dict(task) -> dict[str, Any]:
+    """Stable JSON-serializable shape for a Task."""
+    return {
+        "id": task.id,
+        "parent_spec": task.parent_spec,
+        "title": task.title,
+        "timestamp": task.timestamp,
+        "files_to_modify": task.files_to_modify,
+        "test_to_write": task.test_to_write,
+        "context_reqs": task.context_reqs or [],
+        "context_specs": task.context_specs or [],
+        "context_patterns": task.context_patterns or [],
+        "context_sidecars": task.context_sidecars or [],
+        "context_files": task.context_files or [],
+        "size_budget": {
+            "files": task.size_budget_files,
+            "loc": task.size_budget_loc,
+        },
+        "depends_on": task.depends_on or [],
+        "status": task.status,
+        "claimed_by": task.claimed_by,
+        "claimed_at": task.claimed_at,
+        "completed_at": task.completed_at,
+        "rejection_reason": task.rejection_reason,
+        "escalation_count": task.escalation_count,
+        "created_by": task.created_by,
+        "updated_at": task.updated_at,
+    }
+
+
+def task_list(
+    store: LoomStore,
+    *,
+    status: str | None = None,
+    parent_spec: str | None = None,
+    claimed_by: str | None = None,
+    ready_only: bool = False,
+) -> list[dict[str, Any]]:
+    """List tasks. Filters stack.
+
+    ready_only: only pending tasks whose depends_on are all complete.
+    """
+    if ready_only:
+        tasks = store.list_ready_tasks()
+        if status is not None:
+            tasks = [t for t in tasks if t.status == status]
+        if parent_spec is not None:
+            tasks = [t for t in tasks if t.parent_spec == parent_spec]
+        if claimed_by is not None:
+            tasks = [t for t in tasks if t.claimed_by == claimed_by]
+    else:
+        tasks = store.list_tasks(status=status, parent_spec=parent_spec, claimed_by=claimed_by)
+    return [_task_to_dict(t) for t in tasks]
+
+
+def task_get(store: LoomStore, task_id: str) -> dict[str, Any]:
+    """Get a task's full data. Raises LookupError if not found."""
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    return _task_to_dict(task)
+
+
+def task_claim(store: LoomStore, task_id: str, claimed_by: str) -> dict[str, Any]:
+    """Transition pending -> claimed. Stamps claimed_at and claimed_by.
+
+    Raises:
+        LookupError: task not found.
+        ValueError: task is not in 'pending' status.
+    """
+    from datetime import datetime, timezone
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "pending":
+        raise ValueError(
+            f"Task {task_id} cannot be claimed from status={task.status} (must be pending)"
+        )
+    now = datetime.now(timezone.utc).isoformat()
+    store.update_task(task_id, {
+        "status": "claimed",
+        "claimed_by": claimed_by,
+        "claimed_at": now,
+    })
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_release(store: LoomStore, task_id: str) -> dict[str, Any]:
+    """Transition claimed -> pending (executor gave up cleanly).
+
+    Clears claimed_by/claimed_at. Does NOT count as an escalation.
+    """
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be released from status={task.status} (must be claimed)"
+        )
+    store.update_task(task_id, {
+        "status": "pending",
+        "claimed_by": None,
+        "claimed_at": None,
+    })
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_complete(
+    store: LoomStore,
+    task_id: str,
+    impl_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Transition claimed -> complete. Stamps completed_at.
+
+    impl_ids are returned in the result for audit but not stored on the task
+    (implementations link to specs independently).
+    """
+    from datetime import datetime, timezone
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be completed from status={task.status} (must be claimed)"
+        )
+    store.update_task(task_id, {
+        "status": "complete",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    result = _task_to_dict(store.get_task(task_id))
+    result["linked_impls"] = list(impl_ids) if impl_ids else []
+    return result
+
+
+def task_reject(
+    store: LoomStore,
+    task_id: str,
+    reason: str,
+    *,
+    escalate: bool = False,
+) -> dict[str, Any]:
+    """Transition claimed -> rejected (or escalated).
+
+    escalate=True sets status=escalated and increments escalation_count.
+    Use this when the failure needs human / larger-model attention.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("reason is required")
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+    if task.status != "claimed":
+        raise ValueError(
+            f"Task {task_id} cannot be rejected from status={task.status} (must be claimed)"
+        )
+    updates: dict[str, Any] = {"rejection_reason": reason}
+    if escalate:
+        updates["status"] = "escalated"
+        updates["escalation_count"] = task.escalation_count + 1
+    else:
+        updates["status"] = "rejected"
+    store.update_task(task_id, updates)
+    return _task_to_dict(store.get_task(task_id))
+
+
+def task_build_prompt(store: LoomStore, task_id: str) -> str:
+    """Assemble the executor prompt on demand from current store state.
+
+    Mirrors the enhanced-condition bundle used by benchmarks/ollama_gaps*.py:
+      - task scope (title, files, grading test, size budget)
+      - linked requirements (value + rationale + elaboration + criteria)
+      - linked specifications (description + criteria)
+      - linked patterns (name + description)
+      - sidecar file contents (inlined)
+      - context files (inlined in full)
+      - output contract + stop tokens
+
+    Raises LookupError if the task is missing. Referenced reqs/specs/patterns
+    that don't exist are silently skipped (graceful degradation).
+    """
+    from pathlib import Path as _Path
+
+    task = store.get_task(task_id)
+    if task is None:
+        raise LookupError(f"Task {task_id} not found")
+
+    parts: list[str] = []
+    parts.append(f"# Task {task.id}: {task.title}\n")
+    parts.append(f"Parent specification: {task.parent_spec}")
+    parts.append(f"Files to modify: {', '.join(task.files_to_modify)}")
+    parts.append(f"Grading test: {task.test_to_write}")
+    parts.append(
+        f"Size budget: <= {task.size_budget_files} files, "
+        f"<= {task.size_budget_loc} LoC\n"
+    )
+
+    if task.context_reqs:
+        parts.append("## Requirements\n")
+        for rid in task.context_reqs:
+            req = store.get_requirement(rid)
+            if req is None:
+                continue
+            parts.append(f"### {req.id} [{req.domain}]")
+            parts.append(f"Value: {req.value}")
+            if req.rationale:
+                parts.append(f"Rationale: {req.rationale}")
+            if req.elaboration:
+                parts.append(f"Elaboration: {req.elaboration}")
+            ac = req.acceptance_criteria or []
+            if ac and ac != ["TBD"]:
+                parts.append("Acceptance criteria:")
+                for c in ac:
+                    parts.append(f"  - {c}")
+            parts.append("")
+
+    if task.context_specs:
+        parts.append("## Specifications\n")
+        for sid in task.context_specs:
+            spec = store.get_specification(sid)
+            if spec is None:
+                continue
+            parts.append(f"### {spec.id} (parent: {spec.parent_req}, status: {spec.status})")
+            parts.append(spec.description)
+            ac = spec.acceptance_criteria or []
+            if ac and ac != ["TBD"]:
+                parts.append("Criteria:")
+                for c in ac:
+                    parts.append(f"  - {c}")
+            parts.append("")
+
+    if task.context_patterns:
+        parts.append("## Patterns\n")
+        for pid in task.context_patterns:
+            pat = store.get_pattern(pid)
+            if pat is None:
+                continue
+            parts.append(f"### {pat.id} -- {pat.name}")
+            parts.append(pat.description)
+            parts.append("")
+
+    if task.context_sidecars:
+        parts.append("## Sidecar notes\n")
+        for path_str in task.context_sidecars:
+            p = _Path(path_str)
+            if not p.exists():
+                continue
+            parts.append(f"### {path_str}")
+            parts.append(p.read_text(encoding="utf-8"))
+            parts.append("")
+
+    if task.context_files:
+        parts.append("## Source context\n")
+        for path_str in task.context_files:
+            p = _Path(path_str)
+            if not p.exists():
+                continue
+            parts.append(f"### {path_str}")
+            parts.append("```")
+            parts.append(p.read_text(encoding="utf-8"))
+            parts.append("```")
+            parts.append("")
+
+    parts.append(
+        "## Output contract\n"
+        "Reply with ONE Python code block (```python ... ```) containing your "
+        "changes. Do not include unchanged code from the files above. Do not "
+        "include prose outside the code block.\n\n"
+        "If the task is too large or mixes concerns, reply with "
+        "`TASK_REJECT: <reason>` and stop.\n"
+        "If you need information not provided, reply with "
+        "`NEED_CONTEXT: <what>` and stop.\n"
+        "When complete, begin your final message (after the code block) with "
+        "`DONE: <one-line summary>`."
+    )
+
+    return "\n".join(parts)
+
+
+# ==================== Decomposer ====================
+#
+# Turns a specification + its Loom context into a proposed Task list.
+# Opus-class models are the default for the reasoning; a 32B local model
+# (qwen2.5-coder:32b) is the fallback ceiling.
+#
+# Model selection:
+#   - LOOM_DECOMPOSER_MODEL env var overrides everything.
+#     Format: "anthropic:<model>" or "ollama:<model>".
+#   - Else if ANTHROPIC_API_KEY is set: "anthropic:claude-opus-4-7".
+#   - Else: "ollama:qwen2.5-coder:32b".
+#
+# The command-level --model flag overrides the env default.
+
+
+def _default_decomposer_model() -> str:
+    import os
+    override = os.environ.get("LOOM_DECOMPOSER_MODEL")
+    if override:
+        return override
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic:claude-opus-4-7"
+    return "ollama:qwen2.5-coder:32b"
+
+
+def _call_decomposer_llm(model: str, prompt: str, timeout: int = 900) -> dict:
+    """Dispatch to Ollama or Anthropic based on the model prefix.
+
+    Returns {content, elapsed_s, input_tokens, output_tokens}. Raises
+    RuntimeError on transport failure.
+    """
+    import json as _json
+    import os as _os
+    import time as _time
+    import urllib.request as _urlreq
+
+    if ":" not in model:
+        raise ValueError(
+            f"model {model!r} must be 'anthropic:<name>' or 'ollama:<name>'"
+        )
+    provider, name = model.split(":", 1)
+    t0 = _time.perf_counter()
+
+    if provider == "ollama":
+        url = _os.environ.get("OLLAMA_URL", "http://localhost:11434")
+        payload = _json.dumps({
+            "model": name,
+            "stream": False,
+            "think": False,
+            "messages": [{"role": "user", "content": prompt}],
+            "options": {"temperature": 0.0, "num_predict": 8000},
+        }).encode()
+        req = _urlreq.Request(
+            f"{url}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                body = _json.loads(resp.read().decode())
+        except Exception as e:
+            raise RuntimeError(f"Ollama call failed: {e}") from e
+        msg = body.get("message", {}) or {}
+        return {
+            "content": msg.get("content", ""),
+            "elapsed_s": round(_time.perf_counter() - t0, 2),
+            "input_tokens": body.get("prompt_eval_count", 0),
+            "output_tokens": body.get("eval_count", 0),
+        }
+
+    if provider == "anthropic":
+        api_key = _os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY env var required for anthropic provider")
+        payload = _json.dumps({
+            "model": name,
+            "max_tokens": 8000,
+            "temperature": 0.0,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = _urlreq.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                body = _json.loads(resp.read().decode())
+        except Exception as e:
+            raise RuntimeError(f"Anthropic call failed: {e}") from e
+        content_blocks = body.get("content", []) or []
+        text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
+        usage = body.get("usage", {}) or {}
+        return {
+            "content": "\n".join(text_parts),
+            "elapsed_s": round(_time.perf_counter() - t0, 2),
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        }
+
+    raise ValueError(f"unknown provider: {provider!r}")
+
+
+def _build_decompose_prompt(spec, parent_req, patterns: list) -> str:
+    """Assemble the decomposer user message from the spec + related context."""
+    from pathlib import Path as _Path
+
+    repo_root = _Path(__file__).resolve().parent.parent
+    template_path = repo_root / "prompts" / "decompose.md"
+    try:
+        system = template_path.read_text(encoding="utf-8")
+    except OSError:
+        system = "You are a decomposer. Output YAML tasks or SPEC_TOO_BIG:/NEED_CONTEXT:."
+
+    parts: list[str] = []
+    parts.append(system)
+    parts.append("\n---\n")
+    parts.append("## Input specification to decompose\n")
+    parts.append(f"### {spec.id} (parent: {spec.parent_req})")
+    parts.append(spec.description)
+    ac = spec.acceptance_criteria or []
+    if ac and ac != ["TBD"]:
+        parts.append("Acceptance criteria:")
+        for c in ac:
+            parts.append(f"  - {c}")
+    parts.append("")
+
+    if parent_req is not None:
+        parts.append("## Parent requirement\n")
+        parts.append(f"### {parent_req.id} [{parent_req.domain}]")
+        parts.append(f"Value: {parent_req.value}")
+        if parent_req.rationale:
+            parts.append(f"Rationale: {parent_req.rationale}")
+        if parent_req.elaboration:
+            parts.append(f"Elaboration: {parent_req.elaboration}")
+        rac = parent_req.acceptance_criteria or []
+        if rac and rac != ["TBD"]:
+            parts.append("Acceptance criteria:")
+            for c in rac:
+                parts.append(f"  - {c}")
+        parts.append("")
+
+    if patterns:
+        parts.append("## Applicable patterns\n")
+        for p in patterns:
+            parts.append(f"### {p.id} -- {p.name}")
+            parts.append(p.description)
+            parts.append("")
+
+    parts.append("\nNow produce the task decomposition per the rules above.\n")
+    return "\n".join(parts)
+
+
+def _parse_decompose_response(content: str) -> tuple[str, Any]:
+    """Classify + parse a decomposer response.
+
+    Returns:
+        ("spec_too_big", reason)
+        ("need_context", what)
+        ("tasks", list_of_dicts)
+        ("no_yaml", raw_content_preview)
+        ("yaml_error", error_message)
+    """
+    import re as _re
+    import yaml as _yaml
+
+    content = content or ""
+    stop_re = _re.compile(r"^(SPEC_TOO_BIG|NEED_CONTEXT)\s*:\s*(.*)$", _re.MULTILINE)
+    stop = stop_re.search(content)
+    if stop:
+        kind = stop.group(1).lower()
+        reason = stop.group(2).strip()
+        if kind == "spec_too_big":
+            return ("spec_too_big", reason)
+        return ("need_context", reason)
+
+    yaml_re = _re.compile(r"```yaml\s*\n(.*?)\n```", _re.DOTALL)
+    m = yaml_re.search(content)
+    if not m:
+        return ("no_yaml", content[:400])
+    yaml_text = m.group(1)
+    try:
+        data = _yaml.safe_load(yaml_text)
+    except Exception as e:
+        return ("yaml_error", f"{e}\n---raw---\n{yaml_text[:400]}")
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        return ("yaml_error", f"expected top-level 'tasks' list; got {type(data).__name__}")
+    return ("tasks", data["tasks"])
+
+
+def _validate_task_proposals(
+    proposals: list[dict],
+    parent_spec: str,
+    default_budget_files: int = 2,
+    default_budget_loc: int = 80,
+) -> tuple[list[dict], list[str]]:
+    """Shape-check + atomicity-check proposals. Returns (normalized, warnings)."""
+    normalized: list[dict] = []
+    warnings: list[str] = []
+    titles_seen: set[str] = set()
+
+    for idx, raw in enumerate(proposals):
+        if not isinstance(raw, dict):
+            warnings.append(f"task #{idx}: not a dict, skipped")
+            continue
+        title = (raw.get("title") or "").strip()
+        if not title:
+            warnings.append(f"task #{idx}: missing title, skipped")
+            continue
+        if title in titles_seen:
+            warnings.append(f"task #{idx}: duplicate title {title!r}, skipped")
+            continue
+        titles_seen.add(title)
+        files = raw.get("files_to_modify") or []
+        if not isinstance(files, list) or not files:
+            warnings.append(f"task {title!r}: files_to_modify empty, skipped")
+            continue
+        test = (raw.get("test_to_write") or "").strip()
+        if not test:
+            warnings.append(f"task {title!r}: test_to_write missing, skipped")
+            continue
+
+        budget_files = int(raw.get("size_budget_files", default_budget_files))
+        budget_loc = int(raw.get("size_budget_loc", default_budget_loc))
+        if len(files) > budget_files:
+            warnings.append(
+                f"task {title!r}: touches {len(files)} files, exceeds budget {budget_files}"
+            )
+
+        normalized.append({
+            "title": title,
+            "parent_spec": parent_spec,
+            "files_to_modify": list(files),
+            "test_to_write": test,
+            "context_reqs": raw.get("context_reqs") or [],
+            "context_specs": raw.get("context_specs") or [],
+            "context_patterns": raw.get("context_patterns") or [],
+            "context_sidecars": raw.get("context_sidecars") or [],
+            "context_files": raw.get("context_files") or [],
+            "size_budget_files": budget_files,
+            "size_budget_loc": budget_loc,
+            "depends_on_titles": list(raw.get("depends_on") or []),
+        })
+
+    for i, t in enumerate(normalized):
+        earlier_titles = {n["title"] for n in normalized[:i]}
+        bad = [d for d in t["depends_on_titles"] if d not in earlier_titles]
+        if bad:
+            warnings.append(
+                f"task {t['title']!r}: depends_on refs {bad} not found earlier"
+            )
+            t["depends_on_titles"] = [d for d in t["depends_on_titles"] if d in earlier_titles]
+
+    return normalized, warnings
+
+
+def decompose(
+    store: LoomStore,
+    spec_id: str,
+    *,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Propose a Task decomposition for a Specification. Does NOT persist.
+
+    Returns:
+        {spec_id, model, outcome, tasks, warnings, reason, elapsed_s,
+         input_tokens, output_tokens, raw_response}
+
+        outcome is one of: tasks | spec_too_big | need_context | no_yaml | yaml_error
+
+    Raises:
+        LookupError: spec_id not found.
+        RuntimeError: LLM transport failure.
+        ValueError: bad model spec.
+    """
+    spec = store.get_specification(spec_id)
+    if spec is None:
+        raise LookupError(f"Specification {spec_id} not found")
+    parent_req = store.get_requirement(spec.parent_req) if spec.parent_req else None
+    patterns = store.get_patterns_for_requirement(spec.parent_req) if spec.parent_req else []
+
+    model = model or _default_decomposer_model()
+    prompt = _build_decompose_prompt(spec, parent_req, patterns)
+    llm = _call_decomposer_llm(model, prompt)
+
+    outcome, payload = _parse_decompose_response(llm["content"])
+    base = {
+        "spec_id": spec_id,
+        "model": model,
+        "outcome": outcome,
+        "tasks": [],
+        "warnings": [],
+        "reason": None,
+        "elapsed_s": llm["elapsed_s"],
+        "input_tokens": llm["input_tokens"],
+        "output_tokens": llm["output_tokens"],
+        "raw_response": llm["content"],
+    }
+
+    if outcome == "tasks":
+        normalized, warnings = _validate_task_proposals(payload, parent_spec=spec_id)
+        base["tasks"] = normalized
+        base["warnings"] = warnings
+    elif outcome in ("spec_too_big", "need_context"):
+        base["reason"] = payload
+    else:
+        base["reason"] = payload if isinstance(payload, str) else str(payload)
+
+    return base
+
+
+def apply_decomposition(
+    store: LoomStore,
+    proposals: list[dict],
+    *,
+    created_by: str = "decomposer",
+) -> dict[str, Any]:
+    """Persist accepted task proposals to the store.
+
+    Maps each proposal's depends_on_titles to task IDs by creating earlier
+    tasks first.
+    """
+    created_by_title: dict[str, str] = {}
+    created: list[dict] = []
+    skipped: list[dict] = []
+
+    for p in proposals:
+        title = p["title"]
+        dep_titles = p.get("depends_on_titles") or []
+        dep_ids = [created_by_title[d] for d in dep_titles if d in created_by_title]
+        try:
+            result = task_add(
+                store,
+                parent_spec=p["parent_spec"],
+                title=title,
+                files_to_modify=p["files_to_modify"],
+                test_to_write=p["test_to_write"],
+                context_reqs=p.get("context_reqs") or None,
+                context_specs=p.get("context_specs") or None,
+                context_patterns=p.get("context_patterns") or None,
+                context_sidecars=p.get("context_sidecars") or None,
+                context_files=p.get("context_files") or None,
+                size_budget_files=p.get("size_budget_files", 2),
+                size_budget_loc=p.get("size_budget_loc", 80),
+                depends_on=dep_ids or None,
+                created_by=created_by,
+            )
+        except (LookupError, ValueError) as e:
+            skipped.append({"title": title, "error": str(e)})
+            continue
+        created_by_title[title] = result["id"]
+        created.append(result)
+
+    return {"created": created, "skipped": skipped}

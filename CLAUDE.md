@@ -39,8 +39,11 @@ loom/
 - **`src/docs.py`** — Functions that render the store into Markdown (`generate_requirements_doc`, `generate_test_spec_doc`) and compare embeddings (`check_conflicts`, `analyze_test_impact`). Includes implementation links and a traceability matrix in generated docs. Honors a `PRIVATE.md` allow/deny list and `public_mode`.
 - **`src/testspec.py`** — JSON-backed store for test specs (separate from ChromaDB). Data lives at `~/.openclaw/loom/<project>/.loom-specs.json`.
 - **`src/embedding.py`** — Ollama embedding wrapper with retries + process-local LRU cache (max 500). Shared by the CLI and (eventually) the MCP server; do not duplicate this logic anywhere else.
-- **`src/services.py`** — Shared logic between the CLI (`scripts/loom`) and MCP server. Each function returns plain, JSON-serializable data — no printing, no `sys.exit`, no argparse. The CLI's `cmd_*` functions call these and add pretty printing + exit codes. Grows as `cmd_*` are refactored; currently covers all CLI verbs: `status`, `query`, `list_requirements`, `trace`, `chain`, `coverage`, `doctor`, `conflicts`, `extract`, `check`, `link`, `detect_requirements`, `sync`, `supersede`, `set_status`, `refine`, `spec_add`/`spec_list`/`spec_link`, `pattern_add`/`pattern_list`/`pattern_apply`, `test_add`/`test_verify`/`test_list`/`test_generate`, `incomplete`. Service functions raise `LookupError` for "target not found" cases and `ValueError` for invalid input; callers decide how to surface them. Write services like `link` return `{linked: bool, ..., warnings: [...]}` rather than raising on partial failure — surfaces diagnostics even when nothing could be linked.
+- **`src/services.py`** — Shared logic between the CLI (`scripts/loom`) and MCP server. Each function returns plain, JSON-serializable data — no printing, no `sys.exit`, no argparse. The CLI's `cmd_*` functions call these and add pretty printing + exit codes. Covers every CLI verb: `status`, `query`, `list_requirements`, `trace`, `chain`, `coverage`, `doctor`, `conflicts`, `extract`, `check`, `link`, `detect_requirements`, `sync`, `supersede`, `set_status`, `refine`, `spec_add`/`spec_list`/`spec_link`, `pattern_add`/`pattern_list`/`pattern_apply`, `test_add`/`test_verify`/`test_list`/`test_generate`, `incomplete`, `cost`, `gaps`, `task_add`/`list`/`get`/`claim`/`release`/`complete`/`reject`/`build_prompt`, `decompose`/`apply_decomposition`. Service functions raise `LookupError` for "target not found" cases and `ValueError` for invalid input; callers decide how to surface them. Write services like `link` return `{linked: bool, ..., warnings: [...]}` rather than raising on partial failure.
+- **`src/conflict_verify.py`** — LLM-verified conflict detection. Embedding overlap surfaces candidates; an LLM pass confirms before `loom conflicts` reports.
 - **`scripts/loom`** — Argparse CLI. Each subcommand is a `cmd_*` function. Inserts `src/` on `sys.path` and imports `store` / `embedding` directly (not as a package).
+- **`scripts/loom_exec`** — Small-model task executor. Claims the next ready `Task`, assembles its context bundle, calls Ollama, extracts the code block, applies to a scratch copy, runs the grading test, and promotes on pass. Logs to `<project>/.exec-log.jsonl`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`.
+- **`hooks/loom_pretool.py`** — `PreToolUse` hook. Runs `loom context <file>` on Edit/Write/MultiEdit/NotebookEdit, injects linked reqs/specs/drift as a system-reminder, and appends `{ts, tool, file, latency_ms, bytes, reqs, specs, drift, fired, skipped}` to `<project>/.hook-log.jsonl`. `LOOM_HOOK_BLOCK_ON_DRIFT=1` turns drift into a hard block.
 
 ## CLI Commands (reference)
 
@@ -63,6 +66,12 @@ loom/
 | `refine` / `set-status` / `incomplete` | Elaborate & status-manage requirements | — |
 | `spec` / `specs` / `spec-link` | Specification management | `specs`: Yes |
 | `pattern` / `patterns` / `pattern-apply` | Shared design patterns | `patterns`: Yes |
+| `context <file>` | Pre-edit briefing (used by the PreToolUse hook) | Yes |
+| `cost` | Summarize hook log (p50/p95/p99 latency, overhead %) | Yes |
+| `task {add,list,show,claim,release,complete,reject,prompt}` | Atomic-task lifecycle | `list`/`show`: Yes |
+| `decompose SPEC-xxx [--apply]` | Propose atomic-task decomposition via Opus or Ollama | — |
+
+Separate entry point: **`scripts/loom_exec`** drives the task queue against a local model (`--next`, `--loop`, `--dry-run`, `--model`).
 
 ### Exit codes
 
@@ -80,7 +89,10 @@ All dataclasses use `to_dict`/`from_dict` for ChromaDB metadata (empty lists bec
 - **`Specification`**: detailed HOW for a `parent_req`. Status: draft/approved/implemented/verified/superseded.
 - **`Pattern`**: shared design standard applied across multiple requirements (`applies_to`).
 - **`Implementation`**: code chunk linked to requirements/specs with a content hash (used to detect drift).
+- **`Task`**: atomic work item. Fields: `title`, `files_to_modify`, `test_to_write`, `context_reqs`/`specs`/`patterns`/`sidecars`/`files`, `size_budget_files`, `size_budget_loc`, `depends_on`, `status` (pending/claimed/complete/rejected/escalated), `claimed_by`, `claimed_at`, `completed_at`, `rejected_reason`, `escalated_reason`, `created_by`, `parent_spec`. Store methods: `add_task`, `get_task`, `list_tasks`, `list_ready_tasks` (dep-complete filter), `update_task`, `set_task_status`, `search_tasks`.
 - **`TestSpec`** (testspec.py): steps/expected/automated flag, lives in JSON, not ChromaDB.
+
+Six ChromaDB collections total: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`.
 
 ## Generated Documentation
 
@@ -95,8 +107,9 @@ All dataclasses use `to_dict`/`from_dict` for ChromaDB metadata (empty lists bec
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install chromadb pytest
+.venv/bin/pip install chromadb pyyaml pytest
 ollama pull nomic-embed-text    # required for real embeddings
+ollama pull qwen3.5:latest      # recommended local executor for loom_exec
 ollama serve                    # must be running on localhost:11434
 ```
 

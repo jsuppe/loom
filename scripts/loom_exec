@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""
+Loom executor — run a Task against a local Ollama model.
+
+Default model: qwen3.5:latest (validated in experiments/gaps/FINDINGS.md).
+Override with $LOOM_EXECUTOR_MODEL.
+
+MVP scope (matches what the benchmarks validated):
+  - Single-turn prompt to Ollama
+  - Assumes the model outputs a ```python``` code block to APPEND to the
+    first file in task.files_to_modify (the benchmark pattern). Multi-file
+    diff application is a future extension.
+  - Stop-token and test-result classifier drives the reject/escalate path.
+
+Usage:
+    loom_exec <TASK-id>                 # run one task
+    loom_exec --next                    # claim and run the next ready task
+    loom_exec --next --loop             # drain the ready queue
+    loom_exec --dry-run <TASK-id>       # print prompt, don't call Ollama
+
+Environment:
+    LOOM_EXECUTOR_MODEL   Default: qwen3.5:latest
+    OLLAMA_URL            Default: http://localhost:11434
+    LOOM_PROJECT          Override project detection
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+SKILL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SKILL_DIR / "src"))
+
+from store import LoomStore  # noqa: E402
+import services  # noqa: E402
+
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+DEFAULT_MODEL = os.environ.get("LOOM_EXECUTOR_MODEL", "qwen3.5:latest")
+
+CODE_BLOCK_RE = re.compile(r"```python\s*\n(.*?)\n```", re.DOTALL)
+GENERIC_BLOCK_RE = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
+STOP_TOKEN_RE = re.compile(r"\b(TASK_REJECT|NEED_CONTEXT|DONE)\s*:\s*([^\n]+)", re.IGNORECASE)
+
+
+def get_project_name() -> str:
+    if env := os.environ.get("LOOM_PROJECT"):
+        return env
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).name
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return "default"
+
+
+def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
+    """Single-turn Ollama chat. Returns content + token counts + elapsed."""
+    payload = json.dumps({
+        "model": model,
+        "stream": False,
+        "think": False,
+        "messages": [{"role": "user", "content": prompt}],
+        "options": {"temperature": 0.0, "num_predict": 6000},
+    }).encode()
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    t0 = time.perf_counter()
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = json.loads(resp.read().decode())
+    elapsed = time.perf_counter() - t0
+    msg = body.get("message", {}) or {}
+    return {
+        "content": msg.get("content", ""),
+        "elapsed_s": round(elapsed, 2),
+        "input_tokens": body.get("prompt_eval_count", 0),
+        "output_tokens": body.get("eval_count", 0),
+    }
+
+
+def extract_code(content: str) -> str | None:
+    m = CODE_BLOCK_RE.search(content)
+    if m:
+        return m.group(1).rstrip() + "\n"
+    m = GENERIC_BLOCK_RE.search(content)
+    if m:
+        return m.group(1).rstrip() + "\n"
+    return None
+
+
+def classify_response(content: str) -> tuple[str, str]:
+    """Return (kind, detail) where kind is one of:
+        done, task_reject, need_context, no_code, unknown
+    """
+    stop_match = STOP_TOKEN_RE.search(content)
+    if stop_match:
+        kind = stop_match.group(1).lower()
+        detail = stop_match.group(2).strip()
+        if kind == "task_reject":
+            return "task_reject", detail
+        if kind == "need_context":
+            return "need_context", detail
+        if kind == "done":
+            # Still need to verify code was produced + tests pass.
+            pass
+
+    if not extract_code(content):
+        return "no_code", "response contained no code block"
+
+    return "done", "code block extracted"
+
+
+def _log_path(store: LoomStore) -> Path:
+    return store.data_dir / ".exec-log.jsonl"
+
+
+def _log_run(store: LoomStore, record: dict) -> None:
+    path = _log_path(store)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, separators=(",", ":")) + "\n")
+
+
+def apply_code(task: dict, code: str) -> Path:
+    """Append the model's code to the first file_to_modify.
+
+    Returns the modified file path. Simple MVP — the benchmark runners used
+    this exact pattern. Python's last-definition-wins means a redefined
+    function shadows the prior definition.
+    """
+    if not task["files_to_modify"]:
+        raise ValueError("task has no files_to_modify")
+    target = Path(task["files_to_modify"][0])
+    if not target.is_absolute():
+        target = SKILL_DIR / target
+    existing = target.read_text(encoding="utf-8") if target.exists() else ""
+    target.write_text(existing + "\n\n" + code, encoding="utf-8")
+    return target
+
+
+def run_grading(test_target: str, cwd: Path) -> tuple[int, int, str]:
+    """Run pytest against a single test target; return (passed, total, tail)."""
+    res = subprocess.run(
+        [sys.executable, "-m", "pytest", test_target, "-v", "--tb=line"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    combined = (res.stdout or "") + "\n" + (res.stderr or "")
+    passed = combined.count(" PASSED")
+    failed = combined.count(" FAILED")
+    errored = combined.count(" ERROR")
+    total = passed + failed + errored
+    tail = "\n".join(combined.splitlines()[-14:])
+    return passed, total, tail
+
+
+def execute_task(
+    store: LoomStore,
+    task_id: str,
+    model: str,
+    dry_run: bool = False,
+) -> dict:
+    """Run one task through claim -> prompt -> apply -> grade -> complete/reject."""
+    t0 = time.perf_counter()
+    task = services.task_get(store, task_id)
+    print(f"[exec] task {task_id}  status={task['status']}  "
+          f"title={task['title']!r}")
+
+    prompt = services.task_build_prompt(store, task_id)
+    print(f"[exec] prompt: {len(prompt)} chars")
+
+    if dry_run:
+        print("--- PROMPT (dry-run) ---")
+        print(prompt)
+        print("--- END PROMPT ---")
+        return {"task_id": task_id, "dry_run": True}
+
+    # Claim (transitions pending -> claimed).
+    if task["status"] == "pending":
+        services.task_claim(store, task_id, claimed_by=model)
+        print(f"[exec] claimed by {model}")
+    elif task["status"] != "claimed" or task["claimed_by"] != model:
+        return {
+            "task_id": task_id,
+            "error": f"task is in status={task['status']!r}, cannot execute",
+        }
+
+    # Scratch dir: copy the repo so we can apply + grade without polluting
+    # the working tree. On success we move changes back; on failure we throw
+    # the scratch away.
+    scratch = Path(tempfile.mkdtemp(prefix="loom_exec_"))
+    original_cwd = Path.cwd()
+    try:
+        shutil.copytree(SKILL_DIR / "src", scratch / "src")
+        shutil.copytree(SKILL_DIR / "tests", scratch / "tests")
+        # experiments/ might not exist; copy if present (for grading tests).
+        if (SKILL_DIR / "experiments").exists():
+            shutil.copytree(SKILL_DIR / "experiments", scratch / "experiments")
+
+        # Call the model.
+        print(f"[exec] calling {model}...")
+        try:
+            llm = call_ollama(model, prompt)
+        except Exception as e:
+            reason = f"ollama call failed: {e}"
+            services.task_reject(store, task_id, reason, escalate=True)
+            return {"task_id": task_id, "outcome": "llm_error", "reason": reason}
+
+        print(f"[exec] model: {llm['elapsed_s']:.1f}s  "
+              f"in={llm['input_tokens']}  out={llm['output_tokens']}")
+
+        kind, detail = classify_response(llm["content"])
+        if kind == "task_reject":
+            services.task_reject(store, task_id, f"TASK_REJECT: {detail}", escalate=False)
+            _log_run(store, {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "task_id": task_id, "model": model, "outcome": "task_reject",
+                "reason": detail, "elapsed_s": round(time.perf_counter() - t0, 2),
+                "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+            })
+            return {"task_id": task_id, "outcome": "task_reject", "reason": detail}
+
+        if kind == "need_context":
+            services.task_reject(store, task_id, f"NEED_CONTEXT: {detail}", escalate=True)
+            _log_run(store, {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "task_id": task_id, "model": model, "outcome": "need_context",
+                "reason": detail, "elapsed_s": round(time.perf_counter() - t0, 2),
+                "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+            })
+            return {"task_id": task_id, "outcome": "need_context", "reason": detail}
+
+        if kind == "no_code":
+            services.task_reject(store, task_id, "no code block in response", escalate=True)
+            _log_run(store, {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "task_id": task_id, "model": model, "outcome": "no_code",
+                "elapsed_s": round(time.perf_counter() - t0, 2),
+                "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+            })
+            return {"task_id": task_id, "outcome": "no_code"}
+
+        # Apply code to scratch copy of the target.
+        scratch_target = scratch / Path(task["files_to_modify"][0])
+        code = extract_code(llm["content"])
+        scratch_target.write_text(
+            scratch_target.read_text(encoding="utf-8") + "\n\n" + code,
+            encoding="utf-8",
+        )
+
+        # Grade in scratch.
+        passed, total, tail = run_grading(task["test_to_write"], cwd=scratch)
+        print(f"[exec] grading: {passed}/{total}")
+
+        if total > 0 and passed == total:
+            # Promote scratch changes back to the real working tree.
+            real_target = SKILL_DIR / task["files_to_modify"][0]
+            shutil.copy2(scratch_target, real_target)
+            services.task_complete(store, task_id)
+            _log_run(store, {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "task_id": task_id, "model": model, "outcome": "complete",
+                "passed": passed, "total": total,
+                "elapsed_s": round(time.perf_counter() - t0, 2),
+                "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+            })
+            return {
+                "task_id": task_id, "outcome": "complete",
+                "passed": passed, "total": total,
+                "modified_file": str(real_target),
+            }
+
+        # Test failures -> escalate so human/Opus can look.
+        reason = f"test fail: {passed}/{total}\n{tail}"
+        services.task_reject(store, task_id, reason, escalate=True)
+        _log_run(store, {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "task_id": task_id, "model": model, "outcome": "test_fail",
+            "passed": passed, "total": total,
+            "elapsed_s": round(time.perf_counter() - t0, 2),
+            "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+        })
+        return {
+            "task_id": task_id, "outcome": "test_fail",
+            "passed": passed, "total": total, "tail": tail,
+        }
+
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Loom executor")
+    parser.add_argument("task_id", nargs="?", help="Task id to execute")
+    parser.add_argument("--next", action="store_true",
+                        help="Auto-pick the next ready task from the queue")
+    parser.add_argument("--loop", action="store_true",
+                        help="With --next: drain the queue (stop on empty/failure)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print assembled prompt without calling the model")
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                        help=f"Ollama model (default: {DEFAULT_MODEL})")
+    parser.add_argument("-p", "--project", default=None, help="Project name")
+    args = parser.parse_args()
+
+    project = args.project or get_project_name()
+    store = LoomStore(project)
+
+    if args.next:
+        while True:
+            ready = services.task_list(store, ready_only=True)
+            if not ready:
+                print("[exec] no ready tasks")
+                break
+            task_id = ready[0]["id"]
+            result = execute_task(store, task_id, args.model, dry_run=args.dry_run)
+            print(f"[exec] result: {json.dumps(result)}")
+            if not args.loop:
+                break
+            if result.get("outcome") in {"task_reject", "need_context", "no_code",
+                                          "test_fail", "llm_error"}:
+                # Don't drain further after a failure — operator should look.
+                break
+        return 0
+
+    if not args.task_id:
+        parser.error("task_id required (or use --next)")
+
+    result = execute_task(store, args.task_id, args.model, dry_run=args.dry_run)
+    print(f"[exec] result: {json.dumps(result)}")
+    return 0 if result.get("outcome") in {"complete", None} else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

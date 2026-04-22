@@ -817,6 +817,95 @@ class TestContext:
         assert {r["id"] for r in data["requirements"]} == {"REQ-a", "REQ-b"}
 
 
+class TestCost:
+    def _write_log(self, store, entries):
+        import json as _json
+        path = store.data_dir / ".hook-log.jsonl"
+        with path.open("w", encoding="utf-8") as f:
+            for e in entries:
+                if isinstance(e, str):
+                    f.write(e + "\n")
+                else:
+                    f.write(_json.dumps(e) + "\n")
+        return path
+
+    def test_missing_log_returns_empty_stats(self, store):
+        data = services.cost(store)
+        assert data["exists"] is False
+        assert data["fires"] == 0
+        assert data["latency_ms"]["p50"] == 0.0
+
+    def test_empty_log_flags_exists_true(self, store):
+        (store.data_dir / ".hook-log.jsonl").write_text("", encoding="utf-8")
+        data = services.cost(store)
+        assert data["exists"] is True
+        assert data["fires"] == 0
+
+    def test_counts_fires_injections_and_overhead(self, store):
+        self._write_log(store, [
+            {"tool": "Edit", "fired": True, "latency_ms": 1.0, "bytes": 200,
+             "reqs": 2, "specs": 0, "drift": False, "skipped": None},
+            {"tool": "Edit", "fired": False, "latency_ms": 2.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "no_link"},
+            {"tool": "Write", "fired": True, "latency_ms": 3.0, "bytes": 100,
+             "reqs": 1, "specs": 0, "drift": True, "skipped": None},
+            {"tool": "Write", "fired": False, "latency_ms": 5.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "cli_error"},
+        ])
+        data = services.cost(store)
+        assert data["fires"] == 4
+        assert data["injections"] == 2
+        assert data["empty_fires"] == 2
+        assert data["overhead_pct"] == 50.0
+        assert data["drift_events"] == 1
+        assert data["by_tool"] == {"Edit": 2, "Write": 2}
+        assert data["skipped"] == {"no_link": 1, "cli_error": 1}
+        assert data["bytes"]["total"] == 300
+        # Token estimate is bytes / 4 (integer total, rounded avg).
+        assert data["tokens_est"]["total"] == 75
+        assert data["latency_ms"]["max"] == 5.0
+        # With 4 entries, p50 ≈ the 2nd-smallest (2.0); p99 ≈ max (5.0).
+        assert data["latency_ms"]["p50"] == 2.0
+        assert data["latency_ms"]["p99"] == 5.0
+
+    def test_tail_limits_window(self, store):
+        entries = [
+            {"tool": "Edit", "fired": True, "latency_ms": float(i), "bytes": 10,
+             "reqs": 1, "specs": 0, "drift": False, "skipped": None}
+            for i in range(10)
+        ]
+        self._write_log(store, entries)
+        data = services.cost(store, tail=3)
+        assert data["fires"] == 3
+        # Last 3 entries have latencies 7,8,9.
+        assert data["latency_ms"]["max"] == 9.0
+
+    def test_malformed_lines_are_skipped(self, store):
+        self._write_log(store, [
+            {"tool": "Edit", "fired": True, "latency_ms": 1.0, "bytes": 40,
+             "reqs": 1, "specs": 0, "drift": False, "skipped": None},
+            "this is not json",
+            "",
+            {"tool": "Edit", "fired": False, "latency_ms": 2.0, "bytes": 0,
+             "reqs": 0, "specs": 0, "drift": False, "skipped": "no_link"},
+        ])
+        data = services.cost(store)
+        assert data["fires"] == 2
+        assert data["injections"] == 1
+
+    def test_log_path_override(self, store, tmp_path):
+        import json as _json
+        alt = tmp_path / "elsewhere.jsonl"
+        alt.write_text(_json.dumps({
+            "tool": "Edit", "fired": True, "latency_ms": 7.0, "bytes": 80,
+            "reqs": 1, "specs": 0, "drift": False, "skipped": None,
+        }) + "\n", encoding="utf-8")
+        data = services.cost(store, log_path=alt)
+        assert data["log_path"] == str(alt)
+        assert data["fires"] == 1
+        assert data["bytes"]["total"] == 80
+
+
 class TestIncomplete:
     def test_empty_store(self, store):
         assert services.incomplete(store) == []
@@ -827,3 +916,562 @@ class TestIncomplete:
         assert len(incomplete) == 1
         assert "elaboration" in incomplete[0]["missing"]
         assert "acceptance criteria" in incomplete[0]["missing"]
+
+
+class TestGaps:
+    """Tests for services.gaps()."""
+
+    def _mk_req(self, store, req_id, value="placeholder", elaboration=None, criteria=None, fake_embedding=None):
+        """Create a requirement with optional elaboration and criteria."""
+        req = Requirement(
+            id=req_id,
+            domain="behavior",
+            value=value,
+            source_msg_id="m1",
+            source_session="s1",
+            timestamp="2026-01-01T00:00:00Z",
+            elaboration=elaboration,
+            acceptance_criteria=criteria,
+        )
+        store.add_requirement(req, fake_embedding or [0.1] * 768)
+        return req
+
+    def _mk_impl(self, store, impl_id_file, impl_id_lines, satisfies_req_ids, fake_embedding=None):
+        """Create an implementation with satisfies list."""
+        from store import generate_impl_id
+        impl = Implementation(
+            id=generate_impl_id(impl_id_file, impl_id_lines),
+            file=impl_id_file,
+            lines=impl_id_lines,
+            content="pass\n",
+            content_hash="h",
+            satisfies=[{"req_id": r} for r in satisfies_req_ids],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding or [0.1] * 768)
+        return impl
+
+    def test_empty_store_returns_empty_list(self, store):
+        assert services.gaps(store) == []
+
+    def test_missing_criteria_surfaced(self, store, fake_embedding):
+        self._mk_req(store, "REQ-nc", elaboration="some elaboration text", fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        matches = [g for g in gaps if g["entity_id"] == "REQ-nc"]
+        assert any(g["type"] == "missing_criteria" for g in matches), \
+            f"Expected missing_criteria gap for REQ-nc; got {matches}"
+
+    def test_missing_elaboration_surfaced(self, store, fake_embedding):
+        self._mk_req(store, "REQ-ne", criteria=["criterion one"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        matches = [g for g in gaps if g["entity_id"] == "REQ-ne"]
+        assert any(g["type"] == "missing_elaboration" for g in matches), \
+            f"Expected missing_elaboration gap for REQ-ne; got {matches}"
+
+    def test_orphan_impl_surfaced(self, store, fake_embedding):
+        self._mk_impl(store, "/tmp/a.py", "1-5", ["REQ-does-not-exist"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        assert any(g["type"] == "orphan_impl" for g in gaps), \
+            f"Expected orphan_impl gap; got {gaps}"
+
+    def test_impl_with_superseded_req_is_orphan(self, store, fake_embedding):
+        self._mk_req(store, "REQ-old", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        store.supersede_requirement("REQ-old")
+        self._mk_impl(store, "/tmp/b.py", "1-5", ["REQ-old"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        # An impl whose only linked req is superseded is orphan-adjacent.
+        assert any(g["type"] == "orphan_impl" for g in gaps), \
+            f"Expected orphan_impl gap for superseded-only impl; got {gaps}"
+
+    def test_impl_with_any_live_req_is_not_orphan(self, store, fake_embedding):
+        self._mk_req(store, "REQ-live", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        self._mk_req(store, "REQ-dead", elaboration="x", criteria=["c"], fake_embedding=fake_embedding)
+        store.supersede_requirement("REQ-dead")
+        self._mk_impl(store, "/tmp/c.py", "1-5", ["REQ-live", "REQ-dead"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        orphans = [g for g in gaps if g["type"] == "orphan_impl"]
+        assert orphans == [], \
+            f"Impl with at least one live linked req should not be orphan; got {orphans}"
+
+    def test_uniform_shape(self, store, fake_embedding):
+        self._mk_req(store, "REQ-a", fake_embedding=fake_embedding)
+        self._mk_impl(store, "/tmp/d.py", "1-5", ["REQ-missing"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        assert gaps, "expected at least one gap"
+        required = {"type", "entity_id", "description", "blocks", "suggested_action"}
+        for g in gaps:
+            missing_keys = required - set(g.keys())
+            assert not missing_keys, f"gap missing keys {missing_keys}: {g}"
+            for k in required:
+                assert g[k] is not None, f"field {k} was None in gap {g}"
+            assert isinstance(g["blocks"], list), f"blocks must be list; got {type(g['blocks'])}"
+            assert isinstance(g["suggested_action"], str), "suggested_action must be string"
+            assert g["suggested_action"].strip(), "suggested_action must be non-empty"
+
+    def test_ordering_by_priority(self, store, fake_embedding):
+        # Two reqs: one needs criteria (higher priority), one needs elaboration.
+        self._mk_req(store, "REQ-crit", elaboration="has elab", fake_embedding=fake_embedding)   # missing_criteria
+        self._mk_req(store, "REQ-elab", criteria=["c1"], fake_embedding=fake_embedding)          # missing_elaboration
+        self._mk_impl(store, "/tmp/e.py", "1-5", ["REQ-absent"], fake_embedding=fake_embedding)  # orphan_impl
+        gaps = services.gaps(store)
+        types_in_order = [g["type"] for g in gaps]
+        # Every missing_criteria entry must appear before any missing_elaboration entry.
+        if "missing_criteria" in types_in_order and "missing_elaboration" in types_in_order:
+            assert types_in_order.index("missing_criteria") < types_in_order.index("missing_elaboration")
+        # Every missing_elaboration must appear before any orphan_impl.
+        if "missing_elaboration" in types_in_order and "orphan_impl" in types_in_order:
+            assert types_in_order.index("missing_elaboration") < types_in_order.index("orphan_impl")
+
+    def test_tie_break_by_entity_id(self, store, fake_embedding):
+        self._mk_req(store, "REQ-b", elaboration="e", fake_embedding=fake_embedding)  # missing_criteria
+        self._mk_req(store, "REQ-a", elaboration="e", fake_embedding=fake_embedding)  # missing_criteria
+        gaps = services.gaps(store)
+        mc = [g for g in gaps if g["type"] == "missing_criteria"]
+        assert [g["entity_id"] for g in mc] == sorted(g["entity_id"] for g in mc), \
+            "tie-break should be ascending entity_id"
+
+    def test_type_filter(self, store, fake_embedding):
+        self._mk_req(store, "REQ-x", fake_embedding=fake_embedding)  # both elab AND criteria missing
+        self._mk_impl(store, "/tmp/f.py", "1-5", ["REQ-absent"], fake_embedding=fake_embedding)  # orphan_impl
+        only_orphan = services.gaps(store, types=["orphan_impl"])
+        assert all(g["type"] == "orphan_impl" for g in only_orphan), \
+            f"types filter leaked other types: {only_orphan}"
+
+    def test_limit_cap(self, store, fake_embedding):
+        for i in range(5):
+            self._mk_req(store, f"REQ-{i:02d}", elaboration="e", fake_embedding=fake_embedding)
+        gaps = services.gaps(store, limit=3)
+        assert len(gaps) <= 3
+
+    def test_superseded_reqs_excluded_from_req_level_gaps(self, store, fake_embedding):
+        self._mk_req(store, "REQ-sup", fake_embedding=fake_embedding)  # both elab + criteria missing
+        store.supersede_requirement("REQ-sup")
+        gaps = services.gaps(store)
+        bad = [g for g in gaps
+               if g["entity_id"] == "REQ-sup"
+               and g["type"] in {"missing_criteria", "missing_elaboration"}]
+        assert bad == [], f"superseded reqs must not surface as missing_* gaps; got {bad}"
+
+    def test_complete_reqs_do_not_surface(self, store, fake_embedding):
+        self._mk_req(store, "REQ-ok", elaboration="fully elaborated", criteria=["c1", "c2"], fake_embedding=fake_embedding)
+        gaps = services.gaps(store)
+        related = [g for g in gaps if g["entity_id"] == "REQ-ok"]
+        assert related == [], f"complete req should not appear in gaps; got {related}"
+
+
+def _mk_spec(store, spec_id, parent_req, fake_embedding):
+    from store import Specification
+    spec = Specification(
+        id=spec_id, parent_req=parent_req,
+        description=f"spec for {parent_req}",
+        timestamp="2026-01-01T00:00:00Z",
+        acceptance_criteria=["c1"],
+    )
+    store.add_specification(spec, fake_embedding)
+    return spec
+
+
+class TestTaskAdd:
+    def test_basic_task_created(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "must X", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="implement X",
+            files_to_modify=["src/a.py"],
+            test_to_write="tests/test_a.py::TestX",
+        )
+        assert result["id"].startswith("TASK-")
+        assert result["status"] == "pending"
+        assert result["parent_spec"] == "SPEC-a"
+
+    def test_missing_spec_raises(self, store):
+        with pytest.raises(LookupError):
+            services.task_add(
+                store, parent_spec="SPEC-ghost", title="x",
+                files_to_modify=["a"], test_to_write="t::T",
+            )
+
+    def test_empty_title_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="",
+                files_to_modify=["a"], test_to_write="t::T",
+            )
+
+    def test_empty_files_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="t",
+                files_to_modify=[], test_to_write="t::T",
+            )
+
+    def test_unknown_dep_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_add(
+                store, parent_spec="SPEC-a", title="t",
+                files_to_modify=["a"], test_to_write="t::T",
+                depends_on=["TASK-ghost"],
+            )
+
+
+class TestTaskLifecycle:
+    def _seed(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="do thing",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+        )
+        return result["id"]
+
+    def test_claim_then_complete(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="qwen3.5:latest")
+        t = services.task_get(store, tid)
+        assert t["status"] == "claimed"
+        assert t["claimed_by"] == "qwen3.5:latest"
+        services.task_complete(store, tid, impl_ids=["IMPL-xyz"])
+        t = services.task_get(store, tid)
+        assert t["status"] == "complete"
+        assert t["completed_at"] is not None
+
+    def test_cannot_claim_claimed(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        with pytest.raises(ValueError):
+            services.task_claim(store, tid, claimed_by="b")
+
+    def test_release_returns_to_pending(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_release(store, tid)
+        t = services.task_get(store, tid)
+        assert t["status"] == "pending"
+        assert t["claimed_by"] is None
+
+    def test_reject_non_escalated(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_reject(store, tid, reason="too broad")
+        t = services.task_get(store, tid)
+        assert t["status"] == "rejected"
+        assert t["rejection_reason"] == "too broad"
+        assert t["escalation_count"] == 0
+
+    def test_reject_escalated(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        services.task_reject(store, tid, reason="NEED_CONTEXT: foo", escalate=True)
+        t = services.task_get(store, tid)
+        assert t["status"] == "escalated"
+        assert t["escalation_count"] == 1
+
+    def test_reject_requires_reason(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        services.task_claim(store, tid, claimed_by="a")
+        with pytest.raises(ValueError):
+            services.task_reject(store, tid, reason="")
+
+    def test_complete_from_non_claimed_raises(self, store, fake_embedding):
+        tid = self._seed(store, fake_embedding)
+        with pytest.raises(ValueError):
+            services.task_complete(store, tid)
+
+    def test_task_get_missing(self, store):
+        with pytest.raises(LookupError):
+            services.task_get(store, "TASK-404")
+
+
+class TestTaskList:
+    def test_ready_only_excludes_blocked(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        t1 = services.task_add(store, parent_spec="SPEC-a", title="first",
+                               files_to_modify=["a"], test_to_write="t::T")
+        t2 = services.task_add(store, parent_spec="SPEC-a", title="second",
+                               files_to_modify=["a"], test_to_write="t::T",
+                               depends_on=[t1["id"]])
+
+        ready = services.task_list(store, ready_only=True)
+        assert {t["id"] for t in ready} == {t1["id"]}
+
+        services.task_claim(store, t1["id"], claimed_by="w")
+        services.task_complete(store, t1["id"])
+
+        ready = services.task_list(store, ready_only=True)
+        assert {t["id"] for t in ready} == {t2["id"]}
+
+    def test_filter_by_status(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        a = services.task_add(store, parent_spec="SPEC-a", title="a",
+                              files_to_modify=["x"], test_to_write="t::T")
+        b = services.task_add(store, parent_spec="SPEC-a", title="b",
+                              files_to_modify=["x"], test_to_write="t::T")
+        services.task_claim(store, a["id"], claimed_by="w")
+        pending = services.task_list(store, status="pending")
+        assert {t["id"] for t in pending} == {b["id"]}
+
+
+class TestTaskBuildPrompt:
+    def test_prompt_assembles_context(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        store.update_requirement("REQ-a", {
+            "elaboration": "how to do X",
+            "acceptance_criteria": ["criterion1"],
+        })
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="do thing",
+            files_to_modify=["src/a.py"], test_to_write="t::T",
+            context_reqs=["REQ-a"], context_specs=["SPEC-a"],
+        )
+        prompt = services.task_build_prompt(store, result["id"])
+        assert "# Task" in prompt
+        assert "REQ-a" in prompt
+        assert "SPEC-a" in prompt
+        assert "how to do X" in prompt
+        assert "criterion1" in prompt
+        assert "Output contract" in prompt
+
+    def test_prompt_missing_refs_are_skipped_silently(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        result = services.task_add(
+            store, parent_spec="SPEC-a", title="x",
+            files_to_modify=["a"], test_to_write="t::T",
+            context_reqs=["REQ-ghost", "REQ-a"],
+        )
+        prompt = services.task_build_prompt(store, result["id"])
+        assert "REQ-a" in prompt
+
+    def test_prompt_for_missing_task_raises(self, store):
+        with pytest.raises(LookupError):
+            services.task_build_prompt(store, "TASK-404")
+
+
+class TestDecomposeParsing:
+    def test_spec_too_big_stop_token(self):
+        out, data = services._parse_decompose_response(
+            "SPEC_TOO_BIG: mixes auth and UI concerns"
+        )
+        assert out == "spec_too_big"
+        assert "auth" in data
+
+    def test_need_context_stop_token(self):
+        out, data = services._parse_decompose_response(
+            "NEED_CONTEXT: no acceptance criteria on parent req"
+        )
+        assert out == "need_context"
+
+    def test_yaml_tasks_parsed(self):
+        resp = (
+            "```yaml\n"
+            "tasks:\n"
+            "  - title: t1\n"
+            "    files_to_modify: [src/a.py]\n"
+            "    test_to_write: tests/a.py::T\n"
+            "```"
+        )
+        out, data = services._parse_decompose_response(resp)
+        assert out == "tasks"
+        assert len(data) == 1
+        assert data[0]["title"] == "t1"
+
+    def test_no_yaml_block(self):
+        out, _ = services._parse_decompose_response("just prose, no yaml")
+        assert out == "no_yaml"
+
+    def test_malformed_yaml(self):
+        out, _ = services._parse_decompose_response("```yaml\n::::: bad\n```")
+        # Malformed YAML may either fail to parse (yaml_error) or produce a
+        # non-dict scalar (also yaml_error per our strict top-level check).
+        assert out == "yaml_error"
+
+
+class TestValidateProposals:
+    def test_minimum_fields_accepted(self):
+        proposals = [{
+            "title": "t1",
+            "files_to_modify": ["src/a.py"],
+            "test_to_write": "tests/a.py::T",
+        }]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 1
+        assert norm[0]["parent_spec"] == "SPEC-a"
+        assert norm[0]["size_budget_files"] == 2   # default
+        assert norm[0]["size_budget_loc"] == 80    # default
+        assert warns == []
+
+    def test_missing_title_skipped(self):
+        norm, warns = services._validate_task_proposals(
+            [{"files_to_modify": ["a"], "test_to_write": "t::T"}],
+            parent_spec="SPEC-a",
+        )
+        assert norm == []
+        assert any("title" in w for w in warns)
+
+    def test_duplicate_title_skipped(self):
+        proposals = [
+            {"title": "dup", "files_to_modify": ["a"], "test_to_write": "t::T"},
+            {"title": "dup", "files_to_modify": ["b"], "test_to_write": "t::T"},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 1
+        assert any("duplicate" in w for w in warns)
+
+    def test_empty_files_skipped(self):
+        norm, warns = services._validate_task_proposals(
+            [{"title": "t", "files_to_modify": [], "test_to_write": "t::T"}],
+            parent_spec="SPEC-a",
+        )
+        assert norm == []
+
+    def test_atomicity_warning_for_oversize_files(self):
+        norm, warns = services._validate_task_proposals(
+            [{"title": "huge", "files_to_modify": ["a", "b", "c", "d"],
+              "test_to_write": "t::T", "size_budget_files": 2}],
+            parent_spec="SPEC-a",
+        )
+        # Still normalized (we warn, don't drop — let the caller decide).
+        assert len(norm) == 1
+        assert any("exceeds budget" in w for w in warns)
+
+    def test_unknown_deps_are_dropped_with_warning(self):
+        proposals = [
+            {"title": "a", "files_to_modify": ["x"], "test_to_write": "t::T"},
+            {"title": "b", "files_to_modify": ["x"], "test_to_write": "t::T",
+             "depends_on": ["a", "ghost"]},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert len(norm) == 2
+        assert norm[1]["depends_on_titles"] == ["a"]  # ghost dropped
+        assert any("not found" in w for w in warns)
+
+    def test_forward_dep_treated_as_unknown(self):
+        # Deps must reference EARLIER tasks; forward references dropped.
+        proposals = [
+            {"title": "a", "files_to_modify": ["x"], "test_to_write": "t::T",
+             "depends_on": ["b"]},   # forward ref to later task
+            {"title": "b", "files_to_modify": ["x"], "test_to_write": "t::T"},
+        ]
+        norm, warns = services._validate_task_proposals(proposals, parent_spec="SPEC-a")
+        assert norm[0]["depends_on_titles"] == []
+        assert any("not found" in w for w in warns)
+
+
+class TestApplyDecomposition:
+    def test_applies_tasks_and_wires_deps(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        proposals = [
+            {"title": "t1", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/a.py"], "test_to_write": "tests/a.py::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+            {"title": "t2", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/b.py"], "test_to_write": "tests/b.py::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": ["t1"]},
+        ]
+        result = services.apply_decomposition(store, proposals)
+        assert len(result["created"]) == 2
+        assert result["skipped"] == []
+        # t2 should have t1's id as its dependency
+        t1_id = result["created"][0]["id"]
+        assert result["created"][1]["depends_on"] == [t1_id]
+
+    def test_skips_bad_proposal_without_halting(self, store, fake_embedding):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+        proposals = [
+            {"title": "good", "parent_spec": "SPEC-a",
+             "files_to_modify": ["src/a.py"], "test_to_write": "t::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+            {"title": "bad", "parent_spec": "SPEC-ghost",  # parent missing
+             "files_to_modify": ["src/b.py"], "test_to_write": "t::T",
+             "size_budget_files": 2, "size_budget_loc": 80,
+             "depends_on_titles": []},
+        ]
+        result = services.apply_decomposition(store, proposals)
+        assert len(result["created"]) == 1
+        assert len(result["skipped"]) == 1
+        assert result["skipped"][0]["title"] == "bad"
+
+
+class TestDecomposeService:
+    def test_missing_spec_raises(self, store):
+        with pytest.raises(LookupError):
+            services.decompose(store, "SPEC-ghost")
+
+    def test_dispatches_to_model_and_returns_parsed(
+        self, store, fake_embedding, monkeypatch
+    ):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+
+        # Stub the LLM call to avoid any network traffic.
+        fake = {
+            "content": (
+                "```yaml\n"
+                "tasks:\n"
+                "  - title: t1\n"
+                "    files_to_modify: [src/a.py]\n"
+                "    test_to_write: tests/a.py::T\n"
+                "```"
+            ),
+            "elapsed_s": 0.1,
+            "input_tokens": 500,
+            "output_tokens": 50,
+        }
+        monkeypatch.setattr(services, "_call_decomposer_llm",
+                            lambda model, prompt, **kw: fake)
+
+        result = services.decompose(store, "SPEC-a", model="ollama:fake-model")
+        assert result["outcome"] == "tasks"
+        assert len(result["tasks"]) == 1
+        assert result["tasks"][0]["title"] == "t1"
+        assert result["model"] == "ollama:fake-model"
+        assert result["input_tokens"] == 500
+
+    def test_propagates_spec_too_big(
+        self, store, fake_embedding, monkeypatch
+    ):
+        _mk_req(store, "REQ-a", "behavior", "v", fake_embedding)
+        _mk_spec(store, "SPEC-a", "REQ-a", fake_embedding)
+
+        fake = {
+            "content": "SPEC_TOO_BIG: combines auth and UI",
+            "elapsed_s": 0.1, "input_tokens": 500, "output_tokens": 10,
+        }
+        monkeypatch.setattr(services, "_call_decomposer_llm",
+                            lambda model, prompt, **kw: fake)
+
+        result = services.decompose(store, "SPEC-a", model="ollama:fake")
+        assert result["outcome"] == "spec_too_big"
+        assert "auth" in result["reason"]
+        assert result["tasks"] == []
+
+
+class TestDefaultModelSelection:
+    def test_env_override_wins(self, monkeypatch):
+        monkeypatch.setenv("LOOM_DECOMPOSER_MODEL", "ollama:custom")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+        assert services._default_decomposer_model() == "ollama:custom"
+
+    def test_anthropic_default_when_key_set(self, monkeypatch):
+        monkeypatch.delenv("LOOM_DECOMPOSER_MODEL", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+        assert services._default_decomposer_model() == "anthropic:claude-opus-4-7"
+
+    def test_ollama_fallback(self, monkeypatch):
+        monkeypatch.delenv("LOOM_DECOMPOSER_MODEL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        assert services._default_decomposer_model() == "ollama:qwen2.5-coder:32b"

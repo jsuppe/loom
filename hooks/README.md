@@ -69,6 +69,26 @@ path (since `CLAUDE_PROJECT_DIR` expands per-project):
 | `LOOM_PROJECT` | auto-detected from git | Override project name |
 | `LOOM_HOOK_BLOCK_ON_DRIFT` | `0` | Set to `1` to fail the tool call on drift |
 | `LOOM_HOOK_DEBUG` | `0` | Set to `1` to log hook activity to stderr |
+| `LOOM_HOOK_LOG` | `~/.openclaw/loom/<project>/.hook-log.jsonl` | JSONL activity log. Set to empty string to disable. |
+
+### Measuring cost
+
+Every fire appends a JSONL line with `{ts, tool, file, latency_ms, bytes,
+reqs, specs, drift, fired, skipped}`. Read it back with `loom cost`:
+
+```
+$ loom cost
+Fires:         127
+  injected:    45 (35.4%)
+  empty:       82 (64.6% overhead)
+Latency (ms):  p50=1.4  p95=5.1  p99=12.0  max=61.0
+Injected:      7823 bytes total, 61.6 avg  (~1955 tokens total, ~15.4 avg)
+```
+
+Use `loom cost --json` for machine output and `--tail N` for a recent
+window. `overhead_pct` = fires where the hook ran but had nothing to inject
+(the file isn't linked to any requirement). High overhead means either the
+file-to-req coverage is low, or the hook should narrow its matcher.
 
 ### What the agent sees
 

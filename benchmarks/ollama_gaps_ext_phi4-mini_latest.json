@@ -1,0 +1,38 @@
+{
+  "model": "phi4-mini:latest",
+  "results": [
+    {
+      "model": "phi4-mini:latest",
+      "passed": 1,
+      "total": 20,
+      "extracted": true,
+      "elapsed_s": 11.82,
+      "input_tokens": 22346,
+      "output_tokens": 1403,
+      "scratch_dir": null,
+      "tail": "FAILED experiments/gaps/test_gaps_extend.py::test_type_filter - UnboundLocalE...\nFAILED experiments/gaps/test_gaps_extend.py::test_limit_cap - UnboundLocalErr...\nFAILED experiments/gaps/test_gaps_extend.py::test_superseded_reqs_excluded_from_req_level_gaps\nFAILED experiments/gaps/test_gaps_extend.py::test_empty_store_returns_empty_list\nFAILED experiments/gaps/test_gaps_extend.py::test_complete_reqs_do_not_surface\nFAILED experiments/gaps/test_gaps_extend.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_exists - NameErr...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_not_surfaced_without_impl\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_priority_before_missing_criteria\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_shape_matches_uniform\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_filter - Unbound...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_with_multiple_impls\n======================== 19 failed, 1 passed in 1.93s =========================\n"
+    },
+    {
+      "model": "phi4-mini:latest",
+      "passed": 1,
+      "total": 20,
+      "extracted": true,
+      "elapsed_s": 3.6,
+      "input_tokens": 22346,
+      "output_tokens": 672,
+      "scratch_dir": null,
+      "tail": "FAILED experiments/gaps/test_gaps_extend.py::test_type_filter - TypeError: 'N...\nFAILED experiments/gaps/test_gaps_extend.py::test_limit_cap - TypeError: obje...\nFAILED experiments/gaps/test_gaps_extend.py::test_superseded_reqs_excluded_from_req_level_gaps\nFAILED experiments/gaps/test_gaps_extend.py::test_empty_store_returns_empty_list\nFAILED experiments/gaps/test_gaps_extend.py::test_complete_reqs_do_not_surface\nFAILED experiments/gaps/test_gaps_extend.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_exists - TypeErr...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_not_surfaced_without_impl\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_priority_before_missing_criteria\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_shape_matches_uniform\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_filter - assert ...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_with_multiple_impls\n======================== 19 failed, 1 passed in 1.85s =========================\n"
+    },
+    {
+      "model": "phi4-mini:latest",
+      "passed": 1,
+      "total": 20,
+      "extracted": true,
+      "elapsed_s": 3.64,
+      "input_tokens": 22346,
+      "output_tokens": 672,
+      "scratch_dir": null,
+      "tail": "FAILED experiments/gaps/test_gaps_extend.py::test_type_filter - TypeError: 'N...\nFAILED experiments/gaps/test_gaps_extend.py::test_limit_cap - TypeError: obje...\nFAILED experiments/gaps/test_gaps_extend.py::test_superseded_reqs_excluded_from_req_level_gaps\nFAILED experiments/gaps/test_gaps_extend.py::test_empty_store_returns_empty_list\nFAILED experiments/gaps/test_gaps_extend.py::test_complete_reqs_do_not_surface\nFAILED experiments/gaps/test_gaps_extend.py::test_impl_with_superseded_req_is_orphan\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_exists - TypeErr...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_not_surfaced_without_impl\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_priority_before_missing_criteria\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_shape_matches_uniform\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_type_filter - assert ...\nFAILED experiments/gaps/test_gaps_extend.py::test_drift_with_multiple_impls\n======================== 19 failed, 1 passed in 1.82s =========================\n"
+    }
+  ]
+}
