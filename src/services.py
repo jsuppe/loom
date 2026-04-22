@@ -639,12 +639,19 @@ def init(
     project: str,
     force: bool = False,
     ollama_url: str = "http://localhost:11434",
+    template: str | None = None,
+    variables: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Onboard an existing target repo: write .loom-config.json + health check.
 
+    If ``template`` is given, also scaffold files from that template into
+    ``target_dir`` before the health-check runs. Files already present
+    in the target are skipped (never overwritten) unless ``force=True``.
+
     Pure function — does not touch the Loom store (caller's responsibility
     if they want to create one). Target-side side effects: writes the
-    config file, and creates ``tests/`` if missing.
+    config file, creates ``tests/`` if missing, and (when ``template`` is
+    set) writes template files.
 
     Result shape::
 
@@ -653,15 +660,11 @@ def init(
           "project": str,
           "target_dir": str,
           "config": {...},              # the dict that was written
-          "created_config": bool,       # False if file already existed + !force
+          "created_config": bool,
           "created_tests_dir": bool,
-          "checks": {
-            "ollama":         {"ok": bool, "error": str | None},
-            "embedding_model":{"ok": bool, "name": str},
-            "executor_model": {"ok": bool, "name": str},
-            "pytest":         {"ok": bool, "where": "requirements.txt"|"pyproject.toml"|null},
-            "tests_dir":      {"ok": bool, "path": str, "existed": bool},
-          },
+          "template":       str | None, # the template applied, if any
+          "template_files": {"written": [...], "skipped": [...]},  # None if no template
+          "checks": {...},
           "warnings": [str],
           "next_steps": [str],
         }
@@ -669,6 +672,8 @@ def init(
     Raises:
         NotADirectoryError: target_dir doesn't exist.
         FileExistsError: .loom-config.json already exists and force=False.
+        LookupError: template name doesn't exist.
+        ValueError: template declares variables not provided and without defaults.
     """
     import urllib.request
     import urllib.error
@@ -683,6 +688,24 @@ def init(
     if cfg_path.exists() and not force:
         raise FileExistsError(
             f"{cfg_path} already exists (pass force=True to overwrite)"
+        )
+
+    # Template rendering, if requested. Runs BEFORE config write so the
+    # user sees a coherent "empty dir → scaffold → config" ordering in
+    # any output logs.
+    template_result: dict[str, Any] | None = None
+    if template:
+        import templates as _templates
+        tmpl = _templates.load_template(template)
+        provided = dict(variables or {})
+        missing = _templates.required_variables(tmpl, provided)
+        if missing:
+            names = ", ".join(v.name for v in missing)
+            raise ValueError(
+                f"template {template!r} requires variables without defaults: {names}"
+            )
+        template_result = _templates.render_template(
+            tmpl, td, provided, overwrite=force,
         )
 
     # Build the config dict. Start from defaults, override the project name.
@@ -799,6 +822,8 @@ def init(
         "config": cfg,
         "created_config": True,
         "created_tests_dir": not existed,
+        "template": template,
+        "template_files": template_result,
         "checks": checks,
         "warnings": warnings,
         "next_steps": next_steps,

@@ -72,10 +72,15 @@ repo." Validated against agentforge in
 - [x] **0.5f Config precedence** — CLI flag > env > config > built-in
       default. `src/config.py` owns the resolution.
 
-**Next (Interpretation B, deferred):** `loom init --template <name>`
-scaffolds a new project from a customizable template (no baked-in
-opinionated stack). Template registry pattern so users can author
-templates without forking Loom.
+- [x] **0.5g Templates (Interpretation B)** — `loom init --template
+      <name>` scaffolds files from a template. Template registry:
+      `~/.loom/templates/<name>/` wins over `<loom-repo>/templates/
+      <name>/`. One starter ships (`python-minimal`) as a reference;
+      users are expected to fork it. Variables declared in
+      `manifest.yaml`, prompted interactively or passed via `--var
+      KEY=VALUE`. `{{ var }}` substitution in file contents and
+      file/directory names. Shipped starter validated end-to-end: scaffold
+      → `pip install -e '.[dev]'` → `pytest` passes.
 
 ## Milestone 1: CLI Foundations (DONE)
 

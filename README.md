@@ -251,6 +251,30 @@ Project is auto-detected from the git repo name; override with `-p/--project` or
 
 `loom init` also runs a health-check on the way in — Ollama reachable, required models pulled, pytest declared in the target's deps, `tests/` directory present (creating it if not). A warning lists anything missing without blocking.
 
+### Templates (`loom init --template`)
+
+Scaffold files into the target repo from a template. One starter ships with Loom (`python-minimal`); it's intentionally opinion-free — fork it into `~/.loom/templates/<your-name>/` and customize for your stack.
+
+```bash
+loom init --template python-minimal \
+  --var app_name=myapp --var description="my app" \
+  --var author="me" --var python_version=3.10
+
+loom init --list-templates
+```
+
+Template structure:
+```
+~/.loom/templates/my-fastapi/
+├── manifest.yaml          # name, description, variables[]
+└── files/                 # copied verbatim, with {{ var }} substitution
+    ├── pyproject.toml
+    ├── src/{{ app_name }}/__init__.py    # names are substituted too
+    └── tests/test_smoke.py
+```
+
+Discovery precedence: `~/.loom/templates/<name>/` wins over `<loom-repo>/templates/<name>/`, so user-authored templates can override shipped ones with the same name. Missing variables without defaults are prompted interactively when stdin is a TTY, or passed via `--var KEY=VALUE` (repeatable). Existing files in the target are never overwritten unless `--force` is set.
+
 ## Hook instrumentation
 
 See [`hooks/README.md`](hooks/README.md) for install instructions. Summary:

@@ -1,0 +1,21 @@
+name: python-minimal
+description: |
+  Minimal Python package layout with pytest, a src/<pkg>/ directory, a
+  tests/ dir, and pyproject.toml. Intentionally opinion-free — fork this
+  template as ~/.loom/templates/<your-template> and adapt it for your
+  stack (FastAPI, CLI, Django, etc.). The whole point of Loom templates
+  is to be customizable; the shipped ones are references.
+
+variables:
+  - name: app_name
+    prompt: App / package name (lowercase, no spaces)
+    default: myapp
+  - name: description
+    prompt: One-line description
+    default: An app scaffolded by Loom
+  - name: author
+    prompt: Author name (for pyproject.toml)
+    default: unknown
+  - name: python_version
+    prompt: Minimum Python version
+    default: "3.10"
