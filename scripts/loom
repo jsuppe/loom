@@ -1011,12 +1011,19 @@ def cmd_spec_add(args):
             print("\nCancelled")
             return 1
 
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
     try:
         result = services.spec_add(
             store, args.req_id, description,
             acceptance_criteria=args.criteria or None,
             status=args.status or "draft",
             source_doc=args.source_doc,
+            test_file=getattr(args, "test", "") or "",
+            target_dir=target_dir,
         )
     except (LookupError, ValueError) as e:
         print(f"❌ {e}")
@@ -1027,6 +1034,15 @@ def cmd_spec_add(args):
     print(f"   Description: {result['description'][:80]}...")
     if result["acceptance_criteria"]:
         print(f"   Criteria: {len(result['acceptance_criteria'])} item(s)")
+    if result.get("test_file"):
+        written = result["test_skeleton_written"]
+        path_part = result["test_file"].split("::", 1)[0]
+        if written is True:
+            print(f"   Test skeleton: wrote {path_part}")
+        elif written is False:
+            print(f"   Test file:     {result['test_file']}  (skeleton exists — not overwritten)")
+        else:
+            print(f"   Test file:     {result['test_file']}")
     return 0
 
 
@@ -1759,6 +1775,19 @@ def main():
     p_spec.add_argument("--criteria", "-c", action="append", help="Acceptance criterion (repeatable)")
     p_spec.add_argument("--status", "-s", help="Status: draft, approved, implemented, verified")
     p_spec.add_argument("--source-doc", help="Source document path")
+    p_spec.add_argument(
+        "--test",
+        help="Pytest grading target in 'path::Class' form "
+             "(e.g. 'tests/test_foo.py::TestFoo'). Writes a failing-"
+             "placeholder skeleton at that path inside --target-dir if "
+             "the file doesn't exist. Populates Specification.test_file "
+             "so loom decompose / loom_exec can use it.",
+    )
+    p_spec.add_argument(
+        "--target-dir", default=None,
+        help="Where to write the test skeleton (default: $LOOM_TARGET_DIR "
+             "or cwd). Has no effect unless --test is set.",
+    )
     
     # specs (list specifications)
     p_specs = sp("specs", help="List specifications")

@@ -71,6 +71,12 @@ Rules for the YAML:
   modifying). Include any module the task calls into (service, helper,
   store) as well. Pure-create tasks (new file, no siblings to match) are
   the only case where `context_files` may be empty.
+- **If the input specification declares a grading target (look for
+  "Grading target for every feature task on this spec" in the input),
+  use that exact string as `test_to_write` for every feature task.**
+  That file exists on disk as a failing-placeholder skeleton —
+  operators fill in the real assertions. Do NOT invent a separate test
+  file, do NOT propose a "write tests" sub-task, do NOT rename the path.
 
 ## Decomposition strategy
 

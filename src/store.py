@@ -77,14 +77,19 @@ class Specification:
     source_conversation: Optional[str] = None  # Session if from conversation
     superseded_at: Optional[str] = None
     superseded_by: Optional[str] = None  # SPEC-xxx
-    
+    # Pytest target where the grading test for this spec lives, in pytest's
+    # "path::Class" form, e.g. "tests/test_foo.py::TestFoo". Populated by
+    # `loom spec --test` so downstream Task decomposition has a real file
+    # to grade against (FINDINGS-wild F10).
+    test_file: str = ""
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         # Handle None/empty lists - ChromaDB rejects empty lists in metadata
         if not d.get('acceptance_criteria'):
             d['acceptance_criteria'] = ["TBD"]
         return d
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Specification":
         d.setdefault('status', 'draft')
@@ -93,6 +98,7 @@ class Specification:
         d.setdefault('source_conversation', None)
         d.setdefault('superseded_at', None)
         d.setdefault('superseded_by', None)
+        d.setdefault('test_file', '')
         return cls(**d)
 
 
