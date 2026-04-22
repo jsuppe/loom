@@ -25,6 +25,7 @@ milestone 4.2 and mcp_server/README.md for the full plan.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from store import LoomStore
@@ -2362,7 +2363,11 @@ def task_reject(
     return _task_to_dict(store.get_task(task_id))
 
 
-def task_build_prompt(store: LoomStore, task_id: str) -> str:
+def task_build_prompt(
+    store: LoomStore,
+    task_id: str,
+    target_dir: Path | str | None = None,
+) -> str:
     """Assemble the executor prompt on demand from current store state.
 
     Mirrors the enhanced-condition bundle used by benchmarks/ollama_gaps*.py:
@@ -2374,10 +2379,22 @@ def task_build_prompt(store: LoomStore, task_id: str) -> str:
       - context files (inlined in full)
       - output contract + stop tokens
 
+    Sidecar and context-file paths are resolved relative to ``target_dir``
+    if given; otherwise they fall back to absolute paths or paths relative
+    to the current working directory.
+
     Raises LookupError if the task is missing. Referenced reqs/specs/patterns
     that don't exist are silently skipped (graceful degradation).
     """
     from pathlib import Path as _Path
+
+    td = _Path(target_dir) if target_dir is not None else None
+
+    def _resolve(path_str: str) -> _Path:
+        p = _Path(path_str)
+        if p.is_absolute() or td is None:
+            return p
+        return td / p
 
     task = store.get_task(task_id)
     if task is None:
@@ -2440,7 +2457,7 @@ def task_build_prompt(store: LoomStore, task_id: str) -> str:
     if task.context_sidecars:
         parts.append("## Sidecar notes\n")
         for path_str in task.context_sidecars:
-            p = _Path(path_str)
+            p = _resolve(path_str)
             if not p.exists():
                 continue
             parts.append(f"### {path_str}")
@@ -2450,7 +2467,7 @@ def task_build_prompt(store: LoomStore, task_id: str) -> str:
     if task.context_files:
         parts.append("## Source context\n")
         for path_str in task.context_files:
-            p = _Path(path_str)
+            p = _resolve(path_str)
             if not p.exists():
                 continue
             parts.append(f"### {path_str}")
@@ -2674,11 +2691,20 @@ def _validate_task_proposals(
     parent_spec: str,
     default_budget_files: int = 2,
     default_budget_loc: int = 80,
+    target_dir: Path | str | None = None,
 ) -> tuple[list[dict], list[str]]:
-    """Shape-check + atomicity-check proposals. Returns (normalized, warnings)."""
+    """Shape-check + atomicity-check proposals. Returns (normalized, warnings).
+
+    If ``target_dir`` is given, any entry in ``files_to_modify`` that
+    exists on disk relative to target_dir and is not already in
+    ``context_files`` is auto-added — a small-model executor has no tool
+    access and will hallucinate without the file it is modifying
+    (FINDINGS-wild F7/F8).
+    """
     normalized: list[dict] = []
     warnings: list[str] = []
     titles_seen: set[str] = set()
+    td = Path(target_dir) if target_dir is not None else None
 
     for idx, raw in enumerate(proposals):
         if not isinstance(raw, dict):
@@ -2708,6 +2734,20 @@ def _validate_task_proposals(
                 f"task {title!r}: touches {len(files)} files, exceeds budget {budget_files}"
             )
 
+        context_files = list(raw.get("context_files") or [])
+        if td is not None:
+            # Auto-augment: any file_to_modify that exists in the target dir
+            # and isn't already in context_files should be added, so the
+            # executor sees the current source.
+            for fm in files:
+                if fm in context_files:
+                    continue
+                if (td / fm).exists():
+                    context_files.append(fm)
+                    warnings.append(
+                        f"task {title!r}: auto-added {fm} to context_files"
+                    )
+
         normalized.append({
             "title": title,
             "parent_spec": parent_spec,
@@ -2717,7 +2757,7 @@ def _validate_task_proposals(
             "context_specs": raw.get("context_specs") or [],
             "context_patterns": raw.get("context_patterns") or [],
             "context_sidecars": raw.get("context_sidecars") or [],
-            "context_files": raw.get("context_files") or [],
+            "context_files": context_files,
             "size_budget_files": budget_files,
             "size_budget_loc": budget_loc,
             "depends_on_titles": list(raw.get("depends_on") or []),
@@ -2740,8 +2780,13 @@ def decompose(
     spec_id: str,
     *,
     model: str | None = None,
+    target_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Propose a Task decomposition for a Specification. Does NOT persist.
+
+    If ``target_dir`` is provided, the validator auto-augments each task's
+    ``context_files`` with any entry from ``files_to_modify`` that exists
+    on disk there. Otherwise context augmentation is skipped.
 
     Returns:
         {spec_id, model, outcome, tasks, warnings, reason, elapsed_s,
@@ -2779,7 +2824,9 @@ def decompose(
     }
 
     if outcome == "tasks":
-        normalized, warnings = _validate_task_proposals(payload, parent_spec=spec_id)
+        normalized, warnings = _validate_task_proposals(
+            payload, parent_spec=spec_id, target_dir=target_dir
+        )
         base["tasks"] = normalized
         base["warnings"] = warnings
     elif outcome in ("spec_too_big", "need_context"):

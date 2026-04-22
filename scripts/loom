@@ -26,6 +26,15 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
+# Force UTF-8 on stdout/stderr so emoji etc. don't crash on Windows cp1252
+# when the CLI is piped or redirected (FINDINGS-wild F5).
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
 # Add src to path
 SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
@@ -1436,8 +1445,13 @@ def cmd_task_reject(args):
 
 def cmd_task_prompt(args):
     store = LoomStore(args.project)
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
     try:
-        prompt = services.task_build_prompt(store, args.task_id)
+        prompt = services.task_build_prompt(store, args.task_id, target_dir=target_dir)
     except LookupError as e:
         print(str(e))
         return 1
@@ -1448,8 +1462,15 @@ def cmd_task_prompt(args):
 def cmd_decompose(args):
     """Decompose a spec into proposed tasks; optionally persist them."""
     store = LoomStore(args.project)
+    target_dir = (
+        args.target_dir
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
     try:
-        result = services.decompose(store, args.spec_id, model=args.model)
+        result = services.decompose(
+            store, args.spec_id, model=args.model, target_dir=target_dir,
+        )
     except (LookupError, ValueError, RuntimeError) as e:
         print(str(e))
         return 1
@@ -1498,24 +1519,44 @@ def cmd_decompose(args):
 def main():
     parser = argparse.ArgumentParser(description="Loom - Requirements traceability")
     parser.add_argument("--project", "-p", default=None, help="Project name")
-    
+
+    # Parent parser so subcommands also accept -p/--project (FINDINGS-wild F1).
+    # Without this, `loom doctor -p foo` fails because argparse only looks at
+    # the top-level parser for -p. Each subparser below gets this parent so -p
+    # is recognized in both positions. Post-parse we coalesce _sub_project into
+    # args.project.
+    _project_parent = argparse.ArgumentParser(add_help=False)
+    # default=SUPPRESS so that when the inner parser re-inherits the parent,
+    # it doesn't clobber a value the outer parser already captured. Without
+    # this, `loom task -p foo list` loses the -p because the inner `list`
+    # parser resets _sub_project to None.
+    _project_parent.add_argument(
+        "--project", "-p", dest="_sub_project", default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    def sp(name, **kwargs):
+        """subparsers.add_parser() with the project parent attached."""
+        kwargs["parents"] = list(kwargs.get("parents", [])) + [_project_parent]
+        return subparsers.add_parser(name, **kwargs)
     
     # extract
-    p_extract = subparsers.add_parser("extract", help="Extract requirements")
+    p_extract = sp("extract", help="Extract requirements")
     p_extract.add_argument("--session", help="Session key")
     p_extract.add_argument("--msg-id", help="Message ID for provenance")
     p_extract.add_argument("--text", "-t", help="Requirement text")
     p_extract.add_argument("--rationale", "-r", help="Why this requirement exists")
     
     # check
-    p_check = subparsers.add_parser("check", help="Check for drift")
+    p_check = sp("check", help="Check for drift")
     p_check.add_argument("file", help="File to check")
     p_check.add_argument("--lines", help="Line range (e.g., 42-78)")
     p_check.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
     # context (pre-edit briefing — JSON by default for agent/hook consumption)
-    p_context = subparsers.add_parser(
+    p_context = sp(
         "context",
         help="Pre-edit briefing: linked reqs, specs, and drift for a file",
     )
@@ -1523,34 +1564,34 @@ def main():
     p_context.add_argument("--pretty", action="store_true", help="Human-readable output (default: JSON)")
     
     # link
-    p_link = subparsers.add_parser("link", help="Link code to requirements or specifications")
+    p_link = sp("link", help="Link code to requirements or specifications")
     p_link.add_argument("file", help="File to link")
     p_link.add_argument("--lines", help="Line range")
     p_link.add_argument("--req", action="append", help="Requirement ID(s) — direct link (use sparingly; prefer --spec)")
     p_link.add_argument("--spec", action="append", help="Specification ID(s) — preferred link target")
     
     # status
-    p_status = subparsers.add_parser("status", help="Show status")
+    p_status = sp("status", help="Show status")
     p_status.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # query
-    p_query = subparsers.add_parser("query", help="Search requirements")
+    p_query = sp("query", help="Search requirements")
     p_query.add_argument("text", help="Search text")
     p_query.add_argument("--limit", "-n", type=int, default=5)
     p_query.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # list
-    p_list = subparsers.add_parser("list", help="List requirements")
+    p_list = sp("list", help="List requirements")
     p_list.add_argument("--all", "-a", action="store_true", help="Include superseded")
     p_list.add_argument("--json", "-j", action="store_true", help="Output as JSON (for API)")
     
     # sync
-    p_sync = subparsers.add_parser("sync", help="Generate REQUIREMENTS.md and TEST_SPEC.md")
+    p_sync = sp("sync", help="Generate REQUIREMENTS.md and TEST_SPEC.md")
     p_sync.add_argument("--output", "-o", help="Output directory (default: current)")
     p_sync.add_argument("--public", action="store_true", help="Exclude private requirements")
     
     # conflicts
-    p_conflicts = subparsers.add_parser("conflicts", help="Check for conflicts")
+    p_conflicts = sp("conflicts", help="Check for conflicts")
     p_conflicts.add_argument("--text", "-t", required=True, help="Requirement to check")
     p_conflicts.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     p_conflicts.add_argument(
@@ -1563,11 +1604,11 @@ def main():
     )
     
     # supersede
-    p_supersede = subparsers.add_parser("supersede", help="Supersede a requirement")
+    p_supersede = sp("supersede", help="Supersede a requirement")
     p_supersede.add_argument("req_id", help="Requirement ID to supersede")
     
     # test add
-    p_test_add = subparsers.add_parser("test", help="Add/update test specification")
+    p_test_add = sp("test", help="Add/update test specification")
     p_test_add.add_argument("req_id", help="Requirement ID")
     p_test_add.add_argument("--description", "-d", help="Test description")
     p_test_add.add_argument("--steps", "-s", help="Test steps (semicolon-separated)")
@@ -1577,33 +1618,33 @@ def main():
     p_test_add.add_argument("--private", action="store_true", help="Mark test as private")
     
     # test verify
-    p_verify = subparsers.add_parser("verify", help="Mark test as verified")
+    p_verify = sp("verify", help="Mark test as verified")
     p_verify.add_argument("req_id", help="Requirement ID")
     
     # test list
-    p_tests = subparsers.add_parser("tests", help="List test specifications")
+    p_tests = sp("tests", help="List test specifications")
     p_tests.add_argument("--public", action="store_true", help="Exclude private tests")
     p_tests.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # test-generate
-    p_test_gen = subparsers.add_parser("test-generate", help="Auto-generate test specs from acceptance criteria")
+    p_test_gen = sp("test-generate", help="Auto-generate test specs from acceptance criteria")
     p_test_gen.add_argument("--force", "-f", action="store_true", help="Overwrite existing test specs")
     p_test_gen.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
     
     # init-private
-    p_private = subparsers.add_parser("init-private", help="Initialize PRIVATE.md template")
+    p_private = sp("init-private", help="Initialize PRIVATE.md template")
     
     # doctor
-    p_doctor = subparsers.add_parser("doctor", help="Run health checks")
+    p_doctor = sp("doctor", help="Run health checks")
     p_doctor.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # trace (bidirectional traceability)
-    p_trace = subparsers.add_parser("trace", help="Show bidirectional traceability for a requirement or file")
+    p_trace = sp("trace", help="Show bidirectional traceability for a requirement or file")
     p_trace.add_argument("target", help="Requirement ID (REQ-xxx) or file path")
     p_trace.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # refine (elaborate requirements)
-    p_refine = subparsers.add_parser("refine", help="Elaborate a requirement with acceptance criteria")
+    p_refine = sp("refine", help="Elaborate a requirement with acceptance criteria")
     p_refine.add_argument("req_id", help="Requirement ID")
     p_refine.add_argument("--elaboration", "-e", help="How to satisfy this requirement")
     p_refine.add_argument("--text", "-t", help="Elaboration text (alternative to -e)")
@@ -1613,15 +1654,15 @@ def main():
     p_refine.add_argument("--status", "-s", help="Set status (pending, in_progress, implemented, verified)")
     
     # set-status
-    p_set_status = subparsers.add_parser("set-status", help="Set requirement implementation status")
+    p_set_status = sp("set-status", help="Set requirement implementation status")
     p_set_status.add_argument("req_id", help="Requirement ID")
     p_set_status.add_argument("status", help="Status: pending, in_progress, implemented, verified, superseded")
     
     # incomplete (list requirements needing refinement)
-    p_incomplete = subparsers.add_parser("incomplete", help="List requirements needing refinement")
+    p_incomplete = sp("incomplete", help="List requirements needing refinement")
     
     # spec (add specification to requirement)
-    p_spec = subparsers.add_parser("spec", help="Add specification to a requirement")
+    p_spec = sp("spec", help="Add specification to a requirement")
     p_spec.add_argument("req_id", help="Parent requirement ID")
     p_spec.add_argument("--description", "-d", help="Specification description")
     p_spec.add_argument("--criteria", "-c", action="append", help="Acceptance criterion (repeatable)")
@@ -1629,46 +1670,46 @@ def main():
     p_spec.add_argument("--source-doc", help="Source document path")
     
     # specs (list specifications)
-    p_specs = subparsers.add_parser("specs", help="List specifications")
+    p_specs = sp("specs", help="List specifications")
     p_specs.add_argument("--req", dest="req_id", help="Filter by requirement ID")
     p_specs.add_argument("--all", "-a", action="store_true", help="Include superseded")
     p_specs.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # spec-link (link code to specification)
-    p_spec_link = subparsers.add_parser("spec-link", help="Link code to a specification")
+    p_spec_link = sp("spec-link", help="Link code to a specification")
     p_spec_link.add_argument("spec_id", help="Specification ID")
     p_spec_link.add_argument("file", help="File to link")
     p_spec_link.add_argument("--lines", help="Line range (e.g., 42-78)")
     
     # pattern (add design pattern)
-    p_pattern = subparsers.add_parser("pattern", help="Add a shared design pattern")
+    p_pattern = sp("pattern", help="Add a shared design pattern")
     p_pattern.add_argument("--name", "-n", required=True, help="Pattern name")
     p_pattern.add_argument("--description", "-d", help="Pattern description")
     p_pattern.add_argument("--reqs", action="append", help="Requirement IDs this applies to")
     
     # patterns (list patterns)
-    p_patterns = subparsers.add_parser("patterns", help="List design patterns")
+    p_patterns = sp("patterns", help="List design patterns")
     p_patterns.add_argument("--all", "-a", action="store_true", help="Include deprecated")
     p_patterns.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     
     # pattern-apply (apply pattern to requirements)
-    p_pattern_apply = subparsers.add_parser("pattern-apply", help="Apply pattern to requirements")
+    p_pattern_apply = sp("pattern-apply", help="Apply pattern to requirements")
     p_pattern_apply.add_argument("pattern_id", help="Pattern ID")
     p_pattern_apply.add_argument("reqs", nargs="+", help="Requirement IDs to apply to")
     
     # coverage (gap analysis)
-    p_coverage = subparsers.add_parser("coverage", help="Show requirements missing implementations or tests")
+    p_coverage = sp("coverage", help="Show requirements missing implementations or tests")
     p_coverage.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     p_coverage.add_argument("--scan", action="store_true", help="Scan project files for likely implementations")
     p_coverage.add_argument("--scan-dir", help="Directory to scan (default: current)")
 
     # chain (full traceability chain)
-    p_chain = subparsers.add_parser("chain", help="Show full traceability chain for a requirement")
+    p_chain = sp("chain", help="Show full traceability chain for a requirement")
     p_chain.add_argument("req_id", help="Requirement ID")
     p_chain.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
     # cost (PreToolUse hook activity)
-    p_cost = subparsers.add_parser(
+    p_cost = sp(
         "cost",
         help="Summarize PreToolUse hook cost (latency, tokens, overhead)",
     )
@@ -1676,10 +1717,15 @@ def main():
     p_cost.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
     # task subcommand group
-    p_task = subparsers.add_parser("task", help="Manage atomic work items (Task entity)")
+    p_task = sp("task", help="Manage atomic work items (Task entity)")
     task_subs = p_task.add_subparsers(dest="task_verb", required=True)
 
-    p_ta = task_subs.add_parser("add", help="Create a new task")
+    def tsp(name, **kwargs):
+        """task_subs.add_parser() with the project parent attached."""
+        kwargs["parents"] = list(kwargs.get("parents", [])) + [_project_parent]
+        return task_subs.add_parser(name, **kwargs)
+
+    p_ta = tsp("add", help="Create a new task")
     p_ta.add_argument("--spec", required=True, help="Parent specification id (SPEC-xxx)")
     p_ta.add_argument("--title", required=True, help="One-line task title")
     p_ta.add_argument("--files", nargs="+", required=True, help="Files the task may modify")
@@ -1695,37 +1741,42 @@ def main():
     p_ta.add_argument("--created-by", default=None, help="Who created this task (e.g., 'opus', 'jon')")
     p_ta.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
-    p_tl = task_subs.add_parser("list", help="List tasks")
+    p_tl = tsp("list", help="List tasks")
     p_tl.add_argument("--status", default=None, help="Filter by status")
     p_tl.add_argument("--spec", default=None, help="Filter by parent spec id")
     p_tl.add_argument("--claimed-by", default=None, help="Filter by claimer")
     p_tl.add_argument("--ready", action="store_true", help="Only ready-to-execute tasks")
     p_tl.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
-    p_ts = task_subs.add_parser("show", help="Show full task details as JSON")
+    p_ts = tsp("show", help="Show full task details as JSON")
     p_ts.add_argument("task_id")
 
-    p_tc = task_subs.add_parser("claim", help="Transition pending -> claimed")
+    p_tc = tsp("claim", help="Transition pending -> claimed")
     p_tc.add_argument("task_id")
     p_tc.add_argument("--as", dest="as_worker", required=True, help="Executor name")
 
-    p_tre = task_subs.add_parser("release", help="Transition claimed -> pending")
+    p_tre = tsp("release", help="Transition claimed -> pending")
     p_tre.add_argument("task_id")
 
-    p_tco = task_subs.add_parser("complete", help="Transition claimed -> complete")
+    p_tco = tsp("complete", help="Transition claimed -> complete")
     p_tco.add_argument("task_id")
     p_tco.add_argument("--impl", action="append", help="Implementation id(s) produced")
 
-    p_trj = task_subs.add_parser("reject", help="Transition claimed -> rejected/escalated")
+    p_trj = tsp("reject", help="Transition claimed -> rejected/escalated")
     p_trj.add_argument("task_id")
     p_trj.add_argument("--reason", required=True)
     p_trj.add_argument("--escalate", action="store_true", help="Mark as escalated (operator needed)")
 
-    p_tp = task_subs.add_parser("prompt", help="Print the assembled executor prompt for a task")
+    p_tp = tsp("prompt", help="Print the assembled executor prompt for a task")
     p_tp.add_argument("task_id")
+    p_tp.add_argument(
+        "--target-dir", default=None,
+        help="Resolve context_files / sidecars relative to this directory "
+             "(default: $LOOM_TARGET_DIR or cwd).",
+    )
 
     # decompose (spec -> proposed tasks via LLM)
-    p_dec = subparsers.add_parser(
+    p_dec = sp(
         "decompose",
         help="Propose an atomic-task decomposition for a specification",
     )
@@ -1739,9 +1790,21 @@ def main():
     p_dec.add_argument("--out", default=None, help="Write YAML to file instead of stdout")
     p_dec.add_argument("--apply", action="store_true", help="Persist proposed tasks to the store")
     p_dec.add_argument("--verbose", action="store_true", help="Show raw LLM response on error")
+    p_dec.add_argument(
+        "--target-dir", default=None,
+        help="Target repo root. When set, files_to_modify entries that "
+             "exist on disk there are auto-added to each task's context_files "
+             "so the executor sees real source. Defaults to $LOOM_TARGET_DIR "
+             "or the current working directory.",
+    )
 
     args = parser.parse_args()
-    
+
+    # Coalesce -p from subparser position into top-level args.project (T2.2).
+    # Precedence: subparser -p > top-level -p > LOOM_PROJECT > git detection.
+    sub_project = getattr(args, "_sub_project", None)
+    if sub_project:
+        args.project = sub_project
     if not args.project:
         args.project = get_project_name()
     

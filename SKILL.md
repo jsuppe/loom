@@ -37,7 +37,7 @@ This skill is always active via AGENTS.md integration. Invoke at these moments:
 
 ### Specifications & patterns
 
-- **`loom spec REQ-xxx -t <title> -d <detail>`** — Detailed HOW for a requirement.
+- **`loom spec REQ-xxx -d <description> [-c <criterion>]... [-s <status>]`** — Detailed HOW for a requirement. `-c` is repeatable for each acceptance criterion.
 - **`loom pattern`, `loom patterns`, `loom pattern-apply`** — Shared design standards across requirements.
 
 ### Tasks & execution (new)
@@ -115,8 +115,9 @@ User: "The app should use half-hour increments for time selection"
 Agent:    loom extract --rationale "Matches appointment-booking domain"
           → REQ-042 {domain: data, value: "Time selection uses half-hour increments"}
 
-Agent:    loom spec REQ-042 -t "TimeSelector component" \
-                   -d "Dropdown 00:00..23:30 step=30min; default round down; TZ local"
+Agent:    loom spec REQ-042 -d "TimeSelector component: dropdown 00:00..23:30 step=30min; default round down; TZ local" \
+                   -c "Dropdown options every 30 minutes" \
+                   -c "Values round down to nearest 30min on arbitrary input"
           → SPEC-042a
 
 Agent:    loom decompose SPEC-042a --apply

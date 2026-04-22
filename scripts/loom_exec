@@ -21,7 +21,9 @@ Usage:
 Environment:
     LOOM_EXECUTOR_MODEL   Default: qwen3.5:latest
     OLLAMA_URL            Default: http://localhost:11434
-    LOOM_PROJECT          Override project detection
+    LOOM_PROJECT          Override project detection (store name)
+    LOOM_TARGET_DIR       Override target repo root (where code is read/written).
+                          Default: current working directory.
 """
 from __future__ import annotations
 
@@ -38,6 +40,14 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Force UTF-8 on stdout/stderr so emoji etc. don't crash on Windows cp1252.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
 
@@ -47,6 +57,23 @@ import services  # noqa: E402
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("LOOM_EXECUTOR_MODEL", "qwen3.5:latest")
+
+# Directories that should never be copied into the scratch grading dir —
+# either because they're huge, irrelevant, or they'd break pytest discovery.
+SCRATCH_IGNORE = shutil.ignore_patterns(
+    ".git", "__pycache__", ".venv", "venv", ".pytest_cache",
+    "node_modules", "*.pyc", ".tox", "dist", "build", ".mypy_cache",
+    ".claude", ".worktrees",
+)
+
+
+def resolve_target_dir(arg_value: str | None) -> Path:
+    """Where is the target repo's source rooted? Separate from the Loom store."""
+    if arg_value:
+        return Path(arg_value).expanduser().resolve()
+    if env := os.environ.get("LOOM_TARGET_DIR"):
+        return Path(env).expanduser().resolve()
+    return Path.cwd().resolve()
 
 CODE_BLOCK_RE = re.compile(r"```python\s*\n(.*?)\n```", re.DOTALL)
 GENERIC_BLOCK_RE = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
@@ -138,7 +165,7 @@ def _log_run(store: LoomStore, record: dict) -> None:
         f.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
-def apply_code(task: dict, code: str) -> Path:
+def apply_code(task: dict, code: str, target_dir: Path) -> Path:
     """Append the model's code to the first file_to_modify.
 
     Returns the modified file path. Simple MVP — the benchmark runners used
@@ -149,7 +176,7 @@ def apply_code(task: dict, code: str) -> Path:
         raise ValueError("task has no files_to_modify")
     target = Path(task["files_to_modify"][0])
     if not target.is_absolute():
-        target = SKILL_DIR / target
+        target = target_dir / target
     existing = target.read_text(encoding="utf-8") if target.exists() else ""
     target.write_text(existing + "\n\n" + code, encoding="utf-8")
     return target
@@ -177,6 +204,7 @@ def execute_task(
     store: LoomStore,
     task_id: str,
     model: str,
+    target_dir: Path,
     dry_run: bool = False,
 ) -> dict:
     """Run one task through claim -> prompt -> apply -> grade -> complete/reject."""
@@ -184,8 +212,9 @@ def execute_task(
     task = services.task_get(store, task_id)
     print(f"[exec] task {task_id}  status={task['status']}  "
           f"title={task['title']!r}")
+    print(f"[exec] target_dir: {target_dir}")
 
-    prompt = services.task_build_prompt(store, task_id)
+    prompt = services.task_build_prompt(store, task_id, target_dir=target_dir)
     print(f"[exec] prompt: {len(prompt)} chars")
 
     if dry_run:
@@ -204,17 +233,14 @@ def execute_task(
             "error": f"task is in status={task['status']!r}, cannot execute",
         }
 
-    # Scratch dir: copy the repo so we can apply + grade without polluting
-    # the working tree. On success we move changes back; on failure we throw
-    # the scratch away.
+    # Scratch dir: copy the target repo so we can apply + grade without
+    # polluting the working tree. On success we promote the modified file
+    # back; on failure we throw the scratch away.
     scratch = Path(tempfile.mkdtemp(prefix="loom_exec_"))
-    original_cwd = Path.cwd()
     try:
-        shutil.copytree(SKILL_DIR / "src", scratch / "src")
-        shutil.copytree(SKILL_DIR / "tests", scratch / "tests")
-        # experiments/ might not exist; copy if present (for grading tests).
-        if (SKILL_DIR / "experiments").exists():
-            shutil.copytree(SKILL_DIR / "experiments", scratch / "experiments")
+        # copytree refuses an existing dest; remove the one mkdtemp made.
+        scratch.rmdir()
+        shutil.copytree(target_dir, scratch, ignore=SCRATCH_IGNORE)
 
         # Call the model.
         print(f"[exec] calling {model}...")
@@ -262,10 +288,9 @@ def execute_task(
         # Apply code to scratch copy of the target.
         scratch_target = scratch / Path(task["files_to_modify"][0])
         code = extract_code(llm["content"])
-        scratch_target.write_text(
-            scratch_target.read_text(encoding="utf-8") + "\n\n" + code,
-            encoding="utf-8",
-        )
+        scratch_target.parent.mkdir(parents=True, exist_ok=True)
+        existing = scratch_target.read_text(encoding="utf-8") if scratch_target.exists() else ""
+        scratch_target.write_text(existing + "\n\n" + code, encoding="utf-8")
 
         # Grade in scratch.
         passed, total, tail = run_grading(task["test_to_write"], cwd=scratch)
@@ -273,7 +298,8 @@ def execute_task(
 
         if total > 0 and passed == total:
             # Promote scratch changes back to the real working tree.
-            real_target = SKILL_DIR / task["files_to_modify"][0]
+            real_target = target_dir / task["files_to_modify"][0]
+            real_target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(scratch_target, real_target)
             services.task_complete(store, task_id)
             _log_run(store, {
@@ -319,11 +345,20 @@ def main() -> int:
                         help="Print assembled prompt without calling the model")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"Ollama model (default: {DEFAULT_MODEL})")
-    parser.add_argument("-p", "--project", default=None, help="Project name")
+    parser.add_argument("-p", "--project", default=None, help="Project name (store)")
+    parser.add_argument(
+        "--target-dir", default=None,
+        help="Target repo root — where source files are read and written. "
+             "Defaults to $LOOM_TARGET_DIR, else the current working directory.",
+    )
     args = parser.parse_args()
 
     project = args.project or get_project_name()
     store = LoomStore(project)
+    target_dir = resolve_target_dir(args.target_dir)
+    if not target_dir.is_dir():
+        print(f"[exec] target-dir does not exist: {target_dir}", file=sys.stderr)
+        return 2
 
     if args.next:
         while True:
@@ -332,7 +367,8 @@ def main() -> int:
                 print("[exec] no ready tasks")
                 break
             task_id = ready[0]["id"]
-            result = execute_task(store, task_id, args.model, dry_run=args.dry_run)
+            result = execute_task(store, task_id, args.model, target_dir,
+                                  dry_run=args.dry_run)
             print(f"[exec] result: {json.dumps(result)}")
             if not args.loop:
                 break
@@ -345,7 +381,8 @@ def main() -> int:
     if not args.task_id:
         parser.error("task_id required (or use --next)")
 
-    result = execute_task(store, args.task_id, args.model, dry_run=args.dry_run)
+    result = execute_task(store, args.task_id, args.model, target_dir,
+                          dry_run=args.dry_run)
     print(f"[exec] result: {json.dumps(result)}")
     return 0 if result.get("outcome") in {"complete", None} else 1
 

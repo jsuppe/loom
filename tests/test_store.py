@@ -296,7 +296,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_requirements_doc(temp_store, Path(out_dir))
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "`src/projects.py` (lines 10-25)" in content
             assert "**Status:** pending" in content
@@ -319,7 +319,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_requirements_doc(temp_store, Path(out_dir))
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "*None yet*" in content
 
@@ -352,7 +352,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_requirements_doc(temp_store, Path(out_dir))
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "## Traceability Matrix" in content
             assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
@@ -397,7 +397,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_test_spec_doc(temp_store, Path(out_dir), specs=specs)
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "**Covered code:**" in content
             assert "`src/projects.py` (lines 10-25)" in content
@@ -431,7 +431,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_test_spec_doc(temp_store, Path(out_dir), specs={})
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "**Uncovered code:**" in content
             assert "`src/projects.py` (lines 10-25)" in content
@@ -476,7 +476,7 @@ class TestDocGeneration:
 
         with tempfile.TemporaryDirectory() as out_dir:
             path = generate_requirements_doc(temp_store, Path(out_dir))
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
 
             assert "**Specifications (1):**" in content
             assert "`SPEC-001`" in content
