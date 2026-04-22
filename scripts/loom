@@ -663,6 +663,28 @@ def cmd_init_private(args):
 
 def cmd_init(args):
     """Onboard an existing target repo: write .loom-config.json + health check."""
+    sys.path.insert(0, str(SKILL_DIR / "src"))
+    import templates as _templates
+
+    # --list-templates short-circuits everything else.
+    if getattr(args, "list_templates", False):
+        tmpls = _templates.list_templates()
+        if not tmpls:
+            print("No templates found.")
+            print(f"  Shipped:       {_templates.shipped_templates_dir()}")
+            print(f"  User-authored: {_templates.user_templates_dir()}  (author your own here)")
+            return 0
+        print("Available templates:")
+        for t in tmpls:
+            desc = (t.description.strip().splitlines() or [""])[0]
+            print(f"  {t.name:20}  {desc}")
+        print()
+        print("Author your own by dropping a directory under "
+              f"{_templates.user_templates_dir()} with a manifest.yaml "
+              "and files/ tree. User-authored templates override shipped "
+              "ones with the same name.")
+        return 0
+
     target_dir = (
         getattr(args, "target_dir", None)
         or os.environ.get("LOOM_TARGET_DIR")
@@ -670,9 +692,46 @@ def cmd_init(args):
     )
     project = args.project  # top-level -p / coalesced from subparser / falls back
 
+    # Parse --var key=value pairs and collect missing variables
+    # interactively if stdin is a tty.
+    variables: dict[str, str] = {}
+    for kv in (getattr(args, "var", None) or []):
+        if "=" not in kv:
+            print(f"✗ --var expected key=value, got {kv!r}")
+            return 1
+        k, v = kv.split("=", 1)
+        variables[k.strip()] = v
+
+    template_name = getattr(args, "template", None)
+    if template_name:
+        try:
+            tmpl = _templates.load_template(template_name)
+        except LookupError as e:
+            print(f"✗ {e}")
+            print("   Run `loom init --list-templates` to see available templates.")
+            return 1
+        # Prompt for anything missing
+        missing = _templates.required_variables(tmpl, variables)
+        if missing and sys.stdin.isatty():
+            print(f"Template {template_name!r} needs these values:")
+            for v in missing:
+                prompt = v.prompt or v.name
+                default_hint = f" [{v.default}]" if v.default else ""
+                ans = input(f"  {prompt}{default_hint}: ").strip()
+                if ans:
+                    variables[v.name] = ans
+                elif v.default is not None:
+                    variables[v.name] = v.default
+            print()
+        elif missing:
+            names = ", ".join(v.name for v in missing)
+            print(f"✗ template {template_name!r} requires --var for: {names}")
+            return 1
+
     try:
         result = services.init(
             target_dir=target_dir, project=project, force=args.force,
+            template=template_name, variables=variables,
         )
     except NotADirectoryError as e:
         print(f"✗ {e}")
@@ -681,10 +740,25 @@ def cmd_init(args):
         print(f"✗ {e}")
         print("   Pass --force to overwrite.")
         return 1
+    except LookupError as e:
+        print(f"✗ {e}")
+        return 1
+    except (ValueError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
 
     print(f"🧵 Loom Init — {project}")
     print(f"   target_dir: {result['target_dir']}")
     print(f"   config:     {result['config_path']}")
+
+    # Template output, if applied
+    if result.get("template_files"):
+        tf = result["template_files"]
+        print(f"   template:   {result['template']}")
+        for w in tf["written"]:
+            print(f"     + {w}")
+        for s in tf["skipped"]:
+            print(f"     · {s}  (kept — not overwritten)")
     print()
 
     # Health checks
@@ -1722,7 +1796,21 @@ def main():
     )
     p_init.add_argument(
         "--force", action="store_true",
-        help="Overwrite an existing .loom-config.json",
+        help="Overwrite an existing .loom-config.json and template files",
+    )
+    p_init.add_argument(
+        "--template",
+        help="Scaffold files from a template. See `loom init --list-templates`. "
+             "User templates in ~/.loom/templates/ override shipped ones.",
+    )
+    p_init.add_argument(
+        "--var", action="append", default=None, metavar="KEY=VALUE",
+        help="Set a template variable. Repeat for multiple. Missing required "
+             "variables are prompted interactively when stdin is a tty.",
+    )
+    p_init.add_argument(
+        "--list-templates", action="store_true",
+        help="List available templates and exit (other flags ignored).",
     )
 
     # doctor

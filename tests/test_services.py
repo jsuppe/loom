@@ -370,6 +370,53 @@ class TestInit:
             assert isinstance(result["next_steps"], list)
             assert len(result["next_steps"]) >= 3
 
+    def test_with_template_scaffolds_files(self):
+        """init --template applies the shipped python-minimal template."""
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(
+                target_dir=td, project="demo",
+                template="python-minimal",
+                variables={"app_name": "demoapp", "description": "t",
+                           "author": "a", "python_version": "3.10"},
+            )
+            assert result["template"] == "python-minimal"
+            assert result["template_files"] is not None
+            assert len(result["template_files"]["written"]) > 0
+            # Config is also written
+            assert (Path(td) / ".loom-config.json").exists()
+            # Package directory gets the substituted name
+            assert (Path(td) / "src" / "demoapp" / "__init__.py").exists()
+
+    def test_with_unknown_template_raises(self):
+        with tempfile.TemporaryDirectory() as td:
+            with pytest.raises(LookupError):
+                services.init(
+                    target_dir=td, project="p",
+                    template="not-a-real-template",
+                )
+
+    def test_template_missing_vars_raises(self, monkeypatch):
+        """Missing variables without defaults should surface as ValueError."""
+        with tempfile.TemporaryDirectory() as user_root, \
+             tempfile.TemporaryDirectory() as target:
+            user_path = Path(user_root)
+            (user_path / "needs-var").mkdir()
+            (user_path / "needs-var" / "manifest.yaml").write_text(
+                "name: needs-var\nvariables:\n  - {name: mandatory}\n",
+                encoding="utf-8",
+            )
+            (user_path / "needs-var" / "files").mkdir()
+            (user_path / "needs-var" / "files" / "x.txt").write_text(
+                "{{ mandatory }}", encoding="utf-8",
+            )
+            import templates as _tpl
+            monkeypatch.setattr(_tpl, "user_templates_dir", lambda: user_path)
+            with pytest.raises(ValueError):
+                services.init(
+                    target_dir=target, project="p",
+                    template="needs-var", variables={},
+                )
+
 
 class TestDoctor:
     def test_empty_store_returns_shape(self, store):
