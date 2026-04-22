@@ -1,247 +1,260 @@
 # Loom 🧵
 
-**Weaving requirements through code.**
+**Weaving requirements through code — and driving small-model code execution with them.**
 
-Loom is a semantic requirements traceability system for AI-assisted development. It extracts requirements from conversations, links them to code, detects conflicts, and maintains living documentation.
+Loom is a semantic requirements-traceability system for AI-assisted development, and a context substrate for running atomic code tasks on small local models. It extracts requirements from conversations, embeds them in ChromaDB, links them to code, detects drift and conflicts, and now — with the `Task` entity, `loom decompose`, and `loom_exec` — turns that context into executable work for a local LLM.
+
+## What Loom does
+
+1. **Captures requirements** from natural language (`loom extract`) with rationale, acceptance criteria, domain.
+2. **Expands them into specifications** (`loom spec`) — the detailed "how."
+3. **Links code to requirements/specs** (`loom link`) with content hashes so drift is detectable.
+4. **Generates living docs** (`loom sync`) — REQUIREMENTS.md, TEST_SPEC.md, traceability matrix.
+5. **Decomposes specs into atomic executor-ready tasks** (`loom decompose`) — a frontier model emits a dependency-ordered YAML task list.
+6. **Executes those tasks on a small local model** (`loom_exec`) — claims, assembles context, generates code, runs grading tests, promotes on pass.
+7. **Measures itself** (`loom cost`, `loom doctor`, `loom coverage`) — hook latency, coverage gaps, drift.
+
+## The thesis (validated)
+
+> With enough detail in requirements, spec, and context, and small enough units of work, very small models can be effective.
+
+We tested this empirically. See [`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md) for the full write-up.
+
+### Headline results
+
+Three tasks of escalating difficulty on the same function (write-from-spec, extend, behavior-preserving refactor), graded by 14 → 20 → 29 pytest assertions.
+
+| Model                | Params | Task 1 | Task 2 | Task 3 | Latency (Task 3) | Cost/run |
+|----------------------|-------:|:------:|:------:|:------:|:----------------:|:--------:|
+| phi4-mini            |  3.8B  | 0/3    | 0/3    | —      | —                | ~$0      |
+| llama3.1:8b          |  8.0B  | 1/3    | 3/3    | **0/3** behavior-broken | ~9s    | ~$0      |
+| **qwen3.5:latest**   |  9.7B  | **3/3**| **3/3**| **3/3**| **11s**          | **~$0**  |
+| gpt-oss:latest       | 20.9B  | —      | —      | 0/2 (format) | —          | ~$0      |
+| qwen2.5-coder:32b    | 32.8B  | —      | 1/1    | 1/1    | 455s             | ~$0      |
+| Haiku 4.5 (subagent) | cloud  | 3/3    | —      | —      | ~15s             | ~$0.02   |
+| Opus 4.7 (subagent)  | cloud  | 3/3    | —      | —      | ~15s             | ~$0.28   |
+
+Format: (perfect trials) / (trials).
+
+### What this buys
+
+- `qwen3.5:latest` (9.7B, local, commodity hardware) matched Opus 4.7 on every trial when given Loom context.
+- Determinism at `temperature=0`: byte-identical output across repeated trials.
+- Architectural cost split: Opus decomposes & reviews at spec boundaries (~$0.30 × 2/spec); qwen3.5 executes tasks (~$0/task). On a 100-task project, frontier-only ≈ $30; hybrid ≈ $0.60–1 — a 30–50× reduction, not an optimization.
+- Capability floor depends on task shape: ~8B for template-driven extension, ~10B for write-from-spec and refactor. Below that, failures are silent — e.g., llama3.1:8b's refactor was structurally correct (9/9 helper tests pass) but broke behavior (10/20 regressions).
+- Baseline Opus without Loom context underperformed enhanced Haiku with Loom context — the bundle structure matters more than the order-of-magnitude model gap.
+
+See [`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md) for methodology, caveats, reproduction steps, and the benchmark runners in `benchmarks/ollama_gaps*.py`.
 
 ## Features
 
-- **Requirement Extraction** — Parse decisions from natural language into structured requirements
-- **Semantic Search** — Find requirements by meaning, not just keywords (via Ollama embeddings)
-- **Conflict Detection** — Warns when new requirements overlap or contradict existing ones
-- **Drift Detection** — Identifies code linked to superseded requirements
-- **Living Documentation** — Auto-generates REQUIREMENTS.md and TEST_SPEC.md
-- **Privacy Controls** — PRIVATE.md filters sensitive requirements from public docs
+- **Requirement extraction** — Parse decisions from natural language into structured requirements with rationale and domain.
+- **Specification layer** — Detailed HOW for each requirement; the anchor for tasks and implementations.
+- **Pattern entity** — Shared design standards applied across multiple requirements.
+- **Task entity** — Atomic, dependency-ordered work items with lifecycle (pending → claimed → complete | rejected | escalated) and atomicity budget (≤2 files, ≤80 LoC by default).
+- **Semantic search** — Find requirements by meaning via Ollama embeddings (`nomic-embed-text`, 768-dim).
+- **Conflict detection (LLM-verified)** — Embedding overlap surfaces candidates; an LLM pass confirms real conflicts before they're reported.
+- **Drift detection** — Content hashes on `Implementation` records let `loom check` flag code linked to superseded requirements.
+- **Traceability** — `loom trace`, `loom chain`, `loom coverage` give bidirectional req ↔ spec ↔ impl ↔ test visibility.
+- **Living documentation** — `loom sync` generates REQUIREMENTS.md and TEST_SPEC.md with a traceability matrix; PRIVATE.md filters sensitive reqs from public docs.
+- **Hook instrumentation** — `hooks/loom_pretool.py` injects Loom context as a system-reminder on Edit/Write; logs per-fire latency and bytes to JSONL.
+- **Cost measurement** — `loom cost` reports p50/p95/p99 hook latency, total injected bytes, and skipped-vs-fired ratio.
+- **Spec → task decomposition** — `loom decompose SPEC-xxx --apply` uses a frontier model (or local fallback) to emit atomic tasks with full context bundles.
+- **Small-model task execution** — `scripts/loom_exec` claims the next ready task, calls Ollama, applies code to a scratch copy, runs grading tests, and promotes on pass.
+- **MCP server** — Phase A (read) and Phase B (write) tools shipped; wraps `LoomStore` as typed MCP tools for Claude Code and other clients. See [`mcp_server/README.md`](mcp_server/README.md).
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.10+
-- [Ollama](https://ollama.ai) with `nomic-embed-text` model
-- [ChromaDB](https://www.trychroma.com) (installed automatically)
+- [Ollama](https://ollama.ai) running on `localhost:11434`
+  - `nomic-embed-text` — embeddings
+  - `qwen3.5:latest` — recommended local executor (see findings above)
+- [ChromaDB](https://www.trychroma.com) (installed via pip)
+- Optional: `ANTHROPIC_API_KEY` in the environment if you want Opus-driven decomposition
 
-### As OpenClaw Skill
+### As an OpenClaw skill
 
 ```bash
-# Clone to your skills directory
-git clone https://github.com/your-org/loom.git ~/.openclaw/skills/loom
-
-# Create virtual environment and install dependencies
+git clone https://github.com/jsuppe/loom.git ~/.openclaw/skills/loom
 cd ~/.openclaw/skills/loom
 python3 -m venv .venv
-.venv/bin/pip install chromadb
-
-# Pull the embedding model
+.venv/bin/pip install chromadb pyyaml
 ollama pull nomic-embed-text
-
-# Add to OpenClaw config
-# In ~/.openclaw/openclaw.json:
-{
-  "skills": {
-    "load": {
-      "extraDirs": ["~/.openclaw/skills"]
-    }
-  }
-}
+ollama pull qwen3.5:latest    # for loom_exec
 ```
 
 ### Standalone
 
 ```bash
-git clone https://github.com/your-org/loom.git
+git clone https://github.com/jsuppe/loom.git
 cd loom
 python3 -m venv .venv
-.venv/bin/pip install chromadb
+.venv/bin/pip install chromadb pyyaml
 ollama pull nomic-embed-text
-
-# Add to PATH or use full path
 export PATH="$PWD/scripts:$PATH"
 ```
 
-## Quick Start
+## Quick start
 
 ```bash
-# Extract requirements from conversation
-echo "REQUIREMENT: behavior | Users must confirm before deleting" | loom extract -p myproject
+# Capture a requirement
+echo "REQUIREMENT: behavior | Users must confirm before deleting" \
+  | loom extract -p myproject --rationale "Prevent accidental data loss"
 
-# List all requirements
-loom list -p myproject
+# Expand it into a spec
+loom spec REQ-abc12345 -t "Confirmation modal" \
+  -d "Show modal on delete button; require Type-to-confirm for > 10 items"
 
-# Search semantically
-loom query "deletion confirmation" -p myproject
+# Decompose spec into atomic tasks (Opus by default if ANTHROPIC_API_KEY is set)
+loom decompose SPEC-xxx --apply
 
-# Check for conflicts before adding
-loom conflicts --text "behavior | Allow quick delete without confirmation" -p myproject
+# Execute the next ready task on the local small model
+loom_exec --next --model qwen3.5:latest
 
-# Generate documentation
+# Or run until the queue is empty
+loom_exec --loop
+
+# Regenerate living docs
 loom sync -p myproject
+
+# Check what the PreToolUse hook is costing you
+loom cost
 ```
 
-## Usage Patterns
+## End-to-end pipeline
 
-### For Humans (Chat-Based)
+```
+┌──────────────┐  loom extract  ┌─────────────┐  loom spec  ┌──────────────┐
+│ Conversation │ ─────────────> │ Requirement │ ──────────> │Specification │
+└──────────────┘                └─────────────┘             └──────┬───────┘
+                                                                   │ loom decompose --apply
+                                                                   ▼
+┌──────────────┐  loom_exec    ┌──────────────────────────────────────┐
+│ code + tests │ <──────────── │ Task(s): atomic, ≤2 files, ≤80 LoC,  │
+│  (promoted)  │               │ single grading criterion, dep-ordered│
+└──────────────┘               └──────────────────────────────────────┘
+       │                                                  ▲
+       │ loom link / hook                                 │ loom_exec --next
+       ▼                                                  │
+┌───────────────┐   loom sync   ┌──────────────────┐      │
+│Implementation │ ────────────> │ REQUIREMENTS.md  │      │
+│  + hash       │               │ TEST_SPEC.md     │      │
+└───────────────┘               │ Traceability mat │      │
+                                └──────────────────┘      │
+                                                          │
+                                ┌─────────────────────────┘
+                                │ loom cost / loom doctor / loom coverage
+                                ▼
+                        Telemetry, drift, gap analysis
+```
 
-If you're working with an AI agent that has Loom integrated, just describe requirements naturally:
+## Usage patterns
 
-> "The app should require email verification before posting"
+### For humans (chat-based)
 
-The agent will extract it, check for conflicts, and sync. For more precision, use the structured format:
+```
+"The app should require email verification before posting"
+```
 
-> `REQUIREMENT: behavior | Email verification required before first post`
+If the agent has Loom wired in, that becomes a REQ. For precision, use the structured form:
 
-### For Agents
+```
+REQUIREMENT: behavior | Email verification required before first post
+```
 
-Add Loom to your `AGENTS.md` (see [agents.d/loom-integration.md](agents.d/loom-integration.md)):
-- Extract requirements when decisions are made
-- Check for drift before modifying code
-- Sync documentation during heartbeats
+### For agents
 
-### For CI/Automation
+Add Loom to your `AGENTS.md` — see [`agents.d/loom-integration.md`](agents.d/loom-integration.md). Key moments:
+
+- **On decision** — `loom extract` with `--rationale`.
+- **Before editing** — the `loom_pretool.py` hook auto-injects linked reqs/specs/drift into context (no agent effort required).
+- **After implementing** — `loom link <file> --req REQ-xxx` or `--spec SPEC-xxx`.
+- **For large work** — `loom decompose SPEC-xxx --apply` then `loom_exec --loop`.
+- **During heartbeats** — `loom status --json` to surface drift.
+
+### For CI/automation
 
 ```bash
-# Extract from a file or pipe
 cat decisions.txt | loom extract -p myproject
-
-# Check a file for drift before merge
-loom check src/auth/login.dart -p myproject
-
-# Fail CI if requirements have no test specs
-loom tests -p myproject --public | grep -q "⚠️" && exit 1
+loom check src/auth/login.py -p myproject                    # exit 2 on drift
+loom tests -p myproject --public | grep -q "⚠️" && exit 1   # fail CI on uncovered reqs
+loom cost --json | jq '.overhead_pct > 80 and "warn"'         # catch runaway hook overhead
 ```
-
-## Managing Test Specs
-
-Test specifications link requirements to verification steps.
-
-### Add a Test Spec
-
-```bash
-loom test REQ-abc123 \
-  -d "Verify email confirmation flow" \
-  -s "Register new account;Check inbox for email;Click verification link;Attempt to post" \
-  -e "Post succeeds only after email verified"
-```
-
-**Options:**
-- `-d, --description` — What the test verifies
-- `-s, --steps` — Semicolon-separated test steps
-- `-e, --expected` — Expected outcome
-- `-a, --automated` — Mark as automated test
-- `--test-file` — Link to actual test file
-- `--private` — Exclude from public docs
-
-### Mark Test as Verified
-
-```bash
-loom verify REQ-abc123
-```
-
-### List All Test Specs
-
-```bash
-loom tests -p myproject
-loom tests -p myproject --public  # Exclude private
-```
-
-## Keeping Things Consistent
-
-### The Source of Truth
-
-The **Loom store** (ChromaDB) is the source of truth, not the markdown files.
-
-```
-Loom Store (ChromaDB)
-    ↓ loom sync
-REQUIREMENTS.md + TEST_SPEC.md (generated)
-    ↓ git push
-GitHub repo (for sharing)
-```
-
-### Do NOT Edit Generated Files Directly
-
-`REQUIREMENTS.md` and `TEST_SPEC.md` are regenerated on each `loom sync`. Direct edits will be overwritten.
-
-**To modify requirements:**
-```bash
-# Add new
-echo "REQUIREMENT: domain | text" | loom extract -p project
-
-# Supersede old (marks as replaced, keeps history)
-loom supersede REQ-oldid
-```
-
-**To modify test specs:**
-```bash
-# Update (overwrites previous)
-loom test REQ-xxx -d "New description" -s "New;Steps" -e "New expected"
-```
-
-### Sync Workflow
-
-```bash
-cd /path/to/requirements-repo
-
-# Regenerate docs from Loom store
-loom --project myproject sync --output ./myproject
-
-# Commit and push
-git add -A && git commit -m "Sync requirements" && git push
-```
-
-For teams, run sync after any requirement changes to keep the repo current.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `loom extract` | Extract requirements from stdin |
-| `loom list` | List all requirements |
-| `loom query <text>` | Semantic search |
-| `loom check <file>` | Check file for requirement drift |
-| `loom link <file>` | Link code to requirements |
-| `loom conflicts --text` | Check for conflicts |
-| `loom supersede <id>` | Mark requirement as superseded |
-| `loom sync` | Generate REQUIREMENTS.md and TEST_SPEC.md |
-| `loom test <id>` | Add/update test specification |
-| `loom verify <id>` | Mark test as verified |
-| `loom tests` | List test specifications |
-| `loom status` | Show project overview |
-| `loom doctor` | Run health checks |
-| `loom init-private` | Create PRIVATE.md template |
+Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** error, **2** drift/conflicts.
 
-## Requirement Format
+| Command                  | Purpose                                                              | `--json` |
+|--------------------------|----------------------------------------------------------------------|----------|
+| `extract`                | Parse `REQUIREMENT: domain \| text` from stdin (`--rationale`)       | —        |
+| `check <file>`           | Detect drift in a file                                               | yes      |
+| `context <file>`         | Pre-edit briefing: linked reqs, specs, drift (used by the hook)      | yes      |
+| `link <file>`            | Link code to reqs (`--req`) or specs (`--spec`)                      | —        |
+| `status`                 | Project overview with drift summary                                  | yes      |
+| `query <text>`           | Semantic search                                                      | yes      |
+| `list`                   | List requirements                                                    | yes      |
+| `sync`                   | Regenerate REQUIREMENTS.md + TEST_SPEC.md                            | —        |
+| `conflicts --text`       | Detect conflicting/overlapping reqs (LLM-verified)                   | yes      |
+| `supersede <id>`         | Mark a requirement as superseded                                     | —        |
+| `test` / `verify` / `tests` / `test-generate` | Manage test specs                               | `tests`  |
+| `trace <target>`         | Bidirectional traceability (req↔files)                               | yes      |
+| `chain <req_id>`         | Full traceability chain (req→patterns→specs→impls→tests)             | yes      |
+| `coverage`               | Show requirements missing implementations or tests                   | yes      |
+| `refine` / `set-status` / `incomplete` | Elaborate and status-manage reqs                       | —        |
+| `spec` / `specs` / `spec-link` | Specification management                                       | `specs`  |
+| `pattern` / `patterns` / `pattern-apply` | Shared design patterns                               | `patterns` |
+| `doctor`                 | Health checks (Ollama, store, orphans, drift, coverage)              | yes      |
+| `init-private`           | Create `PRIVATE.md` template                                         | —        |
+| **`cost`**               | Summarize PreToolUse hook cost (latency, bytes, overhead)            | yes      |
+| **`task`**               | Atomic work-item CRUD (`add`/`list`/`show`/`claim`/`release`/`complete`/`reject`/`prompt`) | yes |
+| **`decompose <SPEC>`**   | Propose atomic-task decomposition (`--apply` persists)               | —        |
 
-Requirements are extracted from text matching this pattern:
+Separate entry point for execution:
+
+| Tool                 | Purpose |
+|----------------------|---------|
+| `scripts/loom_exec`  | Drive Ollama against the Task queue. Flags: `--next`, `--loop`, `--dry-run`, `--model`, `-p`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`. |
+
+Project is auto-detected from the git repo name; override with `-p/--project` or the `LOOM_PROJECT` env var.
+
+## Hook instrumentation
+
+See [`hooks/README.md`](hooks/README.md) for install instructions. Summary:
+
+- `hooks/loom_pretool.py` registers as a `PreToolUse` hook on `Edit|Write|MultiEdit|NotebookEdit`.
+- On each fire: runs `loom context <file>`, injects linked reqs/specs/drift as a system-reminder, logs `{ts, tool, file, latency_ms, bytes, reqs, specs, drift, fired, skipped}` to `<project>/.hook-log.jsonl`.
+- `LOOM_HOOK_BLOCK_ON_DRIFT=1` turns drift into a hard block on the tool call.
+- `loom cost` aggregates the log: p50/p95/p99 latency, injected bytes, overhead percentage (fires where nothing was injected).
+
+Hook is designed never to block unrelated work — missing CLI, malformed stdin, or context errors all exit 0 silently.
+
+## Data model
+
+All dataclasses ship with `to_dict`/`from_dict` for ChromaDB metadata. Empty lists are stored as `["TBD"]` because ChromaDB rejects empty-list metadata; read them back as "unset."
+
+- **Requirement** — `id`, `domain`, `value`, `rationale`, `status` (pending/in_progress/implemented/verified/superseded), `acceptance_criteria`, `elaboration`, `test_spec_id`, `source_msg_id`, `source_session`, `timestamp`, optional `superseded_at`.
+- **Specification** — Detailed HOW for a `parent_req`. Status: draft/approved/implemented/verified/superseded.
+- **Pattern** — Shared design standard with an `applies_to` list.
+- **Implementation** — Code chunk linked to reqs/specs with a content hash (drift detection).
+- **Task** — Atomic work item. Fields: `title`, `files_to_modify`, `test_to_write`, `context_reqs`/`specs`/`patterns`/`sidecars`/`files`, `size_budget_files`, `size_budget_loc`, `depends_on`, `status`, `claimed_by`, `claimed_at`, `completed_at`, `rejected_reason`, `escalated_reason`, `created_by`, `parent_spec`.
+- **TestSpec** (JSON-backed, not ChromaDB) — steps, expected outcome, automated flag, links to reqs/specs.
+
+Six ChromaDB collections: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`.
+
+## Source of truth
 
 ```
-REQUIREMENT: <domain> | <requirement text>
+Loom Store (ChromaDB at ~/.openclaw/loom/<project>/)
+    ↓ loom sync
+REQUIREMENTS.md + TEST_SPEC.md  (generated — do NOT edit by hand)
+    ↓ git push
+Repo (for sharing)
 ```
 
-### Domains
-
-- **terminology** — Naming conventions ("the app is called SpeakFit")
-- **behavior** — How features work ("reset requires 3-second hold")
-- **ui** — Visual/UX decisions ("mobile-friendly layout")
-- **data** — Data model constraints ("timestamps in UTC")
-- **architecture** — Technical decisions ("use PostgreSQL")
-
-## Agent Integration
-
-Add to your agent's AGENTS.md for automatic tracking:
-
-```markdown
-## Loom Integration
-
-When a decision is made about how something should work:
-→ Extract it: `echo "REQUIREMENT: domain | text" | loom extract`
-
-Before modifying code:
-→ Check for drift: `loom check <file>`
-
-After implementing:
-→ Link to requirements: `loom link <file> --req REQ-xxx`
-```
+To modify requirements: `loom extract` / `loom refine` / `loom supersede` — never edit generated files.
 
 ## Privacy
 
@@ -249,39 +262,46 @@ Create `PRIVATE.md` in your project to exclude sensitive requirements from publi
 
 ```markdown
 # Private Requirements
-
 - REQ-abc123 — Internal security policy
 - REQ-def456 — Proprietary algorithm details
 ```
 
-Then generate public docs:
+Generate public docs: `loom sync --public`.
 
-```bash
-loom sync --public
-```
-
-## How It Works
-
-1. **Extraction**: Agent or user provides requirements in structured format
-2. **Embedding**: Text is embedded using Ollama's nomic-embed-text (768 dimensions)
-3. **Storage**: ChromaDB stores embeddings with metadata (versioned, timestamped)
-4. **Search**: Queries use semantic similarity to find relevant requirements
-5. **Conflict Detection**: New requirements are compared against existing for overlap
-6. **Documentation**: Markdown files are regenerated on `loom sync`
-
-## Data Storage
+## Data storage
 
 ```
 ~/.openclaw/loom/<project>/
-├── chroma.sqlite3          # ChromaDB database
+├── chroma.sqlite3          # ChromaDB (6 collections)
 ├── .loom-specs.json        # Test specifications
+├── .hook-log.jsonl         # PreToolUse hook activity log
+├── .exec-log.jsonl         # loom_exec run log
 └── PRIVATE.md              # Private requirement IDs
 ```
 
+## Requirement format
+
+```
+REQUIREMENT: <domain> | <requirement text>
+```
+
+Domains: **terminology**, **behavior**, **ui**, **data**, **architecture**.
+
+## How it works (under the hood)
+
+1. **Extraction** — Structured text parsed into `Requirement` dataclass.
+2. **Embedding** — `nomic-embed-text` via Ollama (768 dimensions) with a process-local LRU cache (max 500); 3× retry with fallback to a deterministic hash-based vector if Ollama is down.
+3. **Storage** — ChromaDB persists embeddings + metadata across six collections.
+4. **Search** — Semantic similarity over the appropriate collection.
+5. **Conflict detection** — Nearest-neighbor search surfaces overlap candidates; an LLM pass (`src/conflict_verify.py`) confirms real conflicts before surfacing.
+6. **Drift** — `Implementation.content_hash` is compared against the current file; linked reqs that have been superseded flag the impl as drifted.
+7. **Decomposition** — `loom decompose` builds a prompt from the spec + parent req + applicable patterns, calls the decomposer (Anthropic or Ollama, selected by `provider:model` prefix), parses the YAML task list, validates atomicity + dep graph, and persists if `--apply`.
+8. **Execution** — `loom_exec` selects the next ready task (dependencies complete), assembles its context bundle from `context_reqs`/`specs`/`patterns`/`sidecars`/`files`, calls the executor model, extracts the code block, applies to a scratch copy, runs the grading test, promotes to the real tree on pass.
+
 ## Contributing
 
-Contributions welcome! Please read CONTRIBUTING.md first.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`ROADMAP.md`](ROADMAP.md).
 
 ## License
 
-MIT License - see LICENSE file.
+MIT — see LICENSE.
