@@ -278,6 +278,99 @@ class TestConflicts:
             )
 
 
+class TestInit:
+    def test_creates_config_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(target_dir=td, project="myproj")
+            cfg_path = Path(td) / ".loom-config.json"
+            assert cfg_path.exists()
+            assert result["config_path"] == str(cfg_path)
+            assert result["project"] == "myproj"
+            assert result["created_config"] is True
+            # Config has the project pinned
+            import json as _json
+            cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+            assert cfg["project"] == "myproj"
+            assert cfg["executor_model"] == "qwen3.5:latest"
+
+    def test_refuses_overwrite_without_force(self):
+        with tempfile.TemporaryDirectory() as td:
+            services.init(target_dir=td, project="p1")
+            with pytest.raises(FileExistsError):
+                services.init(target_dir=td, project="p2")
+
+    def test_force_overwrites(self):
+        with tempfile.TemporaryDirectory() as td:
+            services.init(target_dir=td, project="p1")
+            result = services.init(target_dir=td, project="p2", force=True)
+            assert result["project"] == "p2"
+            import json as _json
+            cfg = _json.loads(
+                (Path(td) / ".loom-config.json").read_text(encoding="utf-8")
+            )
+            assert cfg["project"] == "p2"
+
+    def test_missing_target_dir_raises(self):
+        with pytest.raises(NotADirectoryError):
+            services.init(target_dir="/definitely/does/not/exist", project="x")
+
+    def test_creates_tests_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(target_dir=td, project="p")
+            assert (Path(td) / "tests").is_dir()
+            assert result["created_tests_dir"] is True
+
+    def test_existing_tests_dir_not_recreated(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "tests").mkdir()
+            result = services.init(target_dir=td, project="p")
+            assert result["created_tests_dir"] is False
+
+    def test_health_checks_reported(self):
+        # Ollama is mocked-out by the autouse fixture → ollama.ok = False
+        # but result structure should still be populated.
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(target_dir=td, project="p")
+            ch = result["checks"]
+            assert ch["ollama"]["ok"] is False
+            assert ch["embedding_model"]["name"] == "nomic-embed-text"
+            assert ch["executor_model"]["name"] == "qwen3.5:latest"
+            assert ch["tests_dir"]["ok"] is True
+
+    def test_pytest_detected_in_requirements_txt(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "requirements.txt").write_text(
+                "fastapi>=0.1\npytest>=7\n", encoding="utf-8",
+            )
+            result = services.init(target_dir=td, project="p")
+            assert result["checks"]["pytest"]["ok"] is True
+            assert result["checks"]["pytest"]["where"] == "requirements.txt"
+
+    def test_pytest_detected_in_nested_requirements(self):
+        with tempfile.TemporaryDirectory() as td:
+            backend = Path(td) / "src" / "backend"
+            backend.mkdir(parents=True)
+            (backend / "requirements.txt").write_text(
+                "fastapi\npytest-asyncio\n", encoding="utf-8",
+            )
+            result = services.init(target_dir=td, project="p")
+            assert result["checks"]["pytest"]["ok"] is True
+            # Forward-slash path regardless of platform
+            assert "backend" in result["checks"]["pytest"]["where"]
+
+    def test_pytest_missing_warns(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(target_dir=td, project="p")
+            assert result["checks"]["pytest"]["ok"] is False
+            assert any("pytest" in w for w in result["warnings"])
+
+    def test_next_steps_present(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(target_dir=td, project="p")
+            assert isinstance(result["next_steps"], list)
+            assert len(result["next_steps"]) >= 3
+
+
 class TestDoctor:
     def test_empty_store_returns_shape(self, store):
         data = services.doctor(store)

@@ -277,3 +277,71 @@ before they reach for execution.
 | F9  loom_exec hard-coded          | ✅ | T1.1 --target-dir |
 | F10 grading test not created      | ⏭ new | next branch |
 
+---
+
+## Third run — after `loom init` + config precedence (2026-04-22)
+
+`claude/loom-init` added `loom init` and wired `.loom-config.json`
+precedence into the CLI. Replayed the agentforge flow from scratch:
+
+```
+rm -rf ~/.openclaw/loom/agentforge/
+rm -f  ~/dev/agentforge/.loom-config.json
+cd ~/dev/agentforge
+loom init -p agentforge
+  ✓ Ollama reachable
+  ✓ Embedding model:  nomic-embed-text
+  ✓ Executor model:   qwen3.5:latest
+  ⚠ pytest available   (target has no pytest in requirements.txt — F2)
+  ✓ tests dir:         tests/  (already existed)
+  wrote .loom-config.json
+
+# No -p flag needed anywhere downstream:
+echo "REQUIREMENT: …" | loom extract --rationale "…"
+  → REQ-bdd035b4
+
+loom status
+  → project auto-resolved as "agentforge" from .loom-config.json
+```
+
+### What this closes
+
+- **F2 surfaced in init's health-check, not as a runtime failure.** The
+  first `loom init` on agentforge warned "pytest not declared in
+  requirements.txt" — operators see the gap at onboarding time, before
+  they've invested in specs/tasks. Still doesn't *fix* F2 (Loom won't
+  install pytest for you), but changes it from "cryptic pytest-error
+  mid-run" to "explicit warning on day 1."
+- **Config precedence removes repetitive `-p` / `--target-dir` typing.**
+  The three most common commands (`extract`, `status`, `decompose`,
+  `loom_exec`) all pick up the project name and target dir from the
+  config once init has run. Real ergonomics improvement.
+- **F4's spirit is answered.** A first-time user running `loom init` on
+  an unfamiliar repo sees the tool's opinions about what it needs
+  (models, test runner, paths). This is the closest thing to "here's
+  what Loom expects" that a user can read without digging through docs.
+
+### Still open
+
+- **F10** (no pipeline step creates `tests/test_*.py` skeleton).
+  Deferred until after init lands. Options documented in the second-
+  run section above. Next branch after this one.
+- **F3** (doctor truncates model list to 5). Still cosmetic.
+- **B — template scaffolding** (`loom init --template`). Deferred per
+  user feedback: templates must be user-customizable, not baked in.
+
+### Updated scoreboard
+
+| Friction | Status after `claude/loom-init` |
+|---|---|
+| F1  `-p` position                     | ✅ exec-generalize |
+| F2  target lacks pytest               | ✅ surfaced in `loom init` health-check (doesn't install, but doesn't hide) |
+| F3  doctor truncates models           | ⏭ still cosmetic |
+| F4  agentforge own drift              | ✅ addressed as part of init health-check surfacing |
+| F5  cp1252 emoji crash                | ✅ exec-generalize |
+| F6  ghost `-t` flag                   | ✅ exec-generalize |
+| F7  empty context_files               | ✅ exec-generalize |
+| F8  thin prompt downstream            | ✅ closed by F7 fix |
+| F9  loom_exec hard-coded              | ✅ exec-generalize |
+| F10 grading test not created          | ⏭ next branch |
+

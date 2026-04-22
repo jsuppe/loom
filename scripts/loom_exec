@@ -56,7 +56,7 @@ import services  # noqa: E402
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-DEFAULT_MODEL = os.environ.get("LOOM_EXECUTOR_MODEL", "qwen3.5:latest")
+FALLBACK_EXECUTOR_MODEL = "qwen3.5:latest"
 
 # Directories that should never be copied into the scratch grading dir —
 # either because they're huge, irrelevant, or they'd break pytest discovery.
@@ -343,8 +343,11 @@ def main() -> int:
                         help="With --next: drain the queue (stop on empty/failure)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print assembled prompt without calling the model")
-    parser.add_argument("--model", default=DEFAULT_MODEL,
-                        help=f"Ollama model (default: {DEFAULT_MODEL})")
+    parser.add_argument(
+        "--model", default=None,
+        help="Ollama model. Precedence: --model > $LOOM_EXECUTOR_MODEL > "
+             ".loom-config.json > qwen3.5:latest.",
+    )
     parser.add_argument("-p", "--project", default=None, help="Project name (store)")
     parser.add_argument(
         "--target-dir", default=None,
@@ -353,12 +356,33 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    project = args.project or get_project_name()
-    store = LoomStore(project)
     target_dir = resolve_target_dir(args.target_dir)
     if not target_dir.is_dir():
         print(f"[exec] target-dir does not exist: {target_dir}", file=sys.stderr)
         return 2
+
+    # Load the per-target config (empty dict if none). Precedence for every
+    # setting: CLI flag > env var > config file > built-in default.
+    import config as _config
+    cfg = _config.load_config(target_dir)
+
+    project = _config.resolve(
+        "project",
+        cli=args.project,
+        env_var="LOOM_PROJECT",
+        config=cfg,
+        default=None,
+    ) or get_project_name()
+
+    model = _config.resolve(
+        "executor_model",
+        cli=args.model,
+        env_var="LOOM_EXECUTOR_MODEL",
+        config=cfg,
+        default=FALLBACK_EXECUTOR_MODEL,
+    )
+
+    store = LoomStore(project)
 
     if args.next:
         while True:
@@ -367,7 +391,7 @@ def main() -> int:
                 print("[exec] no ready tasks")
                 break
             task_id = ready[0]["id"]
-            result = execute_task(store, task_id, args.model, target_dir,
+            result = execute_task(store, task_id, model, target_dir,
                                   dry_run=args.dry_run)
             print(f"[exec] result: {json.dumps(result)}")
             if not args.loop:
@@ -381,7 +405,7 @@ def main() -> int:
     if not args.task_id:
         parser.error("task_id required (or use --next)")
 
-    result = execute_task(store, args.task_id, args.model, target_dir,
+    result = execute_task(store, args.task_id, model, target_dir,
                           dry_run=args.dry_run)
     print(f"[exec] result: {json.dumps(result)}")
     return 0 if result.get("outcome") in {"complete", None} else 1

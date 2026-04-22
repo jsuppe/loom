@@ -633,6 +633,178 @@ def doctor(store: LoomStore) -> dict[str, Any]:
     }
 
 
+def init(
+    *,
+    target_dir: Path | str,
+    project: str,
+    force: bool = False,
+    ollama_url: str = "http://localhost:11434",
+) -> dict[str, Any]:
+    """Onboard an existing target repo: write .loom-config.json + health check.
+
+    Pure function — does not touch the Loom store (caller's responsibility
+    if they want to create one). Target-side side effects: writes the
+    config file, and creates ``tests/`` if missing.
+
+    Result shape::
+
+        {
+          "config_path": str,
+          "project": str,
+          "target_dir": str,
+          "config": {...},              # the dict that was written
+          "created_config": bool,       # False if file already existed + !force
+          "created_tests_dir": bool,
+          "checks": {
+            "ollama":         {"ok": bool, "error": str | None},
+            "embedding_model":{"ok": bool, "name": str},
+            "executor_model": {"ok": bool, "name": str},
+            "pytest":         {"ok": bool, "where": "requirements.txt"|"pyproject.toml"|null},
+            "tests_dir":      {"ok": bool, "path": str, "existed": bool},
+          },
+          "warnings": [str],
+          "next_steps": [str],
+        }
+
+    Raises:
+        NotADirectoryError: target_dir doesn't exist.
+        FileExistsError: .loom-config.json already exists and force=False.
+    """
+    import urllib.request
+    import urllib.error
+    import json as _json
+    import config as _config
+
+    td = Path(target_dir).expanduser().resolve()
+    if not td.is_dir():
+        raise NotADirectoryError(f"target_dir does not exist: {td}")
+
+    cfg_path = _config.config_path(td)
+    if cfg_path.exists() and not force:
+        raise FileExistsError(
+            f"{cfg_path} already exists (pass force=True to overwrite)"
+        )
+
+    # Build the config dict. Start from defaults, override the project name.
+    cfg: dict[str, Any] = {**_config.DEFAULTS, "ignore": list(_config.DEFAULTS["ignore"])}
+    cfg["project"] = project
+
+    _config.save_config(td, cfg)
+
+    # -- Health checks (non-fatal; fill the result and let caller decide) --
+    warnings: list[str] = []
+    checks: dict[str, Any] = {}
+
+    ollama_models: list[str] = []
+    ollama_ok = False
+    ollama_err: str | None = None
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/tags",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = _json.loads(resp.read().decode())
+            ollama_models = [m["name"] for m in body.get("models", [])]
+            ollama_ok = True
+    except Exception as e:
+        ollama_err = str(e)
+    checks["ollama"] = {"ok": ollama_ok, "error": ollama_err}
+
+    def _has_model(name: str) -> bool:
+        # nomic-embed-text:latest matches "nomic-embed-text"
+        return any(m == name or m.startswith(name + ":") for m in ollama_models)
+
+    checks["embedding_model"] = {
+        "ok": _has_model(cfg["embedding_model"]),
+        "name": cfg["embedding_model"],
+    }
+    if ollama_ok and not checks["embedding_model"]["ok"]:
+        warnings.append(
+            f"embedding model {cfg['embedding_model']!r} not pulled — "
+            f"run `ollama pull {cfg['embedding_model']}`"
+        )
+
+    checks["executor_model"] = {
+        "ok": _has_model(cfg["executor_model"]),
+        "name": cfg["executor_model"],
+    }
+    if ollama_ok and not checks["executor_model"]["ok"]:
+        warnings.append(
+            f"executor model {cfg['executor_model']!r} not pulled — "
+            f"run `ollama pull {cfg['executor_model']}`"
+        )
+
+    # pytest presence check (F2): look in requirements.txt, pyproject.toml,
+    # or setup.py. We don't install anything — just report.
+    pytest_where: str | None = None
+    for candidate in (
+        td / "requirements.txt",
+        td / "requirements-dev.txt",
+        td / "dev-requirements.txt",
+        td / "pyproject.toml",
+        td / "setup.py",
+        td / "setup.cfg",
+    ):
+        if not candidate.exists():
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "pytest" in text:
+            pytest_where = candidate.name
+            break
+    # Also scan backend/requirements.txt for projects like agentforge that
+    # keep deps deeper.
+    if pytest_where is None:
+        for sub in ("src/backend", "backend", "api", "server"):
+            candidate = td / sub / "requirements.txt"
+            if candidate.exists():
+                try:
+                    if "pytest" in candidate.read_text(encoding="utf-8"):
+                        pytest_where = str(candidate.relative_to(td))
+                        break
+                except OSError:
+                    pass
+    checks["pytest"] = {"ok": pytest_where is not None, "where": pytest_where}
+    if not checks["pytest"]["ok"]:
+        warnings.append(
+            "pytest not declared in requirements.txt / pyproject.toml — "
+            "loom_exec grades with pytest, so add it before running tasks"
+        )
+
+    # tests/ dir
+    tests_dir = td / cfg["test_dir"]
+    existed = tests_dir.exists()
+    if not existed:
+        tests_dir.mkdir(parents=True)
+    checks["tests_dir"] = {
+        "ok": True,
+        "path": str(tests_dir.relative_to(td)),
+        "existed": existed,
+    }
+
+    next_steps = [
+        "loom extract  — capture the first requirement",
+        "loom spec <REQ-id>  — elaborate it into a specification",
+        "loom decompose <SPEC-id> --apply  — turn the spec into atomic tasks",
+        "loom_exec --next  — execute the next ready task",
+    ]
+
+    return {
+        "config_path": str(cfg_path),
+        "project": project,
+        "target_dir": str(td),
+        "config": cfg,
+        "created_config": True,
+        "created_tests_dir": not existed,
+        "checks": checks,
+        "warnings": warnings,
+        "next_steps": next_steps,
+    }
+
+
 def extract(
     store: LoomStore,
     *,

@@ -58,27 +58,32 @@ Sample embedding in tests is `[0.1] * 768` to match `nomic-embed-text` dimension
 ### Manual end-to-end check
 
 ```bash
-# Capture a requirement
+# One-time: onboard a fresh target dir
+mkdir /tmp/loom-test-target && cd /tmp/loom-test-target
+python3 ~/dev/loom/scripts/loom init -p test-dev
+#  → writes .loom-config.json + creates tests/ + health-check
+
+# Capture a requirement (no -p needed after init — picked up from config)
 echo "REQUIREMENT: behavior | Users must confirm before deleting" \
-  | python3 scripts/loom extract -p test-dev --rationale "Prevent accidental data loss"
+  | python3 ~/dev/loom/scripts/loom extract --rationale "Prevent accidental data loss"
 
 # Add a spec
-python3 scripts/loom -p test-dev spec REQ-xxx \
+python3 ~/dev/loom/scripts/loom spec REQ-xxx \
   -d "Confirmation modal: show modal before delete; require Type-to-confirm for > 10 items" \
   -c "Modal appears on delete click" \
   -c "Type-to-confirm required when deleting > 10 items"
 
 # Decompose (Opus if ANTHROPIC_API_KEY; else Ollama)
-python3 scripts/loom decompose SPEC-xxx --apply -p test-dev
+python3 ~/dev/loom/scripts/loom decompose SPEC-xxx --apply
 
-# Execute
-LOOM_PROJECT=test-dev python3 scripts/loom_exec --loop
+# Execute (config pins executor_model)
+python3 ~/dev/loom/scripts/loom_exec --loop
 
 # Regenerate docs
-python3 scripts/loom sync -p test-dev --output ./docs
+python3 ~/dev/loom/scripts/loom sync --output ./docs
 
 # Health check
-python3 scripts/loom doctor -p test-dev --json
+python3 ~/dev/loom/scripts/loom doctor --json
 
 # Hook cost (if the hook has been firing)
 python3 scripts/loom cost -p test-dev

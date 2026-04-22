@@ -45,11 +45,23 @@ import services
 
 
 def get_project_name():
-    """Detect project name from current directory or env."""
+    """Detect project name.
+
+    Precedence: LOOM_PROJECT env > .loom-config.json in cwd > git repo name > "default".
+    """
     if os.environ.get("LOOM_PROJECT"):
         return os.environ["LOOM_PROJECT"]
-    
-    # Try to detect from git
+
+    # Config file in cwd (skip if it doesn't exist or doesn't pin a project).
+    try:
+        import config as _config
+        cfg = _config.load_config(os.getcwd())
+        if cfg.get("project"):
+            return cfg["project"]
+    except Exception:
+        pass
+
+    # Git repo name
     try:
         import subprocess
         result = subprocess.run(
@@ -60,7 +72,7 @@ def get_project_name():
             return Path(result.stdout.strip()).name
     except:
         pass
-    
+
     return "default"
 
 
@@ -637,15 +649,69 @@ def cmd_test_generate(args):
 def cmd_init_private(args):
     """Initialize PRIVATE.md template."""
     from testspec import create_private_template
-    
+
     store = LoomStore(args.project)
     path = create_private_template(store.data_dir)
-    
+
     print(f"🧵 Loom Private — Created {path}")
     print()
     print("Edit this file to list requirement IDs that should remain private.")
     print("Private requirements will be excluded from public documentation.")
-    
+
+    return 0
+
+
+def cmd_init(args):
+    """Onboard an existing target repo: write .loom-config.json + health check."""
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
+    project = args.project  # top-level -p / coalesced from subparser / falls back
+
+    try:
+        result = services.init(
+            target_dir=target_dir, project=project, force=args.force,
+        )
+    except NotADirectoryError as e:
+        print(f"✗ {e}")
+        return 1
+    except FileExistsError as e:
+        print(f"✗ {e}")
+        print("   Pass --force to overwrite.")
+        return 1
+
+    print(f"🧵 Loom Init — {project}")
+    print(f"   target_dir: {result['target_dir']}")
+    print(f"   config:     {result['config_path']}")
+    print()
+
+    # Health checks
+    ch = result["checks"]
+    def _mark(ok): return "✓" if ok else "⚠"
+
+    print(f"   {_mark(ch['ollama']['ok'])} Ollama reachable"
+          + ("" if ch["ollama"]["ok"] else f"  ({ch['ollama']['error']})"))
+    print(f"   {_mark(ch['embedding_model']['ok'])} Embedding model:  "
+          f"{ch['embedding_model']['name']}")
+    print(f"   {_mark(ch['executor_model']['ok'])} Executor model:   "
+          f"{ch['executor_model']['name']}")
+    print(f"   {_mark(ch['pytest']['ok'])} pytest available"
+          + (f"  ({ch['pytest']['where']})" if ch["pytest"]["ok"] else ""))
+    tests_msg = "already existed" if not result["created_tests_dir"] else "created"
+    print(f"   ✓ tests dir:      {ch['tests_dir']['path']}/  ({tests_msg})")
+
+    if result["warnings"]:
+        print()
+        for w in result["warnings"]:
+            print(f"   ⚠ {w}")
+
+    print()
+    print("Next steps:")
+    for step in result["next_steps"]:
+        print(f"   → {step}")
+
     return 0
 
 
@@ -1467,9 +1533,20 @@ def cmd_decompose(args):
         or os.environ.get("LOOM_TARGET_DIR")
         or os.getcwd()
     )
+    # Config precedence: --model > LOOM_DECOMPOSER_MODEL > .loom-config.json
+    # > services._default_decomposer_model().
+    import config as _config
+    cfg = _config.load_config(target_dir)
+    model = _config.resolve(
+        "decomposer_model",
+        cli=args.model,
+        env_var="LOOM_DECOMPOSER_MODEL",
+        config=cfg,
+        default=None,
+    )
     try:
         result = services.decompose(
-            store, args.spec_id, model=args.model, target_dir=target_dir,
+            store, args.spec_id, model=model, target_dir=target_dir,
         )
     except (LookupError, ValueError, RuntimeError) as e:
         print(str(e))
@@ -1633,7 +1710,21 @@ def main():
     
     # init-private
     p_private = sp("init-private", help="Initialize PRIVATE.md template")
-    
+
+    # init
+    p_init = sp(
+        "init",
+        help="Onboard a target repo: write .loom-config.json + health check",
+    )
+    p_init.add_argument(
+        "--target-dir", default=None,
+        help="Repo to onboard (default: $LOOM_TARGET_DIR or cwd)",
+    )
+    p_init.add_argument(
+        "--force", action="store_true",
+        help="Overwrite an existing .loom-config.json",
+    )
+
     # doctor
     p_doctor = sp("doctor", help="Run health checks")
     p_doctor.add_argument("--json", "-j", action="store_true", help="Output as JSON")
@@ -1824,6 +1915,7 @@ def main():
         "tests": cmd_test_list,
         "test-generate": cmd_test_generate,
         "init-private": cmd_init_private,
+        "init": cmd_init,
         "doctor": cmd_doctor,
         "trace": cmd_trace,
         "refine": cmd_refine,

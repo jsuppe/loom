@@ -15,6 +15,7 @@ This skill is always active via AGENTS.md integration. Invoke at these moments:
 
 | Moment                               | Action                                  | Command                          |
 |--------------------------------------|-----------------------------------------|----------------------------------|
+| Onboarding a new target repo         | Write `.loom-config.json` + health-check| `loom init`                      |
 | Decision made in chat                | Extract requirement (with rationale)    | `loom extract --rationale ...`   |
 | Before modifying code (automatic)    | Pre-edit briefing                       | `hooks/loom_pretool.py` (hook)   |
 | Manual drift check                   | Inspect a file                          | `loom check <file>`              |
