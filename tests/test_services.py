@@ -657,6 +657,94 @@ class TestSpecAdd:
         with pytest.raises(ValueError):
             services.spec_add(store, "REQ-p", "   ")
 
+    def test_test_file_stored_and_skeleton_written(self, store, fake_embedding):
+        _mk_req(store, "REQ-t", "behavior", "parent", fake_embedding)
+        with tempfile.TemporaryDirectory() as td:
+            result = services.spec_add(
+                store, "REQ-t", "add route",
+                test_file="tests/test_route.py::TestRoute",
+                target_dir=td,
+            )
+            assert result["test_file"] == "tests/test_route.py::TestRoute"
+            assert result["test_skeleton_written"] is True
+            skeleton = Path(td) / "tests" / "test_route.py"
+            assert skeleton.exists()
+            content = skeleton.read_text(encoding="utf-8")
+            # Placeholder intentionally fails so an empty skeleton never
+            # passes.
+            assert "class TestRoute" in content
+            assert "pytest.fail" in content
+            # Store roundtrip preserves the field
+            assert store.get_specification(result["spec_id"]).test_file == \
+                "tests/test_route.py::TestRoute"
+
+    def test_test_file_not_overwritten_when_exists(self, store, fake_embedding):
+        _mk_req(store, "REQ-t", "behavior", "parent", fake_embedding)
+        with tempfile.TemporaryDirectory() as td:
+            existing = Path(td) / "tests" / "test_route.py"
+            existing.parent.mkdir(parents=True)
+            existing.write_text("# real tests here", encoding="utf-8")
+            result = services.spec_add(
+                store, "REQ-t", "d",
+                test_file="tests/test_route.py::TestRoute",
+                target_dir=td,
+            )
+            assert result["test_skeleton_written"] is False
+            # Existing content preserved
+            assert existing.read_text(encoding="utf-8") == "# real tests here"
+
+    def test_test_file_without_target_dir_stores_but_no_skeleton(self, store, fake_embedding):
+        _mk_req(store, "REQ-t", "behavior", "parent", fake_embedding)
+        result = services.spec_add(
+            store, "REQ-t", "d",
+            test_file="tests/test_route.py::TestRoute",
+            target_dir=None,
+        )
+        assert result["test_file"] == "tests/test_route.py::TestRoute"
+        assert result["test_skeleton_written"] is None
+
+    def test_malformed_test_file_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-t", "behavior", "parent", fake_embedding)
+        with pytest.raises(ValueError):
+            services.spec_add(
+                store, "REQ-t", "d",
+                test_file="tests/test_route.py",   # missing ::Class
+            )
+
+
+class TestValidateWithSpecTestFile:
+    """Validator should force-override LLM test_to_write when spec has test_file."""
+
+    def test_override_when_llm_invents_different_path(self):
+        from services import _validate_task_proposals
+        proposals = [{
+            "title": "Add route",
+            "files_to_modify": ["src/main.py"],
+            "test_to_write": "tests/test_wrong.py::Wrong",
+            "context_files": [],
+        }]
+        normalized, warnings = _validate_task_proposals(
+            proposals, parent_spec="SPEC-x",
+            spec_test_file="tests/test_right.py::Right",
+        )
+        assert normalized[0]["test_to_write"] == "tests/test_right.py::Right"
+        assert any("replaced" in w for w in warnings)
+
+    def test_passthrough_when_already_correct(self):
+        from services import _validate_task_proposals
+        proposals = [{
+            "title": "Add route",
+            "files_to_modify": ["src/main.py"],
+            "test_to_write": "tests/test_right.py::Right",
+            "context_files": [],
+        }]
+        normalized, warnings = _validate_task_proposals(
+            proposals, parent_spec="SPEC-x",
+            spec_test_file="tests/test_right.py::Right",
+        )
+        assert normalized[0]["test_to_write"] == "tests/test_right.py::Right"
+        assert not any("replaced" in w for w in warnings)
+
 
 class TestSpecList:
     def test_empty(self, store):

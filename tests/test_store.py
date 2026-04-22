@@ -485,6 +485,40 @@ class TestDocGeneration:
             assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py` | — |" in content
 
 
+class TestSpecificationTestFile:
+    def test_defaults_to_empty_string(self):
+        from store import Specification
+        spec = Specification(
+            id="SPEC-x", parent_req="REQ-x",
+            description="d", timestamp="2026-01-01T00:00:00Z",
+        )
+        assert spec.test_file == ""
+
+    def test_roundtrip_through_dict(self):
+        from store import Specification
+        spec = Specification(
+            id="SPEC-y", parent_req="REQ-y",
+            description="d", timestamp="2026-01-01T00:00:00Z",
+            test_file="tests/test_foo.py::TestFoo",
+        )
+        round_tripped = Specification.from_dict(spec.to_dict())
+        assert round_tripped.test_file == "tests/test_foo.py::TestFoo"
+
+    def test_backward_compat_missing_field(self):
+        """Old stores with no test_file key still load."""
+        from store import Specification
+        d = {
+            "id": "SPEC-old", "parent_req": "REQ-old",
+            "description": "d", "timestamp": "2026-01-01T00:00:00Z",
+            "status": "draft", "acceptance_criteria": None,
+            "source_doc": None, "source_conversation": None,
+            "superseded_at": None, "superseded_by": None,
+            # no test_file
+        }
+        spec = Specification.from_dict(d)
+        assert spec.test_file == ""
+
+
 class TestTaskDataclass:
     def test_generate_task_id_is_stable(self):
         a = generate_task_id("SPEC-x", "add helper")

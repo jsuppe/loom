@@ -111,7 +111,11 @@ echo "REQUIREMENT: behavior | Users must confirm before deleting" \
 loom spec REQ-abc12345 \
   -d "Confirmation modal: show modal on delete button; require Type-to-confirm for > 10 items" \
   -c "Modal appears on delete click" \
-  -c "Type-to-confirm required when deleting > 10 items"
+  -c "Type-to-confirm required when deleting > 10 items" \
+  --test tests/test_delete_confirm.py::TestDeleteConfirm
+# --test writes a failing-placeholder skeleton so the executor has a
+# real grading target. Replace the placeholder assertions before
+# running loom_exec.
 
 # Decompose spec into atomic tasks (Opus by default if ANTHROPIC_API_KEY is set)
 loom decompose SPEC-xxx --apply

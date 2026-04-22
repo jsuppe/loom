@@ -345,3 +345,65 @@ loom status
 | F9  loom_exec hard-coded              | ✅ exec-generalize |
 | F10 grading test not created          | ⏭ next branch |
 
+---
+
+## Fourth run — after `loom spec --test` + skeleton writer (2026-04-22)
+
+`claude/spec-test-skeleton` added:
+
+1. `Specification.test_file: str = ""` — the canonical pytest target for
+   the spec, with `setdefault` backward compat.
+2. `loom spec --test <path::Class>` — writes a failing-placeholder
+   skeleton to `<target_dir>/<path>` if the file doesn't exist. Never
+   overwrites (idempotent).
+3. `_build_decompose_prompt` — injects the spec's `test_file` into the
+   decomposer input, instructing the LLM to use it verbatim.
+4. `_validate_task_proposals` — force-normalizes `test_to_write` back
+   to `spec.test_file` if the LLM ignored the instruction. Belt and
+   suspenders.
+
+### End-to-end replay on agentforge
+
+```
+loom init --force
+loom spec REQ-36c4c3d7 -d "..." -c "..." \
+    --test tests/test_conflicts_check.py::TestConflictsCheck
+  → wrote tests/test_conflicts_check.py (skeleton, placeholder fails)
+loom decompose SPEC-85ca9777 --apply
+  → task uses test_to_write = tests/test_conflicts_check.py::TestConflictsCheck
+  → qwen picked up the instruction directly; validator override didn't fire
+loom_exec --next
+  → prompt: 10208 chars
+  → model:  1.5s, 121 output tokens
+  → grading: 0/1  (placeholder failed as designed)
+  → test_fail outcome, scratch discarded
+```
+
+Previously: `grading: 0/0` (pytest couldn't find the test file) →
+useless "0 tests ran" state. Now: `grading: 0/1` (pytest found 1 test
+and it failed on purpose). The skeleton does its job — an empty
+placeholder never masquerades as a passing test, and the operator gets
+a clear message pointing at what to do next.
+
+### Scoreboard after claude/spec-test-skeleton
+
+| Friction | Status |
+|---|---|
+| F1  `-p` position                     | ✅ |
+| F2  target lacks pytest               | ✅ surfaced in init |
+| F3  doctor truncates models           | ⏭ still cosmetic |
+| F4  agentforge own drift              | ✅ surfaced via init |
+| F5  cp1252 emoji crash                | ✅ |
+| F6  ghost `-t` flag                   | ✅ |
+| F7  empty context_files               | ✅ |
+| F8  thin prompt downstream            | ✅ |
+| F9  loom_exec hard-coded              | ✅ |
+| F10 grading test not created          | ✅ this branch |
+
+All ten documented frictions now resolved or explicitly deferred as
+cosmetic. The pipeline can be pointed at an unfamiliar Python+pytest
+repo, captured with `loom init` → `loom extract` → `loom spec --test`
+→ `loom decompose --apply` → `loom_exec --next`, and produces a real
+graded run with scratch isolation. The remaining gap is authoring test
+assertions (a human or Opus-class task, not a pipeline fix).
+
