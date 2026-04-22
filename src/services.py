@@ -552,7 +552,10 @@ def doctor(store: LoomStore) -> dict[str, Any]:
                 warnings.append("nomic-embed-text model not found")
     except Exception as e:
         issues.append(f"Ollama not reachable: {e}")
-    checks["ollama"] = {"ok": ollama_ok, "models": ollama_models[:5]}
+    # Return the full list (FINDINGS-wild F3 — the previous [:5] slice
+    # hid 9+ available models on multi-model setups). CLI can truncate
+    # for display if it wants; JSON/MCP consumers want everything.
+    checks["ollama"] = {"ok": ollama_ok, "models": ollama_models}
 
     # 2. Store (fatal if it fails)
     try:
