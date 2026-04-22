@@ -48,6 +48,35 @@ tasks at effectively zero marginal cost.
 - `loom_exec` currently supports a single grading-test-runs-pytest
   criterion; multi-criteria grading (lint + type + test) is future work.
 
+## Milestone 0.5: Onboarding & generalization (DONE)
+
+Turn the pipeline from "dogfoods on Loom" into "works on any Python+pytest
+repo." Validated against agentforge in
+[`experiments/wild/FINDINGS-wild.md`](experiments/wild/FINDINGS-wild.md).
+
+- [x] **0.5a `loom_exec --target-dir` / `LOOM_TARGET_DIR`** — Runner no
+      longer hard-coded to Loom's own repo. Separates "store name" from
+      "source root."
+- [x] **0.5b `loom decompose --target-dir`** — Validator auto-adds
+      `files_to_modify` entries that exist on disk to `context_files`,
+      so the executor sees real source instead of hallucinating.
+- [x] **0.5c UTF-8 stdout** — Emoji no longer crash the CLI on Windows
+      cp1252 when output is piped.
+- [x] **0.5d `-p` at every position** — `loom doctor -p foo` works (was
+      KNOWN_ISSUES C1).
+- [x] **0.5e `loom init`** — Writes `.loom-config.json` at the target
+      repo root, runs health-check (Ollama, models, pytest, tests/),
+      prints next-steps. Everything downstream picks up defaults from
+      the config so `loom extract` / `loom decompose` / `loom_exec`
+      don't need flags once init has run.
+- [x] **0.5f Config precedence** — CLI flag > env > config > built-in
+      default. `src/config.py` owns the resolution.
+
+**Next (Interpretation B, deferred):** `loom init --template <name>`
+scaffolds a new project from a customizable template (no baked-in
+opinionated stack). Template registry pattern so users can author
+templates without forking Loom.
+
 ## Milestone 1: CLI Foundations (DONE)
 
 Make Loom reliable for tool use by AI agents.

@@ -99,9 +99,13 @@ export PATH="$PWD/scripts:$PATH"
 ## Quick start
 
 ```bash
-# Capture a requirement
+# One-time: onboard the target repo (writes .loom-config.json, health-checks)
+cd ~/path/to/my-project
+loom init
+
+# Capture a requirement (no more -p flag once .loom-config.json exists)
 echo "REQUIREMENT: behavior | Users must confirm before deleting" \
-  | loom extract -p myproject --rationale "Prevent accidental data loss"
+  | loom extract --rationale "Prevent accidental data loss"
 
 # Expand it into a spec
 loom spec REQ-abc12345 \
@@ -113,13 +117,14 @@ loom spec REQ-abc12345 \
 loom decompose SPEC-xxx --apply
 
 # Execute the next ready task on the local small model
-loom_exec --next --model qwen3.5:latest
+# (executor_model comes from .loom-config.json — no flag needed)
+loom_exec --next
 
 # Or run until the queue is empty
 loom_exec --loop
 
 # Regenerate living docs
-loom sync -p myproject
+loom sync
 
 # Check what the PreToolUse hook is costing you
 loom cost
@@ -209,6 +214,7 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | `spec` / `specs` / `spec-link` | Specification management                                       | `specs`  |
 | `pattern` / `patterns` / `pattern-apply` | Shared design patterns                               | `patterns` |
 | `doctor`                 | Health checks (Ollama, store, orphans, drift, coverage)              | yes      |
+| **`init`**               | Onboard a target repo: write `.loom-config.json` + health-check      | —        |
 | `init-private`           | Create `PRIVATE.md` template                                         | —        |
 | **`cost`**               | Summarize PreToolUse hook cost (latency, bytes, overhead)            | yes      |
 | **`task`**               | Atomic work-item CRUD (`add`/`list`/`show`/`claim`/`release`/`complete`/`reject`/`prompt`) | yes |
@@ -221,6 +227,25 @@ Separate entry point for execution:
 | `scripts/loom_exec`  | Drive Ollama against the Task queue. Flags: `--next`, `--loop`, `--dry-run`, `--model`, `-p`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`. |
 
 Project is auto-detected from the git repo name; override with `-p/--project` or the `LOOM_PROJECT` env var.
+
+## Per-project configuration (`.loom-config.json`)
+
+`loom init` writes a `.loom-config.json` at the root of the target repo. It pins defaults so you don't have to pass `-p` / `--target-dir` / `--model` on every invocation. Precedence for every setting: **CLI flag > environment variable > `.loom-config.json` > built-in default.**
+
+```json
+{
+  "project": "myapp",
+  "target_dir": ".",
+  "decomposer_model": null,
+  "executor_model": "qwen3.5:latest",
+  "embedding_model": "nomic-embed-text",
+  "test_runner": "pytest",
+  "test_dir": "tests",
+  "ignore": [".git", "__pycache__", ".venv", "venv", "node_modules", ...]
+}
+```
+
+`loom init` also runs a health-check on the way in — Ollama reachable, required models pulled, pytest declared in the target's deps, `tests/` directory present (creating it if not). A warning lists anything missing without blocking.
 
 ## Hook instrumentation
 
