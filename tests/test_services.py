@@ -445,6 +445,34 @@ class TestDoctor:
         assert data["checks"]["orphans"]["count"] == 1
         assert any("REQ-ghost" in w for w in data["warnings"])
 
+    def test_ollama_models_not_truncated(self, store, monkeypatch):
+        """FINDINGS-wild F3: the old [:5] slice hid models on multi-model setups."""
+        import services as _services
+        import json as _json
+
+        class _Resp:
+            def __init__(self, body): self._body = body
+            def read(self): return self._body
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        # 14 fake models — same count we hit on the real dev box
+        fake_models = {"models": [{"name": f"model-{i}:latest"} for i in range(14)]}
+        payload = _json.dumps(fake_models).encode()
+
+        def fake_urlopen(req, timeout=5):
+            return _Resp(payload)
+
+        monkeypatch.setattr(
+            "urllib.request.urlopen",
+            lambda req, timeout=5: _Resp(payload),
+        )
+        # nomic-embed-text is absent from the fake list → warning fires but
+        # the models list should still contain everything.
+        data = _services.doctor(store)
+        assert len(data["checks"]["ollama"]["models"]) == 14
+        assert data["checks"]["ollama"]["models"][13] == "model-13:latest"
+
     def test_drift_warned_for_superseded_with_impl(self, store, fake_embedding):
         _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
         impl = Implementation(

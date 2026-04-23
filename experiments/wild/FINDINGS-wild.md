@@ -400,10 +400,49 @@ a clear message pointing at what to do next.
 | F9  loom_exec hard-coded              | ✅ |
 | F10 grading test not created          | ✅ this branch |
 
-All ten documented frictions now resolved or explicitly deferred as
-cosmetic. The pipeline can be pointed at an unfamiliar Python+pytest
+All ten documented frictions now resolved (see fifth-run section below
+for F3). The pipeline can be pointed at an unfamiliar Python+pytest
 repo, captured with `loom init` → `loom extract` → `loom spec --test`
 → `loom decompose --apply` → `loom_exec --next`, and produces a real
 graded run with scratch isolation. The remaining gap is authoring test
 assertions (a human or Opus-class task, not a pipeline fix).
 
+---
+
+## Fifth run — F3 cosmetic (2026-04-22)
+
+Smallest possible fix: drop the `ollama_models[:5]` slice in
+`services.doctor()`. The CLI only shows the list when
+`nomic-embed-text` is absent — so the truncation was actively hurting
+the exact moment the list was load-bearing (user needs to know what
+they have). JSON/MCP consumers always want everything.
+
+### Before / after on the dev box (14 models installed)
+
+```
+# before
+$ loom doctor --json | jq '.checks.ollama.models | length'
+5
+
+# after
+$ loom doctor --json | jq '.checks.ollama.models | length'
+14
+```
+
+### Final scoreboard
+
+| Friction | Status |
+|---|---|
+| F1  `-p` position                     | ✅ |
+| F2  target lacks pytest               | ✅ |
+| F3  doctor truncates models           | ✅ this branch |
+| F4  agentforge own drift              | ✅ |
+| F5  cp1252 emoji crash                | ✅ |
+| F6  ghost `-t` flag                   | ✅ |
+| F7  empty context_files               | ✅ |
+| F8  thin prompt downstream            | ✅ |
+| F9  loom_exec hard-coded              | ✅ |
+| F10 grading test not created          | ✅ |
+
+Ten for ten. The wild-dogfooding loop is complete: every friction that
+surfaced during the first-use attempt on agentforge has been fixed.
