@@ -42,7 +42,15 @@ DEFAULTS: dict[str, Any] = {
     "decomposer_model": None,      # None → services._default_decomposer_model()
     "executor_model": "qwen3.5:latest",
     "embedding_model": "nomic-embed-text",
+    # Which test runner drives grading + prompt contract (see src/runners.py).
+    # Implemented: pytest | flutter_test | dart_test | vitest. Unknown values
+    # fall back to pytest with a warning.
     "test_runner": "pytest",
+    # Source language hint (informational for docs + decomposer — the
+    # authoritative choice is the runner's language). Useful when test_runner
+    # is set to a generic shell wrapper and you still want the prompt to
+    # emit Dart vs. Python.
+    "language": "python",
     "test_dir": "tests",
     "ignore": [
         ".git", "__pycache__", ".venv", "venv", ".pytest_cache",

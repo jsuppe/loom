@@ -81,6 +81,17 @@ repo." Validated against agentforge in
       KEY=VALUE`. `{{ var }}` substitution in file contents and
       file/directory names. Shipped starter validated end-to-end: scaffold
       → `pip install -e '.[dev]'` → `pytest` passes.
+- [x] **0.5h Multi-runtime `loom_exec`** — Pluggable test-runner
+      registry (`src/runners.py`) replaces the hardcoded pytest call.
+      Shipped runners: `pytest` (Python, append-mode), `dart_test` /
+      `flutter_test` (Dart, replace-mode), `vitest` (TypeScript,
+      replace-mode). Each runner owns its command shape, result parser,
+      code-block fence, apply mode, and failing-placeholder skeleton.
+      `.loom-config.json`'s `test_runner` selects which. Downstream
+      (`loom_exec`, `task_build_prompt`, `loom spec --test`, decompose
+      prompt) all dispatch through the registry. Validated end-to-end
+      against real `dart test` and `npx vitest run` output. Authoring
+      a new runner = a single `Runner(...)` entry; no other code changes.
 
 ## Milestone 1: CLI Foundations (DONE)
 

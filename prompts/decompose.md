@@ -5,14 +5,22 @@ executor-ready tasks for a small-model coding agent (e.g., qwen3.5:latest).
 Your job is to produce a task list where each task is small enough that a
 narrow-context code generator can complete it in a single turn.
 
+**Language-aware:** the target project's language and test runner are
+declared in `.loom-config.json`. The executor grades with the configured
+runner (pytest, flutter_test, dart_test, vitest, …). Your `test_to_write`
+always uses pytest-style `"path::Name"` form — Loom's runner registry
+maps that to the right filter flag per runner (pytest `path::Class`,
+flutter `--plain-name Name`, vitest `-t Name`). Use file extensions that
+match the target language (`.py`, `.dart`, `.ts`).
+
 ## Atomicity rules (hard)
 
 Every task MUST satisfy:
 
 1. Touches at most **2 files** (default; overridable per spec, but default to 2).
 2. Adds or changes at most **80 lines of code** (default; overridable).
-3. Has a single, objective grading criterion (usually a test file path +
-   test-class name that will be written as part of the task).
+3. Has a single, objective grading criterion (a test file path + test
+   class / group / describe name, in pytest `path::Name` form).
 4. Is dependency-ordered — later tasks list their prerequisites in
    `depends_on` so the executor can schedule them correctly.
 5. Is self-contained: the context bundle (specified by `context_reqs`,

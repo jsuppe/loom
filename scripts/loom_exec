@@ -53,6 +53,8 @@ sys.path.insert(0, str(SKILL_DIR / "src"))
 
 from store import LoomStore  # noqa: E402
 import services  # noqa: E402
+import runners  # noqa: E402
+import config as loom_config  # noqa: E402
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -75,9 +77,12 @@ def resolve_target_dir(arg_value: str | None) -> Path:
         return Path(env).expanduser().resolve()
     return Path.cwd().resolve()
 
-CODE_BLOCK_RE = re.compile(r"```python\s*\n(.*?)\n```", re.DOTALL)
 GENERIC_BLOCK_RE = re.compile(r"```\s*\n(.*?)\n```", re.DOTALL)
 STOP_TOKEN_RE = re.compile(r"\b(TASK_REJECT|NEED_CONTEXT|DONE)\s*:\s*([^\n]+)", re.IGNORECASE)
+
+
+def _fenced_block_re(fence: str) -> re.Pattern[str]:
+    return re.compile(rf"```{re.escape(fence)}\s*\n(.*?)\n```", re.DOTALL)
 
 
 def get_project_name() -> str:
@@ -122,17 +127,28 @@ def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
     }
 
 
-def extract_code(content: str) -> str | None:
-    m = CODE_BLOCK_RE.search(content)
+def extract_code(content: str, fence: str = "python") -> str | None:
+    """Pull the code block out of the LLM response.
+
+    Prefers a fenced block tagged with ``fence`` (``python``, ``dart``,
+    ``typescript``, ``javascript``); falls back to any fenced block.
+    """
+    m = _fenced_block_re(fence).search(content)
     if m:
         return m.group(1).rstrip() + "\n"
+    # javascript and typescript are interchangeable in practice — many
+    # small models emit ```js even for TS files.
+    if fence == "typescript":
+        m = _fenced_block_re("javascript").search(content) or _fenced_block_re("js").search(content) or _fenced_block_re("ts").search(content)
+        if m:
+            return m.group(1).rstrip() + "\n"
     m = GENERIC_BLOCK_RE.search(content)
     if m:
         return m.group(1).rstrip() + "\n"
     return None
 
 
-def classify_response(content: str) -> tuple[str, str]:
+def classify_response(content: str, fence: str = "python") -> tuple[str, str]:
     """Return (kind, detail) where kind is one of:
         done, task_reject, need_context, no_code, unknown
     """
@@ -148,7 +164,7 @@ def classify_response(content: str) -> tuple[str, str]:
             # Still need to verify code was produced + tests pass.
             pass
 
-    if not extract_code(content):
+    if not extract_code(content, fence=fence):
         return "no_code", "response contained no code block"
 
     return "done", "code block extracted"
@@ -165,39 +181,62 @@ def _log_run(store: LoomStore, record: dict) -> None:
         f.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
-def apply_code(task: dict, code: str, target_dir: Path) -> Path:
-    """Append the model's code to the first file_to_modify.
+def apply_code(
+    task: dict,
+    code: str,
+    target_dir: Path,
+    apply_mode: str = "append",
+) -> Path:
+    """Write the model's code to the first file_to_modify.
 
-    Returns the modified file path. Simple MVP — the benchmark runners used
-    this exact pattern. Python's last-definition-wins means a redefined
-    function shadows the prior definition.
+    apply_mode:
+        "append"  — append to existing file (Python last-definition-wins).
+        "replace" — overwrite the entire file (required for Dart/TS/etc.
+                    where classes and exports can't be redefined).
     """
     if not task["files_to_modify"]:
         raise ValueError("task has no files_to_modify")
     target = Path(task["files_to_modify"][0])
     if not target.is_absolute():
         target = target_dir / target
-    existing = target.read_text(encoding="utf-8") if target.exists() else ""
-    target.write_text(existing + "\n\n" + code, encoding="utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if apply_mode == "replace":
+        target.write_text(code, encoding="utf-8")
+    else:
+        existing = target.read_text(encoding="utf-8") if target.exists() else ""
+        target.write_text(existing + "\n\n" + code, encoding="utf-8")
     return target
 
 
-def run_grading(test_target: str, cwd: Path) -> tuple[int, int, str]:
-    """Run pytest against a single test target; return (passed, total, tail)."""
-    res = subprocess.run(
-        [sys.executable, "-m", "pytest", test_target, "-v", "--tb=line"],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-    combined = (res.stdout or "") + "\n" + (res.stderr or "")
-    passed = combined.count(" PASSED")
-    failed = combined.count(" FAILED")
-    errored = combined.count(" ERROR")
-    total = passed + failed + errored
-    tail = "\n".join(combined.splitlines()[-14:])
-    return passed, total, tail
+def run_grading(
+    test_target: str, cwd: Path, runner: runners.Runner,
+) -> tuple[int, int, str]:
+    """Dispatch grading through the registered runner.
+
+    Returns (passed, total, tail). The runner owns command shape and
+    result parsing — we just subprocess + hand off the raw output.
+    """
+    cmd = runner.build_command(test_target, cwd)
+    try:
+        res = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            # Windows cp1252 crashes on non-Latin-1 bytes from npx/dart; force
+            # utf-8 and replace undecodable bytes so the parse step sees text.
+            encoding="utf-8",
+            errors="replace",
+            # Native launchers (dart.bat, npx.cmd) need shell=True on Windows.
+            shell=(sys.platform == "win32"),
+        )
+    except FileNotFoundError as e:
+        # The runner's binary isn't on PATH. Surface as a failed run so
+        # the caller's test_fail path kicks in.
+        tail = f"grading command failed to launch: {e}\ncmd: {' '.join(cmd)}"
+        return 0, 1, tail
+    return runner.parse(res.stdout, res.stderr, res.returncode)
 
 
 def execute_task(
@@ -206,15 +245,20 @@ def execute_task(
     model: str,
     target_dir: Path,
     dry_run: bool = False,
+    runner: runners.Runner | None = None,
 ) -> dict:
     """Run one task through claim -> prompt -> apply -> grade -> complete/reject."""
     t0 = time.perf_counter()
     task = services.task_get(store, task_id)
+    if runner is None:
+        runner = runners.get_runner("pytest")  # last-resort default
     print(f"[exec] task {task_id}  status={task['status']}  "
           f"title={task['title']!r}")
-    print(f"[exec] target_dir: {target_dir}")
+    print(f"[exec] target_dir: {target_dir}  runner: {runner.name} ({runner.apply_mode})")
 
-    prompt = services.task_build_prompt(store, task_id, target_dir=target_dir)
+    prompt = services.task_build_prompt(
+        store, task_id, target_dir=target_dir, runner=runner,
+    )
     print(f"[exec] prompt: {len(prompt)} chars")
 
     if dry_run:
@@ -254,7 +298,7 @@ def execute_task(
         print(f"[exec] model: {llm['elapsed_s']:.1f}s  "
               f"in={llm['input_tokens']}  out={llm['output_tokens']}")
 
-        kind, detail = classify_response(llm["content"])
+        kind, detail = classify_response(llm["content"], fence=runner.fence)
         if kind == "task_reject":
             services.task_reject(store, task_id, f"TASK_REJECT: {detail}", escalate=False)
             _log_run(store, {
@@ -287,13 +331,16 @@ def execute_task(
 
         # Apply code to scratch copy of the target.
         scratch_target = scratch / Path(task["files_to_modify"][0])
-        code = extract_code(llm["content"])
+        code = extract_code(llm["content"], fence=runner.fence)
         scratch_target.parent.mkdir(parents=True, exist_ok=True)
-        existing = scratch_target.read_text(encoding="utf-8") if scratch_target.exists() else ""
-        scratch_target.write_text(existing + "\n\n" + code, encoding="utf-8")
+        if runner.apply_mode == "replace":
+            scratch_target.write_text(code, encoding="utf-8")
+        else:
+            existing = scratch_target.read_text(encoding="utf-8") if scratch_target.exists() else ""
+            scratch_target.write_text(existing + "\n\n" + code, encoding="utf-8")
 
         # Grade in scratch.
-        passed, total, tail = run_grading(task["test_to_write"], cwd=scratch)
+        passed, total, tail = run_grading(task["test_to_write"], cwd=scratch, runner=runner)
         print(f"[exec] grading: {passed}/{total}")
 
         if total > 0 and passed == total:
@@ -382,6 +429,14 @@ def main() -> int:
         default=FALLBACK_EXECUTOR_MODEL,
     )
 
+    # Pick the test runner for this target. Unknown values fall back to
+    # pytest with a warning so the tool never silently mis-runs tests.
+    runner_name = cfg.get("test_runner") or "pytest"
+    if runner_name not in runners.RUNNERS:
+        print(f"[exec] unknown test_runner {runner_name!r} in config — "
+              f"falling back to pytest", file=sys.stderr)
+    runner = runners.get_runner(runner_name)
+
     store = LoomStore(project)
 
     if args.next:
@@ -392,7 +447,7 @@ def main() -> int:
                 break
             task_id = ready[0]["id"]
             result = execute_task(store, task_id, model, target_dir,
-                                  dry_run=args.dry_run)
+                                  dry_run=args.dry_run, runner=runner)
             print(f"[exec] result: {json.dumps(result)}")
             if not args.loop:
                 break
@@ -406,7 +461,7 @@ def main() -> int:
         parser.error("task_id required (or use --next)")
 
     result = execute_task(store, args.task_id, model, target_dir,
-                          dry_run=args.dry_run)
+                          dry_run=args.dry_run, runner=runner)
     print(f"[exec] result: {json.dumps(result)}")
     return 0 if result.get("outcome") in {"complete", None} else 1
 
