@@ -275,6 +275,23 @@ Template structure:
 
 Discovery precedence: `~/.loom/templates/<name>/` wins over `<loom-repo>/templates/<name>/`, so user-authored templates can override shipped ones with the same name. Missing variables without defaults are prompted interactively when stdin is a TTY, or passed via `--var KEY=VALUE` (repeatable). Existing files in the target are never overwritten unless `--force` is set.
 
+### Test runners (`.loom-config.json` → `test_runner`)
+
+`loom_exec` grades through a pluggable runner registry (`src/runners.py`). Shipped runners:
+
+| `test_runner`    | Language    | apply_mode | Grading command                            |
+|------------------|-------------|------------|--------------------------------------------|
+| `pytest`         | Python      | `append`   | `python -m pytest <path>::<Class>`         |
+| `dart_test`      | Dart        | `replace`  | `dart test <path> --plain-name <name>`     |
+| `flutter_test`   | Dart        | `replace`  | `flutter test <path> --plain-name <name>`  |
+| `vitest`         | TypeScript  | `replace`  | `npx vitest run <path> -t <name>`          |
+
+The runner decides: (a) the command and how to parse pass/total from its output, (b) the code-block fence in the executor prompt (`python` / `dart` / `typescript`), (c) the apply mode (Python can append because last-definition wins; Dart/TS require full-file replacement), (d) the failing-placeholder test skeleton `loom spec --test` writes.
+
+`test_to_write` stays pytest-style (`path::Name`) everywhere — Loom translates it per runner.
+
+Authoring a new runner: add a `Runner(...)` entry to `RUNNERS` in `src/runners.py`. No other changes required.
+
 ## Hook instrumentation
 
 See [`hooks/README.md`](hooks/README.md) for install instructions. Summary:
