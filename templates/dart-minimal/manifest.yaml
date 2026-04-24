@@ -1,0 +1,26 @@
+name: dart-minimal
+description: |
+  Standalone Dart package with the `dart test` runner. Intentionally
+  opinion-free — fork this into ~/.loom/templates/<your-name>/ if you
+  want a different default layout, null-safety rules, linter settings,
+  etc. For Flutter apps, use the flutter-minimal template instead
+  (different pubspec shape, different test runner).
+
+variables:
+  - name: app_name
+    prompt: Package name (lowercase, underscores, no dashes — Dart convention)
+    default: myapp
+  - name: description
+    prompt: One-line description
+    default: A Dart package scaffolded by Loom
+  - name: author
+    prompt: Author name (for pubspec.yaml)
+    default: unknown
+  - name: sdk_constraint
+    prompt: Dart SDK constraint
+    default: "^3.0.0"
+
+config_overrides:
+  test_runner: dart_test
+  language: dart
+  test_dir: test

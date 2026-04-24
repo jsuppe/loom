@@ -81,6 +81,17 @@ repo." Validated against agentforge in
       KEY=VALUE`. `{{ var }}` substitution in file contents and
       file/directory names. Shipped starter validated end-to-end: scaffold
       → `pip install -e '.[dev]'` → `pytest` passes.
+- [x] **0.5h₂ Per-runtime starter templates** — Three new starters
+      ship (`dart-minimal`, `flutter-minimal`, `typescript-minimal`) to
+      pair with each shipped runner. Template manifests gain a
+      `config_overrides` section — `services.init()` merges those into
+      `.loom-config.json`, so `loom init --template flutter-minimal`
+      produces a Flutter-shaped config without manual editing. The
+      runner-dep health-check also dispatches by runner (pytest in
+      requirements.txt / pubspec.yaml for Dart / package.json for TS)
+      so non-Python projects stop getting spurious "pytest not
+      declared" warnings. All four starters validated end-to-end: fresh
+      scaffold → native deps install → smoke test passes.
 - [x] **0.5h Multi-runtime `loom_exec`** — Pluggable test-runner
       registry (`src/runners.py`) replaces the hardcoded pytest call.
       Shipped runners: `pytest` (Python, append-mode), `dart_test` /

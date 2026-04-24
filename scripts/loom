@@ -771,8 +771,14 @@ def cmd_init(args):
           f"{ch['embedding_model']['name']}")
     print(f"   {_mark(ch['executor_model']['ok'])} Executor model:   "
           f"{ch['executor_model']['name']}")
-    print(f"   {_mark(ch['pytest']['ok'])} pytest available"
-          + (f"  ({ch['pytest']['where']})" if ch["pytest"]["ok"] else ""))
+    runner_check = ch.get("test_runner_deps") or {
+        "ok": ch.get("pytest", {}).get("ok", False),
+        "runner": "pytest",
+        "where": ch.get("pytest", {}).get("where"),
+    }
+    label = f"{runner_check.get('runner', 'runner')} available"
+    where = f"  ({runner_check['where']})" if runner_check.get("where") else ""
+    print(f"   {_mark(runner_check['ok'])} {label}{where}")
     tests_msg = "already existed" if not result["created_tests_dir"] else "created"
     print(f"   ✓ tests dir:      {ch['tests_dir']['path']}/  ({tests_msg})")
 

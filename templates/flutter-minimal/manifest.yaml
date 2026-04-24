@@ -1,0 +1,27 @@
+name: flutter-minimal
+description: |
+  Minimal Flutter app with the `flutter_test` runner. Ships a
+  Scaffold+Counter smoke widget and a widget test that verifies the
+  counter increments. Fork into ~/.loom/templates/<your-name>/ if you
+  want state management, a different routing strategy, platform dirs,
+  etc. — this is the smallest working scaffold, not a recommended
+  architecture.
+
+variables:
+  - name: app_name
+    prompt: App name (lowercase, underscores, no dashes — Dart convention)
+    default: myapp
+  - name: description
+    prompt: One-line description
+    default: A Flutter app scaffolded by Loom
+  - name: author
+    prompt: Author name (for pubspec.yaml)
+    default: unknown
+  - name: sdk_constraint
+    prompt: Dart SDK constraint
+    default: "^3.0.0"
+
+config_overrides:
+  test_runner: flutter_test
+  language: dart
+  test_dir: test

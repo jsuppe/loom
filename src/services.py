@@ -636,6 +636,104 @@ def doctor(store: LoomStore) -> dict[str, Any]:
     }
 
 
+def _check_runner_deps(target_dir: Path, runner_name: str) -> dict[str, Any]:
+    """Detect whether the configured test runner's dependencies are declared.
+
+    Returns::
+
+        {"ok": bool, "where": str | None, "runner": str, "warning": str | None}
+
+    We only READ. Never install anything — that's intrusive and out of
+    scope for init.
+    """
+    td = target_dir
+
+    # Python — pytest in requirements.txt / pyproject / nested.
+    if runner_name == "pytest":
+        for candidate in (
+            td / "requirements.txt",
+            td / "requirements-dev.txt",
+            td / "dev-requirements.txt",
+            td / "pyproject.toml",
+            td / "setup.py",
+            td / "setup.cfg",
+        ):
+            if candidate.exists():
+                try:
+                    if "pytest" in candidate.read_text(encoding="utf-8"):
+                        return {"ok": True, "where": candidate.name,
+                                "runner": runner_name, "warning": None}
+                except OSError:
+                    continue
+        for sub in ("src/backend", "backend", "api", "server"):
+            candidate = td / sub / "requirements.txt"
+            if candidate.exists():
+                try:
+                    if "pytest" in candidate.read_text(encoding="utf-8"):
+                        return {
+                            "ok": True,
+                            "where": str(candidate.relative_to(td)).replace("\\", "/"),
+                            "runner": runner_name, "warning": None,
+                        }
+                except OSError:
+                    pass
+        return {
+            "ok": False, "where": None, "runner": runner_name,
+            "warning": "pytest not declared in requirements.txt / pyproject.toml — "
+                       "loom_exec grades with pytest, add it before running tasks",
+        }
+
+    # Dart / Flutter — pubspec.yaml must declare `test` (Dart) or
+    # `flutter_test` (Flutter) dev_dependency.
+    if runner_name in ("dart_test", "flutter_test"):
+        pubspec = td / "pubspec.yaml"
+        if not pubspec.exists():
+            return {
+                "ok": False, "where": None, "runner": runner_name,
+                "warning": f"{runner_name} configured but no pubspec.yaml found",
+            }
+        try:
+            text = pubspec.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        needed = "flutter_test" if runner_name == "flutter_test" else "test:"
+        if needed in text:
+            return {"ok": True, "where": "pubspec.yaml",
+                    "runner": runner_name, "warning": None}
+        return {
+            "ok": False, "where": None, "runner": runner_name,
+            "warning": f"pubspec.yaml does not declare {needed!r} — "
+                       f"loom_exec grades with {runner_name}",
+        }
+
+    # Vitest — package.json devDependencies.
+    if runner_name == "vitest":
+        pkg = td / "package.json"
+        if not pkg.exists():
+            return {
+                "ok": False, "where": None, "runner": runner_name,
+                "warning": "vitest configured but no package.json found",
+            }
+        try:
+            text = pkg.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if "vitest" in text:
+            return {"ok": True, "where": "package.json",
+                    "runner": runner_name, "warning": None}
+        return {
+            "ok": False, "where": None, "runner": runner_name,
+            "warning": "vitest not in package.json devDependencies — "
+                       "loom_exec grades with vitest",
+        }
+
+    # Unknown runner — just pass through; loom_exec will fall back to pytest.
+    return {
+        "ok": True, "where": None, "runner": runner_name,
+        "warning": None,
+    }
+
+
 def init(
     *,
     target_dir: Path | str,
@@ -697,6 +795,7 @@ def init(
     # user sees a coherent "empty dir → scaffold → config" ordering in
     # any output logs.
     template_result: dict[str, Any] | None = None
+    template_config_overrides: dict[str, Any] = {}
     if template:
         import templates as _templates
         tmpl = _templates.load_template(template)
@@ -710,10 +809,15 @@ def init(
         template_result = _templates.render_template(
             tmpl, td, provided, overwrite=force,
         )
+        template_config_overrides = dict(tmpl.config_overrides)
 
-    # Build the config dict. Start from defaults, override the project name.
+    # Build the config dict. Start from defaults, override the project name,
+    # then apply any template-declared config overrides (e.g. a Flutter
+    # template pinning test_runner=flutter_test + test_dir=test).
     cfg: dict[str, Any] = {**_config.DEFAULTS, "ignore": list(_config.DEFAULTS["ignore"])}
     cfg["project"] = project
+    for k, v in template_config_overrides.items():
+        cfg[k] = v
 
     _config.save_config(td, cfg)
 
@@ -761,44 +865,13 @@ def init(
             f"run `ollama pull {cfg['executor_model']}`"
         )
 
-    # pytest presence check (F2): look in requirements.txt, pyproject.toml,
-    # or setup.py. We don't install anything — just report.
-    pytest_where: str | None = None
-    for candidate in (
-        td / "requirements.txt",
-        td / "requirements-dev.txt",
-        td / "dev-requirements.txt",
-        td / "pyproject.toml",
-        td / "setup.py",
-        td / "setup.cfg",
-    ):
-        if not candidate.exists():
-            continue
-        try:
-            text = candidate.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if "pytest" in text:
-            pytest_where = candidate.name
-            break
-    # Also scan backend/requirements.txt for projects like agentforge that
-    # keep deps deeper.
-    if pytest_where is None:
-        for sub in ("src/backend", "backend", "api", "server"):
-            candidate = td / sub / "requirements.txt"
-            if candidate.exists():
-                try:
-                    if "pytest" in candidate.read_text(encoding="utf-8"):
-                        pytest_where = str(candidate.relative_to(td))
-                        break
-                except OSError:
-                    pass
-    checks["pytest"] = {"ok": pytest_where is not None, "where": pytest_where}
-    if not checks["pytest"]["ok"]:
-        warnings.append(
-            "pytest not declared in requirements.txt / pyproject.toml — "
-            "loom_exec grades with pytest, so add it before running tasks"
-        )
+    # Runner-appropriate dep check. pytest in Python repos; dart/flutter
+    # tooling in Dart repos; vitest in package.json for TS repos. We don't
+    # install anything — just report.
+    runner_name = cfg.get("test_runner") or "pytest"
+    checks["test_runner_deps"] = _check_runner_deps(td, runner_name)
+    if not checks["test_runner_deps"]["ok"]:
+        warnings.append(checks["test_runner_deps"]["warning"])
 
     # tests/ dir
     tests_dir = td / cfg["test_dir"]

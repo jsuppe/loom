@@ -1,0 +1,11 @@
+name: {{ app_name }}
+description: {{ description }}
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: "{{ sdk_constraint }}"
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^3.0.0
