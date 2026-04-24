@@ -865,6 +865,18 @@ def cmd_doctor(args):
     else:
         print("  ✅ All domains are standard")
 
+    # 7. Duplicate non-superseded specs per requirement
+    dup_specs = checks.get("duplicate_specs", {})
+    if dup_specs.get("count"):
+        print("Checking for duplicate specs...")
+        print(f"  ⚠️  {dup_specs['count']} requirement(s) have more than one "
+              f"non-superseded spec")
+        for entry in dup_specs["items"][:5]:
+            print(f"      - {entry['req_id']}: {', '.join(entry['spec_ids'])}")
+        if len(dup_specs["items"]) > 5:
+            print(f"      ... and {len(dup_specs['items']) - 5} more")
+    # (no message when count is 0 — absence of bad news is already clear)
+
     print()
     print("─" * 40)
     if issues:
@@ -1096,6 +1108,7 @@ def cmd_spec_add(args):
         or os.environ.get("LOOM_TARGET_DIR")
         or os.getcwd()
     )
+    force = getattr(args, "force", False)
     try:
         result = services.spec_add(
             store, args.req_id, description,
@@ -1104,7 +1117,22 @@ def cmd_spec_add(args):
             source_doc=args.source_doc,
             test_file=getattr(args, "test", "") or "",
             target_dir=target_dir,
+            force=force,
         )
+    except services.DuplicateSpecError as e:
+        print(f"❌ {e}")
+        print()
+        print("   Existing non-superseded spec(s):")
+        for s in e.siblings:
+            desc = (s["description"] or "")[:80]
+            tfile = s.get("test_file") or "(none)"
+            print(f"     • {s['id']}  [{s['status']}]  test={tfile}")
+            print(f"       {desc}")
+        print()
+        print("   Options:")
+        print("     1. Supersede the outdated spec first:   loom supersede <SPEC-id>")
+        print("     2. Bypass (create alongside, not typical): re-run with --force")
+        return 1
     except (LookupError, ValueError) as e:
         print(f"❌ {e}")
         return 1
@@ -1114,6 +1142,9 @@ def cmd_spec_add(args):
     print(f"   Description: {result['description'][:80]}...")
     if result["acceptance_criteria"]:
         print(f"   Criteria: {len(result['acceptance_criteria'])} item(s)")
+    if result.get("siblings_bypassed"):
+        print(f"   ⚠ --force used: {len(result['siblings_bypassed'])} sibling "
+              f"spec(s) still non-superseded — consider superseding them")
     if result.get("test_file"):
         written = result["test_skeleton_written"]
         path_part = result["test_file"].split("::", 1)[0]
@@ -1869,6 +1900,11 @@ def main():
     p_spec.add_argument("--criteria", "-c", action="append", help="Acceptance criterion (repeatable)")
     p_spec.add_argument("--status", "-s", help="Status: draft, approved, implemented, verified")
     p_spec.add_argument("--source-doc", help="Source document path")
+    p_spec.add_argument(
+        "--force", action="store_true",
+        help="Bypass the 'no duplicate non-superseded spec' check. "
+             "Normally prefer `loom supersede <SPEC-id>` on the old spec first.",
+    )
     p_spec.add_argument(
         "--test",
         help="Pytest grading target in 'path::Class' form "

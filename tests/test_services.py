@@ -467,6 +467,28 @@ class TestDoctor:
         # Domains check passes (no reqs, no custom domains)
         assert data["checks"]["domains"]["custom"] == []
 
+    def test_duplicate_specs_surfaced(self, store, fake_embedding):
+        """doctor flags any req with >1 non-superseded spec."""
+        _mk_req(store, "REQ-dup", "behavior", "x", fake_embedding)
+        _mk_req(store, "REQ-single", "behavior", "y", fake_embedding)
+        # Two specs under REQ-dup (via force to bypass the sibling check)
+        services.spec_add(store, "REQ-dup", "spec one")
+        services.spec_add(store, "REQ-dup", "spec two", force=True)
+        # One spec under REQ-single — not a duplicate
+        services.spec_add(store, "REQ-single", "only spec")
+        data = services.doctor(store)
+        dup = data["checks"]["duplicate_specs"]
+        assert dup["count"] == 1
+        assert dup["items"][0]["req_id"] == "REQ-dup"
+        assert len(dup["items"][0]["spec_ids"]) == 2
+        assert any("REQ-dup" in w for w in data["warnings"])
+
+    def test_duplicate_specs_count_zero_when_clean(self, store, fake_embedding):
+        _mk_req(store, "REQ-clean", "behavior", "y", fake_embedding)
+        services.spec_add(store, "REQ-clean", "only one")
+        data = services.doctor(store)
+        assert data["checks"]["duplicate_specs"]["count"] == 0
+
     def test_orphan_impl_warned(self, store, fake_embedding):
         # Impl that points at a req that doesn't exist → orphan
         impl = Implementation(
@@ -761,6 +783,34 @@ class TestSpecAdd:
     def test_unknown_parent_raises(self, store):
         with pytest.raises(LookupError):
             services.spec_add(store, "REQ-missing", "spec text")
+
+    def test_duplicate_spec_blocked_by_default(self, store, fake_embedding):
+        """A second non-superseded spec under the same req should raise."""
+        _mk_req(store, "REQ-d", "behavior", "dup test", fake_embedding)
+        first = services.spec_add(store, "REQ-d", "first spec")
+        with pytest.raises(services.DuplicateSpecError) as excinfo:
+            services.spec_add(store, "REQ-d", "second spec, different path")
+        assert len(excinfo.value.siblings) == 1
+        assert excinfo.value.siblings[0]["id"] == first["spec_id"]
+
+    def test_duplicate_spec_bypassed_with_force(self, store, fake_embedding):
+        _mk_req(store, "REQ-f", "behavior", "force test", fake_embedding)
+        services.spec_add(store, "REQ-f", "first spec")
+        result = services.spec_add(
+            store, "REQ-f", "second spec (forced)", force=True,
+        )
+        assert result["spec_id"].startswith("SPEC-")
+        assert len(result["siblings_bypassed"]) == 1
+
+    def test_superseded_sibling_does_not_block(self, store, fake_embedding):
+        """Once the first spec is superseded, a new one is fine."""
+        _mk_req(store, "REQ-s", "behavior", "supersede test", fake_embedding)
+        first = services.spec_add(store, "REQ-s", "first spec")
+        store.supersede_specification(first["spec_id"])
+        # No force needed — previous spec isn't a sibling anymore.
+        result = services.spec_add(store, "REQ-s", "replacement spec")
+        assert result["spec_id"] != first["spec_id"]
+        assert result["siblings_bypassed"] == []
 
     def test_empty_description_raises(self, store, fake_embedding):
         _mk_req(store, "REQ-p", "behavior", "p", fake_embedding)

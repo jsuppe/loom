@@ -103,6 +103,18 @@ repo." Validated against agentforge in
       prompt) all dispatch through the registry. Validated end-to-end
       against real `dart test` and `npx vitest run` output. Authoring
       a new runner = a single `Runner(...)` entry; no other code changes.
+- [x] **0.5i Duplicate-spec detection (D1 from sparkeye audit)** —
+      `services.spec_add` refuses to create a second non-superseded
+      spec under the same parent requirement (raises `DuplicateSpecError`
+      with the siblings on it); CLI prints the existing spec(s) and the
+      two options (supersede or `--force`). `services.doctor` gains a
+      `duplicate_specs` check that surfaces the same condition in
+      existing stores — validated on the sparkeye store where the check
+      correctly flags `REQ-ef81f657 → {SPEC-c6aa6b90, SPEC-30fdda42}`.
+      Caught at creation time for new specs; surfaced retroactively for
+      existing ones. Addresses the "agent generated duplicate specs
+      with different path conventions, nothing flagged it" failure mode
+      from yesterday's sparkeye audit.
 
 ## Milestone 1: CLI Foundations (DONE)
 
