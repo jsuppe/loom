@@ -1,0 +1,22 @@
+{
+  "condition": "c3_sonnet_loom",
+  "run_id": 1,
+  "model": "claude-code-subagent-general-purpose",
+  "iterations": 3,
+  "final_passed": 15,
+  "final_total": 15,
+  "final_pass_rate": 1.0,
+  "iterations_to_80pct": 3,
+  "regression_count": 0,
+  "pass_trace": [1, 5, 15],
+  "stop_reason": "all_tests_pass",
+  "per_iteration_tokens": {
+    "iter_1": {"po": 20094, "eng": 24122, "po_tool_uses": 0, "eng_tool_uses": 6},
+    "iter_2": {"po": 19910, "eng": 24194, "po_tool_uses": 0, "eng_tool_uses": 5},
+    "iter_3": {"po": 20146, "eng": 28760, "po_tool_uses": 0, "eng_tool_uses": 11}
+  },
+  "total_tokens_summed": 137226,
+  "loom_reqs_captured": 6,
+  "loom_tool_calls_estimate": "6 loom_extract + 6 loom_link (from engineer tool_uses count minus read/write)",
+  "notes": "Subagent-driven V2. Engineer given loom access via bash. Engineer captured 1 req per req (not 22x redundant like qwen V1). Final file has all 6 TaskQueue methods. Loom store at ~/.openclaw/loom/bakeoff-v2-c3-001 with 6 REQs."
+}

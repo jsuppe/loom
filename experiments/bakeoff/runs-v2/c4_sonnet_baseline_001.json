@@ -1,0 +1,22 @@
+{
+  "condition": "c4_sonnet_baseline",
+  "run_id": 1,
+  "model": "claude-code-subagent-general-purpose",
+  "iterations": 5,
+  "final_passed": 15,
+  "final_total": 15,
+  "final_pass_rate": 1.0,
+  "iterations_to_80pct": 5,
+  "regression_count": 0,
+  "pass_trace": [1, 5, 8, 10, 15],
+  "stop_reason": "all_tests_pass",
+  "per_iteration_tokens": {
+    "iter_1": {"po": 20318, "eng": 23069, "po_tool_uses": 0, "eng_tool_uses": 4, "note": "engineer retry on first attempt due to msys path — fixed in this attempt"},
+    "iter_2": {"po": 20374, "eng": 23671, "po_tool_uses": 0, "eng_tool_uses": 3},
+    "iter_3": {"po": 19966, "eng": 24457, "po_tool_uses": 0, "eng_tool_uses": 3},
+    "iter_4": {"po": 19973, "eng": 26007, "po_tool_uses": 0, "eng_tool_uses": 3},
+    "iter_5": {"po": 20180, "eng": 25642, "po_tool_uses": 0, "eng_tool_uses": 3}
+  },
+  "total_tokens_summed": 223657,
+  "notes": "Subagent-driven V2. Each iteration = 2 subagent spawns (PO + Engineer). File-level state shuttled between /tmp/v2_c4_001 (engineer workspace) and /tmp/v2_c4_001_tests (orchestrator test grounds). Engineer never saw tests/. Baseline condition: engineer had file I/O + bash only, no Loom tools."
+}
