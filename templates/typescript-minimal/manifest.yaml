@@ -1,0 +1,27 @@
+name: typescript-minimal
+description: |
+  TypeScript package with the vitest runner. Ships a package.json with
+  vitest as a dev dependency, a tsconfig targeting ES2022, a src/
+  module, and a tests/ directory with a smoke test. Intentionally
+  opinion-free — fork this into ~/.loom/templates/<your-name>/ if you
+  want a different module system, Node version, linter, or test
+  framework (Jest, Mocha, etc.).
+
+variables:
+  - name: app_name
+    prompt: Package name (lowercase, dashes OK — npm convention)
+    default: myapp
+  - name: description
+    prompt: One-line description
+    default: A TypeScript package scaffolded by Loom
+  - name: author
+    prompt: Author name (for package.json)
+    default: unknown
+  - name: node_engine
+    prompt: Node engine range
+    default: ">=20"
+
+config_overrides:
+  test_runner: vitest
+  language: typescript
+  test_dir: tests

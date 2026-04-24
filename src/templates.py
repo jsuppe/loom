@@ -47,6 +47,12 @@ class Template:
     path: Path
     description: str = ""
     variables: list[TemplateVariable] = field(default_factory=list)
+    # Keys to merge into .loom-config.json when this template is applied.
+    # Typical use: a Flutter template setting
+    #   config_overrides: {test_runner: flutter_test, language: dart, test_dir: test}
+    # so `loom init --template flutter-minimal` produces a Flutter-shaped
+    # config without requiring a manual edit afterward.
+    config_overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
     def files_dir(self) -> Path:
@@ -86,11 +92,15 @@ def _manifest_to_template(name: str, template_dir: Path) -> Template:
             prompt=v.get("prompt"),
             default=(str(v["default"]) if v.get("default") is not None else None),
         ))
+    overrides = manifest.get("config_overrides") or {}
+    if not isinstance(overrides, dict):
+        overrides = {}
     return Template(
         name=name,
         path=template_dir,
         description=str(manifest.get("description", "")),
         variables=variables,
+        config_overrides=overrides,
     )
 
 

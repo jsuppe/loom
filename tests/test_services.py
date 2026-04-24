@@ -343,8 +343,8 @@ class TestInit:
                 "fastapi>=0.1\npytest>=7\n", encoding="utf-8",
             )
             result = services.init(target_dir=td, project="p")
-            assert result["checks"]["pytest"]["ok"] is True
-            assert result["checks"]["pytest"]["where"] == "requirements.txt"
+            assert result["checks"]["test_runner_deps"]["ok"] is True
+            assert result["checks"]["test_runner_deps"]["where"] == "requirements.txt"
 
     def test_pytest_detected_in_nested_requirements(self):
         with tempfile.TemporaryDirectory() as td:
@@ -354,14 +354,14 @@ class TestInit:
                 "fastapi\npytest-asyncio\n", encoding="utf-8",
             )
             result = services.init(target_dir=td, project="p")
-            assert result["checks"]["pytest"]["ok"] is True
+            assert result["checks"]["test_runner_deps"]["ok"] is True
             # Forward-slash path regardless of platform
-            assert "backend" in result["checks"]["pytest"]["where"]
+            assert "backend" in result["checks"]["test_runner_deps"]["where"]
 
     def test_pytest_missing_warns(self):
         with tempfile.TemporaryDirectory() as td:
             result = services.init(target_dir=td, project="p")
-            assert result["checks"]["pytest"]["ok"] is False
+            assert result["checks"]["test_runner_deps"]["ok"] is False
             assert any("pytest" in w for w in result["warnings"])
 
     def test_next_steps_present(self):
@@ -394,6 +394,41 @@ class TestInit:
                     target_dir=td, project="p",
                     template="not-a-real-template",
                 )
+
+    def test_template_config_overrides_merged_into_config(self):
+        """A Flutter template sets test_runner=flutter_test in .loom-config.json."""
+        import json as _json
+        with tempfile.TemporaryDirectory() as td:
+            result = services.init(
+                target_dir=td, project="dogfood",
+                template="flutter-minimal",
+                variables={"app_name": "dogfood", "description": "x",
+                           "author": "a", "sdk_constraint": "^3.0.0"},
+            )
+            cfg_path = Path(td) / ".loom-config.json"
+            cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+            assert cfg["test_runner"] == "flutter_test"
+            assert cfg["language"] == "dart"
+            assert cfg["test_dir"] == "test"
+            # tests/ was NOT created; test/ was (per the override)
+            assert (Path(td) / "test").is_dir()
+            assert not (Path(td) / "tests").exists()
+            # result reflects the overrides too
+            assert result["config"]["test_runner"] == "flutter_test"
+
+    def test_template_without_overrides_keeps_defaults(self):
+        """python-minimal declares no config_overrides — config uses DEFAULTS."""
+        import json as _json
+        with tempfile.TemporaryDirectory() as td:
+            services.init(
+                target_dir=td, project="demo",
+                template="python-minimal",
+                variables={"app_name": "demoapp", "description": "t",
+                           "author": "a", "python_version": "3.10"},
+            )
+            cfg = _json.loads((Path(td) / ".loom-config.json").read_text(encoding="utf-8"))
+            assert cfg["test_runner"] == "pytest"
+            assert cfg["test_dir"] == "tests"
 
     def test_template_missing_vars_raises(self, monkeypatch):
         """Missing variables without defaults should surface as ValueError."""

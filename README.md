@@ -253,15 +253,26 @@ Project is auto-detected from the git repo name; override with `-p/--project` or
 
 ### Templates (`loom init --template`)
 
-Scaffold files into the target repo from a template. One starter ships with Loom (`python-minimal`); it's intentionally opinion-free — fork it into `~/.loom/templates/<your-name>/` and customize for your stack.
+Scaffold files into the target repo from a template. Four starters ship as **reference implementations** — intentionally opinion-free, one per shipped test runner:
+
+| Starter | Runner | Install | Test |
+|---|---|---|---|
+| `python-minimal` | pytest | `pip install -e '.[dev]'` | `pytest` |
+| `dart-minimal` | dart_test | `dart pub get` | `dart test` |
+| `flutter-minimal` | flutter_test | `flutter pub get` | `flutter test` |
+| `typescript-minimal` | vitest | `npm install` | `npm test` |
+
+Fork any of them into `~/.loom/templates/<your-name>/` and customize — the shipped ones are not a canonical set.
 
 ```bash
-loom init --template python-minimal \
+loom init --template flutter-minimal \
   --var app_name=myapp --var description="my app" \
-  --var author="me" --var python_version=3.10
+  --var author="me" --var sdk_constraint="^3.0.0"
 
 loom init --list-templates
 ```
+
+Each template's `manifest.yaml` can declare `config_overrides` that are merged into `.loom-config.json` on init — that's how `flutter-minimal` pins `test_runner: flutter_test` and `test_dir: test` automatically.
 
 Template structure:
 ```
