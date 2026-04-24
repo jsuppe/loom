@@ -181,4 +181,61 @@ All limitations from V1 carry over.  In addition:
 
 ## Amendments
 
-(None yet.)
+### Amendment 1 (2026-04-24) — shift to Claude Code subagents
+
+**Why:** The original V2 design proposed driving two Sonnet agents via
+the Anthropic Messages API. But Loom is a *Claude Code skill*. The
+actual product is Loom-in-a-Claude-Code-session, not Loom-via-API-
+driver. Testing the API-driver path was reproducing V1's shape with a
+better model rather than testing the shipped product.
+
+Also: the user has Claude Max (subscription). Paying for separate API
+billing on top of Max to run this experiment would be nonsensical
+when the subagent path is on Max and more faithful to the product.
+
+**Design change:**
+
+- Runs are orchestrated from the human's Claude Code session (this
+  one).  For each iteration, the orchestrator spawns one PO subagent
+  and one Engineer subagent using the `Agent` tool.  All subagent
+  tokens bill against Max.
+- Both subagents are `general-purpose` type.  They have bash + read +
+  write + grep access. They use Loom by invoking the loom CLI from
+  bash (the same way a Claude Code user with the skill installed
+  would).
+- Metrics come from the `Agent` tool's usage field:
+  `total_tokens`, `tool_uses`, `duration_ms` per subagent call.  No
+  character-count proxy needed.
+- Workspace isolation: the subagent works in a dedicated tempdir
+  containing only `task_queue.py`.  The orchestrator maintains a
+  separate tempdir containing `tests/`, copies `task_queue.py` into
+  it after each engineer turn, runs pytest, reports results to the
+  PO subagent on the next turn.  The engineer subagent never sees
+  the tests directory.
+- Stop conditions unchanged.
+
+**Conditions (unchanged from pre-amendment design):**
+
+| | PO agent | Engineer agent | Loom tools available |
+|---|---|---|---|
+| C3 — Sonnet + Loom | Claude Code subagent | Claude Code subagent | yes (via bash `python3 ~/dev/loom/scripts/loom ...`) |
+| C4 — Sonnet baseline | Claude Code subagent | Claude Code subagent | no (engineer prompt forbids loom calls) |
+
+**Model spec now**: whatever Claude Code routes subagents to. At the
+time of this amendment, that's Claude Sonnet 4.6 (Max tier default).
+If the model changes over the course of the run, we document it.
+
+**Sample size caveat:** the orchestrator is this conversation, which
+consumes context on every subagent response. Each subagent spawn
+may return up to ~5K tokens. N=10 runs × ~10 iterations × 2
+subagents = ~200 spawns, roughly 1M tokens of raw response data
+streaming back through the orchestrator. We have headroom (1M window)
+but V1-style hundreds of runs are infeasible in this shape. If V2
+signal is clear at N=5 we accept it; if ambiguous we either scale
+to N=10 within one session or split the runs across sessions.
+
+**Anti-leakage rule (carried from V1):** PO subagent never reveals
+test source.  Result reporting to PO happens at summary level
+(counts + per-test-class pass/fail status).
+
+**Publication commitment carries forward verbatim from V1 protocol.**
