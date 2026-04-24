@@ -44,7 +44,13 @@ PROMPTS = BAKEOFF_DIR / "prompts"
 RUNS_DIR = BAKEOFF_DIR / "runs"
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-MODEL = os.environ.get("BAKEOFF_MODEL", "qwen3.5:latest")
+# Bakeoff model spec format: "<provider>:<name>".
+#   ollama:qwen3.5:latest        V1 default, local, free
+#   anthropic:claude-sonnet-4-6  V2 — requires ANTHROPIC_API_KEY
+# Bare names without a provider prefix default to Ollama for backward
+# compatibility with V1 (BAKEOFF_MODEL=qwen3.5:latest still works).
+_RAW_MODEL = os.environ.get("BAKEOFF_MODEL", "qwen3.5:latest")
+MODEL = _RAW_MODEL if ":" in _RAW_MODEL and _RAW_MODEL.split(":", 1)[0] in ("ollama", "anthropic") else f"ollama:{_RAW_MODEL}"
 
 # Stop-condition defaults (match PROTOCOL.md).
 MAX_ITERATIONS = 25
@@ -61,17 +67,40 @@ TOOL_BLOCK_RE = re.compile(r"```tool\s*\n(.*?)\n```", re.DOTALL)
 
 
 # ============================================================
-# Ollama HTTP
+# Model HTTP — dispatches by provider prefix
 # ============================================================
 
-def call_ollama(
+def call_model(
     messages: list[dict],
     system: str,
-    timeout: int = 180,
+    model_spec: str = None,
+    timeout: int = 300,
 ) -> dict:
-    """Single /api/chat call.  Returns {content, elapsed, in, out}."""
+    """Single chat call against the configured provider.
+
+    model_spec is 'provider:name'. Dispatches to Ollama or Anthropic
+    and normalizes to the common return shape:
+        {content, elapsed, input_tokens, output_tokens}
+    """
+    spec = model_spec or MODEL
+    if ":" not in spec:
+        raise ValueError(f"model_spec must be 'provider:name', got {spec!r}")
+    provider, name = spec.split(":", 1)
+    if provider == "ollama":
+        return _call_ollama(name, messages, system, timeout)
+    if provider == "anthropic":
+        return _call_anthropic(name, messages, system, timeout)
+    raise ValueError(f"unknown provider {provider!r}")
+
+
+def _call_ollama(
+    name: str,
+    messages: list[dict],
+    system: str,
+    timeout: int,
+) -> dict:
     payload = json.dumps({
-        "model": MODEL,
+        "model": name,
         "stream": False,
         "think": False,
         "messages": [{"role": "system", "content": system}] + messages,
@@ -93,6 +122,96 @@ def call_ollama(
         "input_tokens": body.get("prompt_eval_count", 0),
         "output_tokens": body.get("eval_count", 0),
     }
+
+
+def _call_anthropic(
+    name: str,
+    messages: list[dict],
+    system: str,
+    timeout: int,
+) -> dict:
+    """Anthropic Messages API call.
+
+    Key differences from Ollama:
+      - `system` is a top-level field, not a role=system message.
+      - Consecutive same-role messages are rejected; we merge them.
+      - Returns content blocks (we pull text from type=text blocks).
+      - Rate limits are real; caller should back off on 429.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY env var required for anthropic provider"
+        )
+
+    # Anthropic rejects role=system in messages[]. Strip any that snuck in
+    # and merge consecutive same-role messages (Anthropic alternates strictly).
+    cleaned: list[dict] = []
+    for m in messages:
+        role = m.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content", "")
+        if cleaned and cleaned[-1]["role"] == role:
+            cleaned[-1]["content"] += "\n\n" + content
+        else:
+            cleaned.append({"role": role, "content": content})
+
+    payload = json.dumps({
+        "model": name,
+        "max_tokens": 4000,
+        "temperature": 0.2,
+        "system": system,
+        "messages": cleaned,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    t0 = time.perf_counter()
+    # Simple retry with backoff for transient failures (429, 5xx).
+    last_exc = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = json.loads(resp.read().decode("utf-8", errors="replace"))
+            break
+        except urllib.error.HTTPError as e:
+            last_exc = e
+            if e.code in (429, 500, 502, 503, 529) and attempt < 2:
+                time.sleep(2 ** attempt * 3)  # 3s, 6s
+                continue
+            raise
+        except Exception as e:
+            last_exc = e
+            if attempt < 2:
+                time.sleep(2 ** attempt * 3)
+                continue
+            raise
+    else:
+        raise last_exc or RuntimeError("Anthropic call failed after retries")
+
+    elapsed = time.perf_counter() - t0
+    content_blocks = body.get("content", []) or []
+    text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
+    usage = body.get("usage", {}) or {}
+    return {
+        "content": "\n".join(text_parts),
+        "elapsed": round(elapsed, 2),
+        "input_tokens": usage.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0),
+    }
+
+
+# Back-compat alias — old code called call_ollama directly. Keep it working
+# for the bakeoff's one-off scripts; production calls go through call_model.
+def call_ollama(messages, system, timeout=300):
+    return call_model(messages, system, MODEL, timeout)
 
 
 # ============================================================
@@ -386,6 +505,7 @@ def engineer_turn(
     tools: dict,
     loom_ctx: dict | None,
     logger,
+    model_spec: str | None = None,
 ) -> tuple[str, int, int, int]:
     """Run the engineer's turn.  Tool-call inner loop until respond_to_po.
 
@@ -397,7 +517,7 @@ def engineer_turn(
 
     while round_idx < MAX_TOOL_ROUNDS_PER_TURN:
         round_idx += 1
-        resp = call_ollama(history, system)
+        resp = call_model(history, system, model_spec=model_spec)
         in_tok += resp["input_tokens"]
         out_tok += resp["output_tokens"]
         assistant_content = resp["content"]
@@ -547,19 +667,29 @@ class EventLogger:
 # Main run loop
 # ============================================================
 
-def run_experiment(condition: str, run_id: int, max_iters: int = MAX_ITERATIONS) -> dict:
+def run_experiment(
+    condition: str,
+    run_id: int,
+    max_iters: int = MAX_ITERATIONS,
+    model_spec: str | None = None,
+) -> dict:
     assert condition in ("baseline", "loom")
-    run_dir = RUNS_DIR / f"{condition}_{run_id:03d}"
+    spec = model_spec or MODEL
+    # Embed the model in the run dir name so V1 and V2 runs don't collide.
+    # V2 adds the provider+name suffix to distinguish qwen vs sonnet.
+    provider = spec.split(":", 1)[0]
+    dir_suffix = "" if provider == "ollama" else f"_{provider}"
+    run_dir = RUNS_DIR / f"{condition}{dir_suffix}_{run_id:03d}"
     run_dir.mkdir(parents=True, exist_ok=True)
     logger = EventLogger(run_dir)
 
     workspace = make_workspace(run_id)
-    logger.event("start", {"condition": condition, "workspace": str(workspace)})
+    logger.event("start", {"condition": condition, "model": spec, "workspace": str(workspace)})
 
     # Per-run hermetic Loom "home" so the CLI writes to a tempdir, not ~/.openclaw/loom.
     loom_home = Path(tempfile.mkdtemp(prefix=f"bakeoff_loomhome_{run_id}_"))
     loom_project = f"bakeoff_{condition}_{run_id}"
-    metrics = Metrics(run_id=run_id, condition=condition, model=MODEL)
+    metrics = Metrics(run_id=run_id, condition=condition, model=spec)
     loom_ctx = (
         {"project": loom_project, "loom_home": loom_home, "metrics": metrics}
         if condition == "loom" else None
@@ -587,7 +717,7 @@ def run_experiment(condition: str, run_id: int, max_iters: int = MAX_ITERATIONS)
                 delta_msg = _format_test_results(last_results, metrics.last_per_test_prev)
                 po_history.append({"role": "user", "content": f"Engineer responded.\n\nCurrent test state:\n{delta_msg}"})
 
-            po_resp = call_ollama(po_history, po_system)
+            po_resp = call_model(po_history, po_system, model_spec=spec)
             metrics.po_tokens_in += po_resp["input_tokens"]
             metrics.po_tokens_out += po_resp["output_tokens"]
             po_msg = po_resp["content"].strip()
@@ -603,6 +733,7 @@ def run_experiment(condition: str, run_id: int, max_iters: int = MAX_ITERATIONS)
             eng_msg, eng_in, eng_out, tcount = engineer_turn(
                 workspace, eng_history, eng_system,
                 BASELINE_TOOLS, loom_ctx, logger,
+                model_spec=spec,
             )
             metrics.eng_tokens_in += eng_in
             metrics.eng_tokens_out += eng_out
@@ -716,13 +847,22 @@ def _format_test_results(current: dict, previous: dict | None) -> str:
 # ============================================================
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Bakeoff V1 driver")
+    p = argparse.ArgumentParser(description="Bakeoff driver")
     p.add_argument("--condition", choices=["baseline", "loom"], required=True)
     p.add_argument("--run-id", type=int, required=True)
     p.add_argument("--max-iters", type=int, default=MAX_ITERATIONS)
+    p.add_argument(
+        "--model", default=None,
+        help="Model spec 'provider:name' (default: $BAKEOFF_MODEL). "
+             "V1: ollama:qwen3.5:latest.  V2: anthropic:claude-sonnet-4-6.",
+    )
     args = p.parse_args()
 
-    summary = run_experiment(args.condition, args.run_id, max_iters=args.max_iters)
+    summary = run_experiment(
+        args.condition, args.run_id,
+        max_iters=args.max_iters,
+        model_spec=args.model,
+    )
     print(json.dumps(summary, indent=2))
     return 0
 

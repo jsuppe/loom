@@ -1,21 +1,22 @@
 # Bakeoff V1 — Findings
 
-**Date:** 2026-04-24
+**Date:** 2026-04-24 (revised after loom_002 completed)
 **Protocol:** pre-registered at commit `ee28d38` as
 `experiments/bakeoff/PROTOCOL.md`. No amendments.
 **Harness:** `experiments/bakeoff/driver.py` + `aggregate.py`.
 **Ground truth:** TaskQueue library, ~200 LoC, 15 pytest tests.
 **Model:** qwen3.5:latest via Ollama (both agents).
-**N:** 5 baseline, 4 loom (loom_002 didn't complete — see "Data
-completeness" below).
+**N:** 5 baseline, 5 loom (loom_002 re-run as step 4 of the V2 prep).
 
 ## TL;DR
 
 > On this project scope, with both agents running qwen3.5, giving
 > the engineer access to Loom tools as in-conversation tooling
 > measurably *increases token cost without improving pass rate*.
-> Holm-corrected p = 0.080 on `total_tokens` (Cliff's delta = +1.0
-> — every Loom run used more tokens than every baseline run).
+> Holm-corrected p = 0.049 on `total_tokens` with Cliff's delta = +1.0
+> — **every single Loom run used more tokens than every single
+> baseline run.** Median Loom run: 490K tokens vs baseline: 30K
+> tokens (16× more).
 
 This is a legitimate null-or-negative result for the hypothesis as
 V1 framed it. But V1 measured a mode of Loom usage the product
@@ -25,7 +26,7 @@ wasn't designed for. See "What this does NOT mean" below.
 
 ## Results
 
-### Raw data (N=5 baseline, N=4 loom)
+### Raw data (N=5 per condition)
 
 | run | pass/total | iters | tokens | regressions | stop_reason | duration |
 |---|:---:|:---:|:---:|:---:|---|---:|
@@ -35,6 +36,7 @@ wasn't designed for. See "What this does NOT mean" below.
 | baseline_004 | **15/15** | 7 | 30,011 | 0 | all_tests_pass | 30s |
 | baseline_005 | 4/15 | 25 | 295,567 | 18 | max_iterations | 168s |
 | loom_001 | 7/15 | 9 | 502,725 | 2 | **token_budget** | 521s |
+| loom_002 | 3/15 | 8 | 490,007 | 0 | no_progress | 120s |
 | loom_003 | 3/15 | 7 | 397,551 | 0 | no_progress | 169s |
 | loom_004 | 5/15 | 7 | 343,089 | 0 | no_progress | 104s |
 | loom_005 | 13/15 | 9 | 606,252 | 0 | **token_budget** | 144s |
@@ -43,21 +45,22 @@ wasn't designed for. See "What this does NOT mean" below.
 
 | metric | baseline median | loom median | delta | effect size | p raw | p Holm | significant |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| final_pass_rate | 0.533 | 0.400 | -0.200 | small | 0.713 | 1.000 | no |
-| iterations_to_80pct | 7 | ∞ | +0.500 | large | 0.270 | 0.811 | no |
-| **total_tokens** | **30,011** | **450,138** | **+1.000** | **large** | **0.020** | **0.080** | **YES (against Loom)** |
-| regression_count | 0 | 0 | -0.200 | small | 0.713 | 1.000 | no |
+| final_pass_rate | 0.533 | 0.333 | -0.280 | small | 0.531 | 1.000 | no |
+| iterations_to_80pct | 7 | ∞ | +0.520 | large | 0.210 | 0.630 | no |
+| **total_tokens** | **30,011** | **490,007** | **+1.000** | **large** | **0.012** | **0.049** | **YES (against Loom)** |
+| regression_count | 0 | 0 | -0.240 | small | 0.602 | 1.000 | no |
 
-Only `total_tokens` reached significance. Every Loom run used more
-tokens than every baseline run (Cliff's delta = +1.0, maximum
-possible). For the other three metrics, the small sample and
-high variance of both conditions gave inconclusive evidence.
+Only `total_tokens` reached significance — AGAINST Loom. Every Loom
+run used more tokens than every baseline run (Cliff's delta = +1.0,
+the maximum possible). For the other three metrics, the small sample
+and high variance of both conditions gave inconclusive evidence, but
+the direction is consistently worse for Loom.
 
 ### Perfect runs
 
 - Baseline: 2 of 5 hit 15/15 green (runs 003, 004). Both finished
   in ~30K tokens within 7 iterations.
-- Loom: 0 of 4 hit 15/15. Best was loom_005 at 13/15 when the
+- Loom: 0 of 5 hit 15/15. Best was loom_005 at 13/15 when the
   token budget forced stop.
 
 ### Why Loom burned tokens
@@ -67,6 +70,7 @@ Per-run Loom tool-call counts:
 | run | extract | spec | link | check | list | total Loom calls |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | loom_001 | 22 | 15 | 9 | 5 | 0 | 51 |
+| loom_002 | 30 | 2 | 6 | 0 | 14 | 52 |
 | loom_003 | 10 | 0 | 9 | 0 | 12 | 31 |
 | loom_004 | 7 | 1 | 9 | 2 | 4 | 23 |
 | loom_005 | 24 | 3 | 9 | 0 | 21 | 57 |
@@ -140,17 +144,15 @@ didn't touch them.
 
 ## Data completeness
 
-**`loom_002` is missing.** The background job that ran loom 002–005
-produced summaries for 3, 4, and 5 but not 2. Event log shows iteration
-4 was in progress with ~25 min elapsed before the process terminated;
-no stop condition was reached cleanly. Cause is under investigation.
+Initial V1 capture had `loom_002` incomplete — the first background
+invocation didn't produce a summary (event log showed iteration 4
+in progress then terminated). Cause was the shared background
+process being preempted; not a run-level failure.
 
-Per PROTOCOL.md, a missing run is not the same as a bad run — we
-report N=4 for Loom, not N=5, and flag the gap. The direction of
-the result (tokens 15× higher, pass rate slightly lower) is the
-same across all 4 Loom runs that did complete, so loom_002's absence
-doesn't change the conclusion. A retrospective re-run to fill in
-loom_002 is scheduled (it would require only ~5 min).
+**Re-ran `loom_002` on the unchanged Ollama harness** (step 4 of
+the V2 preparation). Result: 3/15 pass, 8 iterations, 490K tokens,
+0 regressions — in-range with the other 4 Loom runs and reinforces
+the conclusion. Updated stats reflect complete N=5/5.
 
 ---
 
