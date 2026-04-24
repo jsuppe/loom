@@ -627,6 +627,33 @@ def doctor(store: LoomStore) -> dict[str, Any]:
         warnings.append(f"Non-standard domains: {', '.join(custom_domains)}")
     checks["domains"] = {"custom": sorted(custom_domains)}
 
+    # Duplicate-spec check: any requirement with >1 non-superseded spec.
+    # Agents generating specs after edit-confusion have been observed
+    # to produce duplicates (the sparkeye case: two specs under the
+    # same req pointing at different path conventions). Surface it here
+    # so existing stores in this state are visible without waiting for
+    # the sibling check at spec_add time to catch the NEXT duplicate.
+    duplicate_specs: list[dict[str, Any]] = []
+    for req in store.list_requirements(include_superseded=False):
+        sibs = store.list_specifications(req_id=req.id, include_superseded=False)
+        if len(sibs) > 1:
+            duplicate_specs.append({
+                "req_id": req.id,
+                "count": len(sibs),
+                "spec_ids": [s.id for s in sibs],
+            })
+    if duplicate_specs:
+        for entry in duplicate_specs:
+            warnings.append(
+                f"Requirement {entry['req_id']} has {entry['count']} "
+                f"non-superseded specs: {', '.join(entry['spec_ids'])} — "
+                f"supersede the outdated one(s) or pick a canonical path"
+            )
+    checks["duplicate_specs"] = {
+        "count": len(duplicate_specs),
+        "items": duplicate_specs,
+    }
+
     return {
         "project": store.project,
         "healthy": len(issues) == 0,
@@ -1587,6 +1614,17 @@ def _generate_spec_id() -> str:
     return f"SPEC-{uuid.uuid4().hex[:8]}"
 
 
+class DuplicateSpecError(ValueError):
+    """Raised when spec_add finds a non-superseded sibling spec and !force.
+
+    Carries the existing sibling specs on ``siblings`` so the CLI can
+    show them to the user.
+    """
+    def __init__(self, message: str, siblings: list[dict[str, Any]]):
+        super().__init__(message)
+        self.siblings = siblings
+
+
 def spec_add(
     store: LoomStore,
     req_id: str,
@@ -1597,8 +1635,18 @@ def spec_add(
     source_doc: str | None = None,
     test_file: str = "",
     target_dir: Path | str | None = None,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Add a specification under a parent requirement.
+
+    Refuses to create a second non-superseded spec under the same
+    requirement. Agents generating specs after an edit-confusion have
+    been observed to produce duplicates (e.g. SPEC-A at `app/lib/x.dart`
+    plus SPEC-B at `lib/x.dart` for one req on a Flutter repo). Silent
+    duplicates break decomposition downstream: each spec generates its
+    own task queue, and tasks under the wrong-path spec can never reach
+    green. We raise ``DuplicateSpecError`` with the existing siblings
+    instead; callers can pass ``force=True`` to bypass with a warning.
 
     If ``test_file`` is provided in pytest "path::Class" form and
     ``target_dir`` is given, writes a failing-placeholder skeleton at
@@ -1608,15 +1656,20 @@ def spec_add(
 
     Returns:
         {spec_id, parent_req, description, status, acceptance_criteria,
-         test_file, test_skeleton_written: bool | None}
+         test_file, test_skeleton_written: bool | None,
+         siblings_bypassed: list[{id, description}] | []}
 
         ``test_skeleton_written`` is:
             - None if no test_file was passed or no target_dir given
             - True if a skeleton was written
             - False if the file already existed (respected — not overwritten)
 
+        ``siblings_bypassed`` is populated only when ``force=True`` was
+        used to override an existing spec; empty otherwise.
+
     Raises:
         LookupError: parent requirement not found.
+        DuplicateSpecError: non-superseded sibling exists and force=False.
         ValueError: description is empty, or test_file is malformed.
     """
     from datetime import datetime, timezone
@@ -1633,6 +1686,22 @@ def spec_add(
     if test_file and "::" not in test_file:
         raise ValueError(
             f"test_file must be in pytest 'path::Class' form, got {test_file!r}"
+        )
+
+    # Sibling-spec check: any non-superseded spec under the same req is
+    # a blocker unless the caller explicitly passed force=True.
+    sibling_specs = store.list_specifications(req_id=req_id, include_superseded=False)
+    siblings_as_dicts = [
+        {"id": s.id, "description": s.description, "status": s.status,
+         "timestamp": s.timestamp, "test_file": getattr(s, "test_file", "")}
+        for s in sibling_specs
+    ]
+    if sibling_specs and not force:
+        ids = ", ".join(s.id for s in sibling_specs)
+        raise DuplicateSpecError(
+            f"requirement {req_id} already has non-superseded spec(s): {ids} "
+            f"(pass force=True to create another, or supersede first)",
+            siblings=siblings_as_dicts,
         )
 
     spec_id = _generate_spec_id()
@@ -1666,6 +1735,7 @@ def spec_add(
         "acceptance_criteria": acceptance_criteria or [],
         "test_file": test_file,
         "test_skeleton_written": skeleton_written,
+        "siblings_bypassed": siblings_as_dicts if force else [],
     }
 
 
