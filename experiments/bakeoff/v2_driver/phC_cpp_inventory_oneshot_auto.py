@@ -43,7 +43,10 @@ if hasattr(sys.stdout, "reconfigure"):
 PROJECT = "phC_cpp_inventory_oneshot_auto"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
-# Tasks run in topological order: errors → types → persistence → services.
+# v2 — split convention: .hpp declarations + .cpp definitions where
+# non-trivial. Matches qwen2.5-coder's native C++ idiom and avoids
+# the header-only linker errors that dominated v1's failure cluster.
+# 13 files in topological order. Each task produces ONE file.
 TARGET_FILES = [
     "include/errors.hpp",
     "include/types/customers.hpp",
@@ -51,10 +54,17 @@ TARGET_FILES = [
     "include/types/inventory.hpp",
     "include/types/orders.hpp",
     "include/persistence.hpp",
+    "src/persistence.cpp",
     "include/services/customer_service.hpp",
+    "src/services/customer_service.cpp",
     "include/services/inventory_service.hpp",
+    "src/services/inventory_service.cpp",
     "include/services/order_service.hpp",
+    "src/services/order_service.cpp",
 ]
+# Files that should compile to an object on their own (catches missing
+# definitions). Headers are syntax-only checked.
+CPP_FILES = {tf for tf in TARGET_FILES if tf.endswith(".cpp")}
 BARREL_PATH = "include/shop.hpp"
 BARREL_CONTENT = """\
 // shop.hpp — barrel header re-including the public API.
@@ -76,32 +86,45 @@ BARREL_CONTENT = """\
 
 PLANNER_SYSTEM = """\
 You are a senior C++ architect writing an implementation specification
-for a header-only multi-service C++20 library named `shop`. The
-downstream executor is a small local model (qwen3.5, 9.7B parameters)
-that will write each header in a single replace-mode pass. Your spec
-must be self-contained, exhaustive about C++20 specifics, and
-explicit about which symbols live in which header.
+for a multi-service C++20 library named `shop`. The downstream
+executor is a small local model (qwen2.5-coder:32b by default) that
+will write each file in a single replace-mode pass. Your spec must
+be self-contained, exhaustive about C++20 specifics, and explicit
+about which symbols live in which file.
 
-The library is split across 9 implementation headers (the barrel
-include/shop.hpp re-including these is pre-written by the harness;
-do NOT include a section for it):
+The library uses a SPLIT convention:
+  - Files under `include/...hpp` carry declarations.
+  - Files under `src/...cpp` carry the corresponding definitions
+    (out-of-line method bodies via `ClassName::method(...) { ... }`).
+  - Small value types (Customer, Product, Item, OrderLine, etc.)
+    that are mostly POD-shaped MAY be header-only — declare and
+    define inline. Larger classes with non-trivial methods (services,
+    Store) MUST split into header + .cpp.
 
-  include/errors.hpp                         — domain error hierarchy
-  include/types/customers.hpp                — Customer + Address
-  include/types/products.hpp                 — Product
-  include/types/inventory.hpp                — StockLevel + ReservationToken
-  include/types/orders.hpp                   — Item, Transition, Order, OrderStatus, OrderLine helper
-  include/persistence.hpp                    — Store + Snapshot
-  include/services/customer_service.hpp      — CustomerService
-  include/services/inventory_service.hpp     — InventoryService
-  include/services/order_service.hpp         — OrderService
+The library is split across 13 implementation files (the barrel
+include/shop.hpp re-including the headers is pre-written by the
+harness; do NOT include a section for it):
+
+  include/errors.hpp                         — domain error hierarchy (header-only via using-inheritance)
+  include/types/customers.hpp                — Customer + Address (header-only OK)
+  include/types/products.hpp                 — Product (header-only OK)
+  include/types/inventory.hpp                — StockLevel + ReservationToken (header-only OK)
+  include/types/orders.hpp                   — Item, Transition, Order, OrderStatus, OrderLine helper (header-only OK)
+  include/persistence.hpp                    — Store + Snapshot (declarations)
+  src/persistence.cpp                        — Store::snapshot, Store::restore definitions
+  include/services/customer_service.hpp      — CustomerService (declarations)
+  src/services/customer_service.cpp          — CustomerService method definitions
+  include/services/inventory_service.hpp     — InventoryService (declarations)
+  src/services/inventory_service.cpp         — InventoryService method definitions
+  include/services/order_service.hpp         — OrderService (declarations)
+  src/services/order_service.cpp             — OrderService method definitions
 
 Cross-file commitments to fix early in your spec:
   - All errors derive from `class DomainError : public std::runtime_error`.
     Every subclass uses `using DomainError::DomainError;` to inherit
-    constructors. Do NOT add fields or override what.
+    constructors. Header-only via the using-inheritance trick.
   - Keep the EXACT subclass names listed in the README — tests assert
-    on type. Do not invent merged or renamed errors.
+    on type.
   - `OrderStatus` is `enum class`: `New, Paid, Shipped, Delivered, Cancelled`.
   - `Item` validates in constructor: quantity > 0, unit_price >= 0.
     `double line_total() const` returns quantity * unit_price.
@@ -119,43 +142,49 @@ Cross-file commitments to fix early in your spec:
   - Token IDs `rsv-NNNNNN` and Order IDs `ord-NNNNNN` use
     `std::ostringstream` + `std::setw(6) << std::setfill('0')`.
 
-Critical C++20 specifics for the executor:
-  - Header-only library: each header has `#pragma once` at top.
-  - Standard library only — NO third-party deps (boost, fmt, doctest,
-    Catch2, etc.). The benchmark workspace has nothing extra installed.
-  - Every service's constructor takes `Store&` (reference, not pointer
-    or value) and stores it as `Store& store_;` member.
-  - `OrderService` constructor takes `Store&, CustomerService&, InventoryService&`.
-  - Use `std::map<std::string, T>` (NOT `std::unordered_map`) so test
-    iteration order is stable.
-  - Methods on services return references (e.g. `Customer&`,
-    `Order&`) NOT values, so test code can chain operations.
-  - Errors thrown by std::runtime_error subclasses use string-only
-    constructors; concatenate via `std::string("a") + "b"` or use
-    `std::to_string(int)` for numeric values.
-  - The barrel re-includes every public header.
+Split-convention specifics (the executor is going to write these
+files one at a time):
+  - Each .cpp file `#include`s its sibling .hpp via relative path
+    (e.g. `src/services/customer_service.cpp` includes
+    `"../../include/services/customer_service.hpp"`).
+  - Method definitions in .cpp use `ClassName::method(...)` syntax.
+  - Members declared in .hpp must have matching definitions in .cpp.
+    Missing a definition produces a linker error — verify every
+    declared method has a body in its sibling .cpp.
 
-For each header, give:
+Critical C++20 specifics for the executor:
+  - Each header has `#pragma once` at top.
+  - Standard library only — NO third-party deps (boost, fmt, doctest,
+    Catch2, etc.).
+  - Every service's constructor takes `Store&` (reference) stored as
+    a member `Store& store_;`.
+  - `OrderService` constructor takes `Store&, CustomerService&, InventoryService&`.
+  - Use `std::map<std::string, T>` (NOT `std::unordered_map`).
+  - Methods on services return references (e.g. `Customer&`,
+    `Order&`) NOT values.
+  - Errors throw with string-only constructors; concatenate via
+    `std::string("a") + "b"` or use `std::to_string(int)` for ints.
+
+For each file, give:
   - `#include` declarations needed (with relative paths)
   - public class/struct signatures
   - constructor behavior including validations
-  - method signatures + concrete bodies (no pseudocode)
+  - method signatures (header) + concrete bodies (.cpp) — concrete,
+    not pseudocode
   - field declarations with types and defaults
 
 CONTRACT BLOCKS — each `### include/<path>.hpp` section MUST end with a
 ```cpp-contract
 …
 ```
-fenced block containing declaration-only C++ code: every public
-class/struct, field, constructor, method, and enum that the executor
-must produce, with full signatures and types but no method bodies.
-Constructors with member init lists may end with `;` and no body.
+fenced block containing declaration-only C++ code matching what the
+executor will produce. .cpp sections do NOT need a contract block;
+they implement what the header declared.
 
 Output ONE top-level ```text``` block wrapping the whole spec.
-Inside it, organize as 9 sections each labeled exactly
-`### include/<path>.hpp` (matching the file paths above), in the
-listed order. Each section has the prose description followed by its
-`cpp-contract` block.
+Inside it, organize as 13 sections each labeled exactly with the
+file path, in the topological order listed above. Each section
+has the prose description (and contract block, for headers).
 """
 
 
@@ -198,7 +227,7 @@ def extract_spec(opus_response: str) -> str:
 
 def split_spec_by_file(spec_text: str) -> dict[str, str]:
     sections: dict[str, str] = {}
-    pattern = re.compile(r"^### (include/\S+\.hpp)\s*$", re.MULTILINE)
+    pattern = re.compile(r"^### ((?:include|src)/\S+\.(?:hpp|cpp))\s*$", re.MULTILINE)
     matches = list(pattern.finditer(spec_text))
     if not matches:
         return {f: spec_text for f in TARGET_FILES}
@@ -275,15 +304,67 @@ def parse_runner_output(stdout: str) -> tuple[int, int]:
     return p, p + f
 
 
+def static_check_per_file(workspace: Path, target_file: str) -> tuple[bool, str]:
+    """Per-file structural check after each task writes its output.
+
+    For .cpp: compile to object (`g++ -c`). Catches missing definitions
+    when a header declared a symbol the .cpp didn't define, plus any
+    syntax/typing errors against the headers it includes.
+
+    For .hpp: syntax-only check (`g++ -fsyntax-only`).
+
+    On failure, returns (False, error_tail). The driver logs the
+    failure but continues the chain so we get a full picture of which
+    files broke and where. The final grade is what gates pass/fail.
+    """
+    target = workspace / target_file
+    if not target.exists() or target.stat().st_size == 0:
+        return False, f"file missing or empty: {target_file}"
+    try:
+        if target_file.endswith(".cpp"):
+            res = subprocess.run(
+                ["g++", "-c", "-std=c++20", "-I", "include",
+                 str(target), "-o", str(target) + ".o"],
+                cwd=workspace, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+                shell=(sys.platform == "win32"),
+            )
+        else:
+            res = subprocess.run(
+                ["g++", "-fsyntax-only", "-std=c++20",
+                 "-I", "include", str(target)],
+                cwd=workspace, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+                shell=(sys.platform == "win32"),
+            )
+        if res.returncode == 0:
+            return True, ""
+        return False, (res.stdout + res.stderr)[-1500:]
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return True, f"static check skipped: {e}"
+
+
 def grade(workspace: Path) -> dict:
     grade_dir = Path(tempfile.mkdtemp(prefix="phC_cpp_inv_grade_"))
-    # Copy entire include tree
+    # Copy entire include + src trees
     shutil.copytree(workspace / "include", grade_dir / "include")
+    if (workspace / "src").exists():
+        shutil.copytree(workspace / "src", grade_dir / "src")
     (grade_dir / "test").mkdir()
     shutil.copy(HIDDEN_TEST, grade_dir / "test" / "shop_test.cpp")
+    # Build command links all .cpp files + the test harness.
+    src_files = []
+    for p in CPP_FILES:
+        f = grade_dir / p
+        if f.exists():
+            src_files.append(p)
+    compile_args = (
+        ["g++", "-std=c++20", "-I", "include"]
+        + src_files
+        + ["test/shop_test.cpp", "-o", "test_runner.exe"]
+    )
     compile_proc = subprocess.run(
-        ["g++", "-std=c++20", "-I", "include",
-         "test/shop_test.cpp", "-o", "test_runner.exe"],
+        compile_args,
         cwd=grade_dir, capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=180,
         shell=(sys.platform == "win32"),
@@ -317,6 +398,8 @@ def setup_workspace() -> Path:
     (ws / "include").mkdir()
     (ws / "include" / "types").mkdir()
     (ws / "include" / "services").mkdir()
+    (ws / "src").mkdir()
+    (ws / "src" / "services").mkdir()
     # Pre-write the barrel
     (ws / BARREL_PATH).write_text(BARREL_CONTENT, encoding="utf-8")
     return ws
@@ -342,13 +425,15 @@ def run_one(run_id: str = "1") -> dict:
     else:
         readme = README.read_text(encoding="utf-8")
         planner_prompt = (
-            f"Below is a benchmark README that describes a 9-header C++20 "
-            f"multi-service library named `shop`. Write a complete "
-            f"implementation spec, organized as 9 `### include/...hpp` "
-            f"sections so a downstream executor can produce each header in "
-            f"a single replace pass. Each section MUST end with a "
-            f"```cpp-contract``` block per the system instructions. "
-            f"Output ONLY a ```text``` block.\n\n"
+            f"Below is a benchmark README that describes a 13-file C++20 "
+            f"multi-service library named `shop` using a SPLIT convention "
+            f"(.hpp declarations + .cpp definitions). Write a complete "
+            f"implementation spec, organized as 13 sections (9 `### include/...hpp` "
+            f"and 4 `### src/...cpp`) in topological order so a downstream "
+            f"executor can produce each file in a single replace pass. Each "
+            f"`include/...hpp` section MUST end with a ```cpp-contract``` "
+            f"block per the system instructions; `src/...cpp` sections do "
+            f"not need a contract block. Output ONLY a ```text``` block.\n\n"
             f"---README---\n{readme}\n---END README---"
         )
         opus_t0 = time.time()
@@ -362,19 +447,30 @@ def run_one(run_id: str = "1") -> dict:
 
     # Step 2: per-file Ollama calls in topological order. Each call sees
     # the full spec PLUS a pointer at its target section. After each file
-    # is written, the next file's qwen call sees prior files in the spec.
+    # is written, run a static check (`g++ -fsyntax-only` for headers,
+    # `g++ -c` for .cpp) — catches missing definitions cheaply and gives
+    # us a clear file-level failure record.
     exec_model = os.environ.get("PHC_EXEC_MODEL", "qwen3.5:latest")
     qwen_total_elapsed = 0.0
     file_outcomes = {}
+    static_fails = 0
     for tf in TARGET_FILES:
-        section = sections.get(tf, spec_text)
+        is_cpp = tf.endswith(".cpp")
         prompt = (
-            f"You are writing the file `{tf}` for the multi-header C++20 "
-            f"library `shop`. Below is the complete implementation spec; "
-            f"focus on the section labeled `### {tf}`. Standard library "
-            f"only (no third-party deps). Header-only style with `#pragma "
-            f"once`. Output ONE ```cpp``` code block containing the COMPLETE "
-            f"header file. Nothing before or after the fence.\n\n"
+            f"You are writing the file `{tf}` for the C++20 library `shop`. "
+            f"This benchmark uses a SPLIT convention:\n"
+            f"  - Files under `include/...hpp` are headers (declarations only\n"
+            f"    for non-trivial classes; small types may be header-only).\n"
+            f"  - Files under `src/...cpp` are definitions (out-of-line\n"
+            f"    method bodies that match a sibling header).\n\n"
+            f"You are now writing `{tf}` — "
+            f"{'a .cpp definitions file' if is_cpp else 'a header file'}.\n"
+            f"Standard library only (no third-party deps). Each header has\n"
+            f"`#pragma once`. Out-of-line definitions in .cpp use\n"
+            f"`ClassName::method(...)` syntax. Use `#include \"<rel-path>.hpp\"`\n"
+            f"to reference the matching header.\n\n"
+            f"Output ONE ```cpp``` code block containing the COMPLETE file\n"
+            f"contents. Nothing before or after the fence.\n\n"
             f"---SPEC---\n{spec_text}\n---END SPEC---\n\n"
             f"Write `{tf}` per the section labeled `### {tf}` in the spec.\n"
         )
@@ -389,11 +485,23 @@ def run_one(run_id: str = "1") -> dict:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(code, encoding="utf-8")
         qwen_total_elapsed += qwen_resp["elapsed_s"]
+
+        # Per-file static check (Option 3) — catches missing definitions
+        # and link issues per-.cpp before final grading.
+        sc_ok, sc_tail = static_check_per_file(workspace, tf)
+        if not sc_ok:
+            static_fails += 1
         file_outcomes[tf] = {
             "elapsed_s": qwen_resp["elapsed_s"],
             "code_chars": len(code),
+            "static_check_ok": sc_ok,
+            "static_check_tail": (sc_tail[:500] if not sc_ok else ""),
         }
-        print(f"[qwen] {tf}: {qwen_resp['elapsed_s']}s  {len(code)} chars")
+        marker = "ok" if sc_ok else "STATIC_FAIL"
+        print(f"[qwen] {tf}: {qwen_resp['elapsed_s']}s  {len(code)} chars  "
+              f"static={marker}")
+        if not sc_ok:
+            print(f"[qwen] {tf} static tail: {sc_tail[:300]}")
 
     # Step 3: hidden grading — g++ compile + run
     g = grade(workspace)
@@ -409,6 +517,8 @@ def run_one(run_id: str = "1") -> dict:
         "passed": g["passed"], "total": g["total"],
         "pass_rate": g["pass_rate"],
         "compile_failed": g.get("compile_failed", False),
+        "static_fails": static_fails,
+        "task_count": len(TARGET_FILES),
         "opus_duration_s": round(opus_elapsed, 1),
         "opus_cost_usd": opus_resp["cost_usd"],
         "spec_chars": len(spec_text),

@@ -1,5 +1,6 @@
-// persistence.hpp — In-memory store + Snapshot.
+// persistence.hpp — In-memory store + Snapshot (declarations).
 //
+// Implementations live in src/persistence.cpp.
 // Snapshot DEEP-COPIES mutable state (StockLevel, Order, ReservationToken)
 // so post-snapshot mutations don't bleed through restore().
 #pragma once
@@ -26,21 +27,6 @@ struct Store {
     std::map<std::string, Order> orders;
     std::map<std::string, ReservationToken> reservations;
 
-    Snapshot snapshot() const {
-        Snapshot s;
-        s.customers = customers;
-        s.products = products;
-        s.stock = stock;            // value-copy; StockLevel has trivial copy
-        s.orders = orders;          // value-copy; Order has vector members
-        s.reservations = reservations;
-        return s;
-    }
-
-    void restore(const Snapshot& s) {
-        customers = s.customers;
-        products = s.products;
-        stock = s.stock;
-        orders = s.orders;
-        reservations = s.reservations;
-    }
+    Snapshot snapshot() const;
+    void restore(const Snapshot& s);
 };

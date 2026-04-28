@@ -1,17 +1,21 @@
-# cpp-inventory benchmark
+# cpp-inventory benchmark (v2: split `.hpp/.cpp` convention)
 
-Multi-header C++ benchmark — three coordinating services (customers,
+Multi-file C++ benchmark — three coordinating services (customers,
 inventory, orders) over an in-memory persistence store with snapshot /
 restore. Direct port of `dart-inventory` and `python-inventory` to
-modern C++ idioms (header-only, `std::map`, `std::optional`, exception
-hierarchy via `using`-inheritance). Used to disambiguate Dart-specific
-vs general-complexity ceiling for qwen3.5 across three languages.
+modern C++ idioms (`std::map`, `std::optional`, exception hierarchy
+via `using`-inheritance, `.hpp/.cpp` separation for non-trivial
+classes).
+
+v2 changed the convention from header-only (v1: 2/5 = 40% ceiling
+because qwen reverted to `.hpp/.cpp` despite the spec) to native
+`.hpp/.cpp` separation. Small value types stay header-only; services
++ persistence split.
 
 ## Public API
 
 The library is exported from `include/shop.hpp` (a barrel — pre-written
-by the harness). All other headers under `include/` are the executor's
-responsibility.
+by the harness).
 
 ```cpp
 #include "shop.hpp"
@@ -31,22 +35,29 @@ orders.ship(order.id);     // commits reservations, decrements on_hand
 orders.deliver(order.id);
 ```
 
-## Files (8 executor tasks + 1 pre-written barrel)
+## Files (13 executor tasks)
 
 ```
-include/
+include/                                     (declarations)
 ├── shop.hpp                                 (barrel — pre-written)
-├── errors.hpp                               [task 1]
+├── errors.hpp                               [task  1] header-only
 ├── types/
-│   ├── customers.hpp                        [task 2]
-│   ├── products.hpp                         [task 3]
-│   ├── inventory.hpp                        [task 4]
-│   └── orders.hpp                           [task 5]
-├── persistence.hpp                          [task 6]
+│   ├── customers.hpp                        [task  2] header-only
+│   ├── products.hpp                         [task  3] header-only
+│   ├── inventory.hpp                        [task  4] header-only
+│   └── orders.hpp                           [task  5] header-only
+├── persistence.hpp                          [task  6]
 └── services/
-    ├── customer_service.hpp                 [task 7]
-    ├── inventory_service.hpp                [task 8]
-    └── order_service.hpp                    [task 9]
+    ├── customer_service.hpp                 [task  8]
+    ├── inventory_service.hpp                [task 10]
+    └── order_service.hpp                    [task 12]
+
+src/                                         (definitions)
+├── persistence.cpp                          [task  7]
+└── services/
+    ├── customer_service.cpp                 [task  9]
+    ├── inventory_service.cpp                [task 11]
+    └── order_service.cpp                    [task 13]
 ```
 
 Tasks run in topological order. Each task's executor sees the spec
@@ -162,7 +173,13 @@ all maps (since the value types are owned, value-copy is a deep copy).
 ## Grading
 
 ```
-g++ -std=c++20 -I include test/shop_test.cpp -o test_runner.exe
+g++ -std=c++20 -I include \
+  src/persistence.cpp \
+  src/services/customer_service.cpp \
+  src/services/inventory_service.cpp \
+  src/services/order_service.cpp \
+  test/shop_test.cpp \
+  -o test_runner.exe
 ./test_runner.exe
 ```
 

@@ -2,6 +2,7 @@
   "benchmark": "cpp-inventory",
   "language": "cpp",
   "barrel": "include/shop.hpp",
+  "convention": "split (.hpp declarations + .cpp definitions for non-trivial classes)",
   "target_files": [
     "include/errors.hpp",
     "include/types/customers.hpp",
@@ -9,12 +10,24 @@
     "include/types/inventory.hpp",
     "include/types/orders.hpp",
     "include/persistence.hpp",
+    "src/persistence.cpp",
     "include/services/customer_service.hpp",
+    "src/services/customer_service.cpp",
     "include/services/inventory_service.hpp",
-    "include/services/order_service.hpp"
+    "src/services/inventory_service.cpp",
+    "include/services/order_service.hpp",
+    "src/services/order_service.cpp"
   ],
-  "test_command": ["g++", "-std=c++20", "-I", "include", "test/shop_test.cpp", "-o", "test_runner.exe"],
+  "test_command": [
+    "g++", "-std=c++20", "-I", "include",
+    "src/persistence.cpp",
+    "src/services/customer_service.cpp",
+    "src/services/inventory_service.cpp",
+    "src/services/order_service.cpp",
+    "test/shop_test.cpp",
+    "-o", "test_runner.exe"
+  ],
   "run_command": ["./test_runner.exe"],
   "reference_pass_count": 28,
-  "notes": "Multi-header sibling of cpp-orders. Used to disambiguate language vs complexity ceiling for qwen3.5. Driver bypasses loom_exec (matches cpp-orders pattern); per-file Ollama calls in topological order."
+  "notes": "13-file C++20 split-convention benchmark (.hpp declarations + .cpp definitions). Used to test whether matching qwen2.5-coder's native convention lifts the cpp-inventory v1 ceiling (was 2/5 = 40% with header-only)."
 }
