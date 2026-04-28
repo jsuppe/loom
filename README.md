@@ -88,7 +88,7 @@ The asymmetric pipeline holds up well in Python and at small file counts; it hit
 | **Python** | single-file (Phase D) | **96 % (51/53)** | qwen3.5:latest |
 | **Python** | 9-file (`python-inventory`) | **100 % (5/5)** | qwen3.5:latest |
 | **C++** | single-header (`cpp-orders`) | **100 % (6/6)** | qwen2.5-coder:32b |
-| **C++** | 13-file split (`cpp-inventory` v2) | partial (in flight) | qwen2.5-coder:32b |
+| **C++** | 13-file split (`cpp-inventory` v2) | **80 % (4/5)** | qwen2.5-coder:32b |
 | **C++** | 9-header v1 (`cpp-inventory` v1) | 40 % (2/5) | qwen2.5-coder:32b |
 | **Dart** | 3-file (`dart-orders` Tier 1+2) | **100 %** at top tier | qwen3.5:latest |
 | **Dart** | 9-file (`dart-inventory`) | **0 % (0/35)** | both qwen3.5 and qwen2.5-coder:32b |

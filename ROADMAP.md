@@ -316,7 +316,7 @@ and project size. Companion writeup:
 |---|---|---|---|---|
 | **Python** | ✅ 100% (Phase D) | (skipped) | ✅ **5/5 = 100%** (qwen3.5) | use it freely up to ~9 files |
 | **Dart (pure)** | (skipped) | ✅ 100% after Tier 2 | ❌ 0/35 (qwen3.5 + qwen2.5-coder:32b) | use for ≤ 3 files; ceiling robust to executor at 9 |
-| **C++** | ✅ 100% (cpp-orders) | (skipped) | ⚠ **2/5 = 40%** (qwen2.5-coder:32b) | mid-ceiling; header-only convention is the failure surface |
+| **C++** | ✅ 100% (cpp-orders) | (skipped) | v1 header-only: 2/5 = 40% · **v2 split:** **4/5 = 80%** (qwen2.5-coder:32b) | use split `.h/.cpp` convention; matching qwen's native idiom doubled the pass rate |
 | **Flutter Dart** | ❓ untested | ❓ untested | ❓ untested | benchmark + driver authored, not run |
 | **JS/TS/Go/Rust** | ❓ untested | ❓ untested | ❓ untested | unknown |
 
@@ -370,7 +370,7 @@ and project size. Companion writeup:
 ### 6.6 In-flight tasks
 
 - [x] **6.6.1 Python N=5 at 9 files** — **5/5 = 100%** (every trial 28/28). Median wall 224s, Opus $0.50. H1 confirmed at N=5.
-- [x] **6.6.2 C++ N=5 at 9 files** — **2/5 = 40%** with qwen2.5-coder:32b. Failures cluster on header-only linker errors (qwen produces declarations without inline bodies despite spec). Median wall 770s, Opus $0.76.
+- [x] **6.6.2 C++ N=5 at 9 files (header-only v1 + split v2)** — v1 header-only: **2/5 = 40%** with qwen2.5-coder:32b (header-only linker errors dominate). v2 split-convention restructure: **4/5 = 80%** — doubling the pass rate by matching qwen's native `.h/.cpp` style. v2 wall ~1100s, Opus $0.74 median.
 - [x] **6.6.3 qwen2.5-coder:32b on dart-inventory N=5** — **0/5 = 0%**. The ceiling holds across local executors; bigger code-specialized model does not cross it. All 5 chains break on `lib/errors.dart` or `lib/types/customers.dart`.
 - [x] **6.6.4 Wire `dart analyze` between body and grading** — `LOOM_EXEC_STATIC_CHECK=1` opt-in; runs `dart analyze --fatal-warnings` (Dart), `ast.parse` (Python), `g++ -fsyntax-only` (C++) before grading.
 - [x] **6.6.5 Worked-example demo** — `docs/WORKED_EXAMPLE.md` walks through extract → spec → decompose → loom_exec → grade on python-inventory.

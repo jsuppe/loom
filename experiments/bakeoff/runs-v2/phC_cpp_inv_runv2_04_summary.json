@@ -1,0 +1,116 @@
+{
+  "phase": "C_cpp_inventory_oneshot_auto",
+  "run_id": "v2_04",
+  "benchmark": "cpp-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 28,
+  "total": 28,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "static_fails": 0,
+  "task_count": 13,
+  "opus_duration_s": 225.3,
+  "opus_cost_usd": 0.7217852499999999,
+  "spec_chars": 38580,
+  "spec_sections_found": [
+    "include/errors.hpp",
+    "include/types/customers.hpp",
+    "include/types/products.hpp",
+    "include/types/inventory.hpp",
+    "include/types/orders.hpp",
+    "include/persistence.hpp",
+    "src/persistence.cpp",
+    "include/services/customer_service.hpp",
+    "src/services/customer_service.cpp",
+    "include/services/inventory_service.hpp",
+    "src/services/inventory_service.cpp",
+    "include/services/order_service.hpp",
+    "src/services/order_service.cpp"
+  ],
+  "qwen_total_elapsed_s": 835.4,
+  "wall_s": 1071.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_r05mg_fc",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_grade_v0dq3ibs",
+  "file_outcomes": {
+    "include/errors.hpp": {
+      "elapsed_s": 34.8,
+      "code_chars": 725,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/customers.hpp": {
+      "elapsed_s": 53.4,
+      "code_chars": 957,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/products.hpp": {
+      "elapsed_s": 32.5,
+      "code_chars": 573,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/inventory.hpp": {
+      "elapsed_s": 44.6,
+      "code_chars": 835,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/orders.hpp": {
+      "elapsed_s": 87.2,
+      "code_chars": 1789,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/persistence.hpp": {
+      "elapsed_s": 42.9,
+      "code_chars": 826,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/persistence.cpp": {
+      "elapsed_s": 26.5,
+      "code_chars": 459,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/customer_service.hpp": {
+      "elapsed_s": 24.1,
+      "code_chars": 406,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/customer_service.cpp": {
+      "elapsed_s": 53.5,
+      "code_chars": 1166,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/inventory_service.hpp": {
+      "elapsed_s": 39.1,
+      "code_chars": 813,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/inventory_service.cpp": {
+      "elapsed_s": 161.6,
+      "code_chars": 3431,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/order_service.hpp": {
+      "elapsed_s": 39.7,
+      "code_chars": 820,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/order_service.cpp": {
+      "elapsed_s": 195.5,
+      "code_chars": 4147,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    }
+  },
+  "grade_stdout_tail": "28 passed, 0 failed\n"
+}

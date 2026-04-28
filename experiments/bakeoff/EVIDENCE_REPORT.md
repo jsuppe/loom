@@ -6,9 +6,9 @@ and groups by phase + experiment cell.
 
 ## Top-line totals
 
-- Total trials recorded: **538**
-- Trials at 100 % pass: **376** (69.9 %)
-- Total Opus/PO cost across all trials: **$160.67**
+- Total trials recorded: **541**
+- Trials at 100 % pass: **379** (70.1 %)
+- Total Opus/PO cost across all trials: **$162.88**
 - Total tokens across all trials: **1,348,253**
 
 ## Phase A
@@ -79,8 +79,8 @@ and groups by phase + experiment cell.
 | cell | N | full-pass | median pass | median wall (s) | median cost ($) | total cost ($) |
 |---|---:|---:|---:|---:|---:|---:|
 | cpp-inv v1 (header-only) qwen-coder:32b | 5 | 2/5 (40.0%) | 0.000 | 777.5 | 0.7595 | 3.9509 |
-| cpp-inv v2 (split) qwen-coder:32b | 3 | 2/3 (66.7%) | 1.000 | 1162.0 | 0.7673 | 2.1515 |
-| **phase total** | **8** | **4/8 (50.0%)** | | | | **6.10** |
+| cpp-inv v2 (split) qwen-coder:32b | 6 | 5/6 (83.3%) | 1.000 | 1125.2 | 0.7444 | 4.3622 |
+| **phase total** | **11** | **7/11 (63.6%)** | | | | **8.31** |
 
 ## Phase D
 
@@ -140,7 +140,7 @@ Pass rates across all relevant Phase C / D cells, by language and project size.
 | Python | single-file (D) | 51/53 = 96% | qwen3.5:latest | N=53 |
 | Python | 9-file (C/python-inventory) | 5/5 = 100% | qwen3.5:latest | N=5 |
 | C++ | single-header (C/cpp-orders) | 6/6 = 100% | qwen2.5-coder:32b | N=6 |
-| C++ | 13-file v2 split (C/cpp-inventory) | 2/3 = 67% | qwen2.5-coder:32b | N=3 |
+| C++ | 13-file v2 split (C/cpp-inventory) | 5/6 = 83% | qwen2.5-coder:32b | N=6 |
 | C++ | 9-header v1 (C/cpp-inventory) | 2/5 = 40% | qwen2.5-coder:32b | N=5 |
 | Dart | 3-file (C/dart-orders Tier-progression) | 24/36 = 67% | qwen3.5:latest | N=36 |
 | Dart | 9-file (C/dart-inventory) | 0/5 = 0% | qwen2.5-coder:32b | N=5 |
