@@ -1,0 +1,68 @@
+{
+  "phase": "C_cpp_inventory_oneshot_auto",
+  "run_id": "c01",
+  "benchmark": "cpp-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 0,
+  "total": 28,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "opus_duration_s": 300.4,
+  "opus_cost_usd": 0.84458525,
+  "spec_chars": 27950,
+  "spec_sections_found": [
+    "include/errors.hpp",
+    "include/types/customers.hpp",
+    "include/types/products.hpp",
+    "include/types/inventory.hpp",
+    "include/types/orders.hpp",
+    "include/persistence.hpp",
+    "include/services/customer_service.hpp",
+    "include/services/inventory_service.hpp",
+    "include/services/order_service.hpp"
+  ],
+  "qwen_total_elapsed_s": 465.5,
+  "wall_s": 767.1,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_ql5ra5cz",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_grade_8pnw2gbd",
+  "file_outcomes": {
+    "include/errors.hpp": {
+      "elapsed_s": 44.5,
+      "code_chars": 725
+    },
+    "include/types/customers.hpp": {
+      "elapsed_s": 42.4,
+      "code_chars": 965
+    },
+    "include/types/products.hpp": {
+      "elapsed_s": 28.5,
+      "code_chars": 611
+    },
+    "include/types/inventory.hpp": {
+      "elapsed_s": 27.5,
+      "code_chars": 597
+    },
+    "include/types/orders.hpp": {
+      "elapsed_s": 41.9,
+      "code_chars": 928
+    },
+    "include/persistence.hpp": {
+      "elapsed_s": 49.7,
+      "code_chars": 1128
+    },
+    "include/services/customer_service.hpp": {
+      "elapsed_s": 22.0,
+      "code_chars": 445
+    },
+    "include/services/inventory_service.hpp": {
+      "elapsed_s": 35.8,
+      "code_chars": 829
+    },
+    "include/services/order_service.hpp": {
+      "elapsed_s": 173.2,
+      "code_chars": 4352
+    }
+  },
+  "grade_stdout_tail": "N5SetupC1Ev[_ZN5SetupC1Ev]+0x137): undefined reference to `CustomerService::register_customer(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)'\nC:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: C:\\Users\\jonsu\\AppData\\Local\\Temp\\ccAHy2Lh.o:shop_test.cpp:(.text$_ZN5SetupC1Ev[_ZN5SetupC1Ev]+0x1e1): undefined reference to `InventoryService::register_product(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, double)'\nC:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: C:\\Users\\jonsu\\AppData\\Local\\Temp\\ccAHy2Lh.o:shop_test.cpp:(.text$_ZN5SetupC1Ev[_ZN5SetupC1Ev]+0x291): undefined reference to `InventoryService::register_product(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, double)'\nC:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: C:\\Users\\jonsu\\AppData\\Local\\Temp\\ccAHy2Lh.o:shop_test.cpp:(.text$_ZN5SetupC1Ev[_ZN5SetupC1Ev]+0x307): undefined reference to `InventoryService::add_stock(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, int)'\nC:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: C:\\Users\\jonsu\\AppData\\Local\\Temp\\ccAHy2Lh.o:shop_test.cpp:(.text$_ZN5SetupC1Ev[_ZN5SetupC1Ev]+0x36d): undefined reference to `InventoryService::add_stock(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, int)'\nC:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: C:\\Users\\jonsu\\AppData\\Local\\Temp\\ccAHy2Lh.o:shop_test.cpp:(.text$_ZSt12construct_atI4ItemJRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKiRdEEDTgsnwcvPvLi0E_T_pispcl7declvalIT0_EEEEPSD_DpOSE_[_ZSt12construct_atI4ItemJRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKiRdEEDTgsnwcvPvLi0E_T_pispcl7declvalIT0_EEEEPSD_DpOSE_]+0x88): undefined reference to `Item::Item(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, double)'\ncollect2.exe: error: ld returned 1 exit status\n"
+}

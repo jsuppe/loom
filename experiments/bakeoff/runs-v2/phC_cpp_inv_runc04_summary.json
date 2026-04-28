@@ -1,0 +1,68 @@
+{
+  "phase": "C_cpp_inventory_oneshot_auto",
+  "run_id": "c04",
+  "benchmark": "cpp-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 28,
+  "total": 28,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "opus_duration_s": 311.8,
+  "opus_cost_usd": 0.862829,
+  "spec_chars": 40675,
+  "spec_sections_found": [
+    "include/errors.hpp",
+    "include/types/customers.hpp",
+    "include/types/products.hpp",
+    "include/types/inventory.hpp",
+    "include/types/orders.hpp",
+    "include/persistence.hpp",
+    "include/services/customer_service.hpp",
+    "include/services/inventory_service.hpp",
+    "include/services/order_service.hpp"
+  ],
+  "qwen_total_elapsed_s": 668.3,
+  "wall_s": 981.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_kt2wblkd",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_grade_v79t4xvw",
+  "file_outcomes": {
+    "include/errors.hpp": {
+      "elapsed_s": 41.5,
+      "code_chars": 725
+    },
+    "include/types/customers.hpp": {
+      "elapsed_s": 47.4,
+      "code_chars": 991
+    },
+    "include/types/products.hpp": {
+      "elapsed_s": 31.6,
+      "code_chars": 617
+    },
+    "include/types/inventory.hpp": {
+      "elapsed_s": 31.2,
+      "code_chars": 515
+    },
+    "include/types/orders.hpp": {
+      "elapsed_s": 84.0,
+      "code_chars": 1850
+    },
+    "include/persistence.hpp": {
+      "elapsed_s": 55.3,
+      "code_chars": 1128
+    },
+    "include/services/customer_service.hpp": {
+      "elapsed_s": 53.2,
+      "code_chars": 1076
+    },
+    "include/services/inventory_service.hpp": {
+      "elapsed_s": 150.2,
+      "code_chars": 3263
+    },
+    "include/services/order_service.hpp": {
+      "elapsed_s": 173.9,
+      "code_chars": 4013
+    }
+  },
+  "grade_stdout_tail": "28 passed, 0 failed\n"
+}
