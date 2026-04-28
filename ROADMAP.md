@@ -369,12 +369,12 @@ and project size. Companion writeup:
 
 ### 6.6 In-flight tasks
 
-- [ ] **6.6.1 Python N=5 at 9 files** to firm up cross-language. ~30 min compute.
-- [ ] **6.6.2 C++ N=5 at 9 files.** Driver bypasses loom_exec; cleanest run path. ~50 min compute.
-- [ ] **6.6.3 qwen2.5-coder:32b on dart-inventory.** If it crosses the ceiling, the pipeline-extends story changes shape. ~50 min compute.
-- [ ] **6.6.4 Wire `dart analyze` between body and grading** as the first language-aware validator.
-- [ ] **6.6.5 Worked-example demo** of production-mode workflow on a real small project.
-- [ ] **6.6.6 Flutter multi-widget benchmark** to test the existing audience's actual use case.
+- [x] **6.6.1 Python N=5 at 9 files** — **5/5 = 100%** (every trial 28/28). Median wall 224s, Opus $0.50. H1 confirmed at N=5.
+- [ ] **6.6.2 C++ N=5 at 9 files** — in flight (qwen2.5-coder:32b).
+- [ ] **6.6.3 qwen2.5-coder:32b on dart-inventory** — queued after step 2.
+- [x] **6.6.4 Wire `dart analyze` between body and grading** — `LOOM_EXEC_STATIC_CHECK=1` opt-in; runs `dart analyze --fatal-warnings` (Dart), `ast.parse` (Python), `g++ -fsyntax-only` (C++) before grading.
+- [x] **6.6.5 Worked-example demo** — `docs/WORKED_EXAMPLE.md` walks through extract → spec → decompose → loom_exec → grade on python-inventory.
+- [x] **6.6.6 Flutter multi-widget benchmark** — `flutter-counter` benchmark + 17/17 reference tests; driver authoring deferred (see benchmark README).
 
 Status updated as items land.
 

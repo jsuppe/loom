@@ -211,24 +211,49 @@ def split_spec_by_file(spec_text: str) -> dict[str, str]:
     return sections
 
 
-def call_ollama(prompt: str, model: str) -> dict:
-    """Direct Ollama call — bypasses loom_exec (matches cpp-orders)."""
+def call_ollama(prompt: str, model: str, retries: int = 3) -> dict:
+    """Direct Ollama call with simple retry — bypasses loom_exec.
+
+    qwen2.5-coder:32b runner has been seen to crash mid-session with
+    HTTP 500 ("llama runner has terminated"). When that happens, the
+    Ollama daemon usually recovers if you give it a few seconds.
+    Retry up to `retries` times with exponential backoff before
+    giving up.
+    """
     import urllib.request
+    import urllib.error
     body = json.dumps({
         "model": model,
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0},
     }).encode()
-    req = urllib.request.Request(
-        OLLAMA_URL, data=body,
-        headers={"Content-Type": "application/json"},
-    )
-    t0 = time.time()
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        data = json.loads(resp.read().decode())
-    return {"response": data.get("response", ""),
-            "elapsed_s": round(time.time() - t0, 1)}
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(
+                OLLAMA_URL, data=body,
+                headers={"Content-Type": "application/json"},
+            )
+            t0 = time.time()
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                data = json.loads(resp.read().decode())
+            return {"response": data.get("response", ""),
+                    "elapsed_s": round(time.time() - t0, 1),
+                    "attempts": attempt}
+        except urllib.error.HTTPError as e:
+            last_err = e
+            wait = 5 * attempt  # 5s, 10s, 15s
+            print(f"[qwen] HTTP {e.code} on attempt {attempt}/{retries}; "
+                  f"retrying in {wait}s")
+            time.sleep(wait)
+        except Exception as e:
+            last_err = e
+            wait = 5 * attempt
+            print(f"[qwen] {type(e).__name__}: {e} on attempt {attempt}/{retries}; "
+                  f"retrying in {wait}s")
+            time.sleep(wait)
+    raise RuntimeError(f"ollama failed after {retries} attempts: {last_err}")
 
 
 def extract_cpp(text: str) -> str:
@@ -265,6 +290,7 @@ def grade(workspace: Path) -> dict:
     )
     if compile_proc.returncode != 0:
         return {"passed": 0, "total": 28,
+                "pass_rate": 0.0,
                 "compile_failed": True,
                 "stdout_tail": compile_proc.stderr[-2500:],
                 "grade_dir": str(grade_dir)}
