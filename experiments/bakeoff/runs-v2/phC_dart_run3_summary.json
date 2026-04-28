@@ -1,0 +1,32 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "3",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 58.2,
+  "opus_cost_usd": 0.2185665,
+  "spec_chars": 11637,
+  "exec_duration_s": 23.4,
+  "exec_rc": 0,
+  "wall_s": 90.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_n07abzm6",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_y8vwmzys",
+  "file_sizes": {
+    "lib/types.dart": 1586,
+    "lib/history.dart": 594,
+    "lib/service.dart": 1916,
+    "lib/orders.dart": 67
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart",
+    "lib/orders.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-3ac6c756ad4a  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_n07abzm6  runner: dart_test (replace)\n[exec] prompt: 4826 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.3s  in=1239  out=445\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-3ac6c756ad4a\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_n07abzm6\\\\lib\\\\types.dart\"}\n[exec] task TASK-13706f21f4e7  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_n07abzm6  runner: dart_test (replace)\n[exec] prompt: 2876 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.5s  in=792  out=194\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-13706f21f4e7\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_n07abzm6\\\\lib\\\\history.dart\"}\n[exec] task TASK-94fa2acdf2e2  status=pending  title='Implement lib/service.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_n07abzm6  runner: dart_test (replace)\n[exec] prompt: 5563 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.8s  in=1423  out=556\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-94fa2acdf2e2\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_n07abzm6\\\\lib\\\\service.dart\"}\n[exec] task TASK-241c5236b8e5  status=pending  title='Implement lib/orders.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_n07abzm6  runner: dart_test (replace)\n[exec] prompt: 1594 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 0.5s  in=448  out=42\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-241c5236b8e5\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_n07abzm6\\\\lib\\\\orders.dart\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "00:00 +0: loading test/orders_test.dart\n00:00 +0 -1: loading test/orders_test.dart [E]\n  Failed to load \"test/orders_test.dart\":\n  test/orders_test.dart:9:6: Error: Type 'Item' not found.\n  List<Item> _items(List<({String name, num price, int quantity})> xs) =>\n       ^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}

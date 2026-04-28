@@ -1,0 +1,31 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "25",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 21,
+  "total": 21,
+  "pass_rate": 1.0,
+  "opus_duration_s": 65.0,
+  "opus_cost_usd": 0.25592899999999996,
+  "spec_chars": 9380,
+  "exec_duration_s": 231.2,
+  "exec_rc": 0,
+  "wall_s": 304.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart___7g711s",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_67gdyhxw",
+  "file_sizes": {
+    "lib/types.dart": 1663,
+    "lib/history.dart": 495,
+    "lib/service.dart": 1698
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart",
+    "lib/orders.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-40070e97ba8d  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart___7g711s  runner: dart_test (replace)\n[exec] prompt: 4615 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 91.6s  in=1091  out=402\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-40070e97ba8d\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart___7g711s\\\\lib\\\\types.dart\"}\n[exec] task TASK-c2041f23a10b  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart___7g711s  runner: dart_test (replace)\n[exec] prompt: 2567 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 32.7s  in=640  out=145\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-c2041f23a10b\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart___7g711s\\\\lib\\\\history.dart\"}\n[exec] task TASK-bb59060d5948  status=pending  title='Implement lib/service.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart___7g711s  runner: dart_test (replace)\n[exec] prompt: 4634 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 96.3s  in=1087  out=423\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-bb59060d5948\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart___7g711s\\\\lib\\\\service.dart\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "00:00 +0: loading test/orders_test.dart\n00:00 +0: REQ-1: Order model starts with status NEW\n00:00 +1: REQ-1: Order model computes total\n00:00 +2: REQ-1: Order model rejects empty items\n00:00 +3: REQ-1: Order model rejects negative price\n00:00 +4: REQ-2: placeOrder returns order in NEW\n00:00 +5: REQ-2: placeOrder records history entry\n00:00 +6: REQ-2: placeOrder rejects bad items\n00:00 +7: REQ-3: markPaid from NEW\n00:00 +8: REQ-3: markPaid twice raises\n00:00 +9: REQ-3: markPaid unknown id raises\n00:00 +10: REQ-4: ship and deliver ship from PAID\n00:00 +11: REQ-4: ship and deliver ship from NEW raises\n00:00 +12: REQ-4: ship and deliver deliver from SHIPPED\n00:00 +13: REQ-4: ship and deliver deliver from PAID raises\n00:00 +14: REQ-5: cancel from NEW\n00:00 +15: REQ-5: cancel from PAID\n00:00 +16: REQ-5: cancel from SHIPPED raises\n00:00 +17: REQ-5: cancel twice raises\n00:00 +18: REQ-6: history records full lifecycle\n00:00 +19: REQ-6: history empty for unknown order\n00:00 +20: REQ-6: history timestamps strictly increasing\n00:00 +21: All tests passed!\n"
+}

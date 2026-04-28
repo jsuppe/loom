@@ -1,0 +1,18 @@
+{
+  "phase": "D_oneshot",
+  "run_id": "5",
+  "benchmark": "python-state-machine",
+  "executor": "qwen3.5:latest",
+  "passed": 21,
+  "failed": 0,
+  "errors": 0,
+  "total": 21,
+  "pass_rate": 1.0,
+  "plan_elapsed_s": 0.2,
+  "exec_elapsed_s": 8.7,
+  "wall_s": 9.3,
+  "exec_rc": 0,
+  "target_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phD_oneshot_5_afqnhbxv",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phD_oneshot_grade_92f7_tm3",
+  "orders_py_loc": 143
+}

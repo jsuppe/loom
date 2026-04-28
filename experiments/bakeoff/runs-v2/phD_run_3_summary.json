@@ -1,0 +1,18 @@
+{
+  "phase": "D_smoke",
+  "benchmark": "python-state-machine",
+  "planner": "opus(manual)",
+  "executor": "qwen3.5:latest",
+  "passed": 8,
+  "failed": 13,
+  "errors": 0,
+  "total": 21,
+  "pass_rate": 0.38095238095238093,
+  "plan_elapsed_s": 0.8,
+  "exec_elapsed_s": 21.1,
+  "exec_rc": 0,
+  "wall_s": 22.4,
+  "target_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phD_smoke_i8drrz5f",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phD_grade_h089o_4f",
+  "orders_py_loc": 159
+}

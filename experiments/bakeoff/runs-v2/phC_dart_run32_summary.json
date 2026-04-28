@@ -1,0 +1,30 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "32",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 102.2,
+  "opus_cost_usd": 0.32944775,
+  "spec_chars": 2648,
+  "exec_duration_s": 26.1,
+  "exec_rc": 0,
+  "wall_s": 134.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_mpnzhunc",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_7cdbuhak",
+  "file_sizes": {
+    "lib/types.dart": 1656,
+    "lib/history.dart": 0,
+    "lib/service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-59eb01c2d1f0  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_mpnzhunc  runner: dart_test (replace)\n[exec] prompt: 4176 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.0s  in=1138  out=440\n[exec] grading (attempt 1): 3/3\n[exec] result: {\"task_id\": \"TASK-59eb01c2d1f0\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_mpnzhunc\\\\lib\\\\types.dart\"}\n[exec] task TASK-151fac353c23  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_mpnzhunc  runner: dart_test (replace)\n[exec] prompt: 1410 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 4.4s  in=424  out=684\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 4459 chars\n[exec] calling qwen3.5:latest...\n[exec] model: 4.6s  in=1231  out=689\n[exec] grading (attempt 2): 0/1\n[exec] test_fail on attempt 2; retrying with error feedback\n[exec] retry attempt 3/3  prompt: 4459 chars\n[exec] calling qwen3.5:latest...\n[exec] model: 4.6s  in=1231  out=692\n[exec] grading (attempt 3): 0/1\n[exec] result: {\"task_id\": \"TASK-151fac353c23\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"        _entries.sublist(_currentIndex + 1).removeRange(0);\\n                                                       ^\\n  lib/history.dart:78:32: Error: The argument type 'List<String>' can't be assigned to the parameter type 'List<T>'.\\n   - 'List' is from 'dart:core'.\\n      return History.fromEntries(entries, currentIndex);\\n                                 ^\\n  lib/history.dart:83:21: Error: Couldn't find constructor 'History'.\\n      final history = History<T>();\\n                      ^^^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_history.dart: loading test/_gate_history.dart\\n\", \"attempts\": 3}",
+  "grade_stdout_tail": "est.dart:185:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:186:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:199:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:200:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:214:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:214:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:228:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:228:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:243:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:244:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:265:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:270:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:271:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}

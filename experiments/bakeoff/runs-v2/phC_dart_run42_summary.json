@@ -1,0 +1,31 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "42",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 21,
+  "total": 21,
+  "pass_rate": 1.0,
+  "opus_duration_s": 49.9,
+  "opus_cost_usd": 0.11039500000000001,
+  "spec_chars": 8859,
+  "exec_duration_s": 21.9,
+  "exec_rc": 0,
+  "wall_s": 77.1,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_8odilzzi",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_trnmhkl1",
+  "file_sizes": {
+    "lib/types.dart": 1651,
+    "lib/history.dart": 555,
+    "lib/service.dart": 1945
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart",
+    "lib/orders.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-81d7cac19a0f  status=pending  title='Implement lib/types.dart per the section labeled `### lib/types.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_8odilzzi  runner: dart_test (replace)\n[exec] prompt: 10341 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.4s  in=2680  out=442\n[exec] grading (attempt 1): 3/3\n[exec] result: {\"task_id\": \"TASK-81d7cac19a0f\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_8odilzzi\\\\lib\\\\types.dart\"}\n[exec] task TASK-cf359668381b  status=pending  title='Implement lib/history.dart per the section labeled `### lib/history.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_8odilzzi  runner: dart_test (replace)\n[exec] prompt: 10353 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.7s  in=2681  out=165\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 12028 chars\n[exec] calling qwen3.5:latest...\n[exec] model: 1.4s  in=3129  out=171\n[exec] grading (attempt 2): 2/2\n[exec] result: {\"task_id\": \"TASK-cf359668381b\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"attempts\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_8odilzzi\\\\lib\\\\history.dart\"}\n[exec] task TASK-bbd5d487a06f  status=pending  title='Implement lib/service.dart per the section labeled `### lib/service.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_8odilzzi  runner: dart_test (replace)\n[exec] prompt: 10353 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.9s  in=2680  out=535\n[exec] grading (attempt 1): 1/1\n[exec] result: {\"task_id\": \"TASK-bbd5d487a06f\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_8odilzzi\\\\lib\\\\service.dart\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "00:00 +0: loading test/orders_test.dart\n00:00 +0: REQ-1: Order model starts with status NEW\n00:00 +1: REQ-1: Order model computes total\n00:00 +2: REQ-1: Order model rejects empty items\n00:00 +3: REQ-1: Order model rejects negative price\n00:00 +4: REQ-2: placeOrder returns order in NEW\n00:00 +5: REQ-2: placeOrder records history entry\n00:00 +6: REQ-2: placeOrder rejects bad items\n00:00 +7: REQ-3: markPaid from NEW\n00:00 +8: REQ-3: markPaid twice raises\n00:00 +9: REQ-3: markPaid unknown id raises\n00:00 +10: REQ-4: ship and deliver ship from PAID\n00:00 +11: REQ-4: ship and deliver ship from NEW raises\n00:00 +12: REQ-4: ship and deliver deliver from SHIPPED\n00:00 +13: REQ-4: ship and deliver deliver from PAID raises\n00:00 +14: REQ-5: cancel from NEW\n00:00 +15: REQ-5: cancel from PAID\n00:00 +16: REQ-5: cancel from SHIPPED raises\n00:00 +17: REQ-5: cancel twice raises\n00:00 +18: REQ-6: history records full lifecycle\n00:00 +19: REQ-6: history empty for unknown order\n00:00 +20: REQ-6: history timestamps strictly increasing\n00:00 +21: All tests passed!\n"
+}

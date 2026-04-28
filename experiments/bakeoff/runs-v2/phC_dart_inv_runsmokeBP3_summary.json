@@ -1,0 +1,43 @@
+{
+  "phase": "C_dart_inventory_oneshot_auto",
+  "run_id": "smokeBP3",
+  "benchmark": "dart-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "blueprint_enabled": true,
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 145.4,
+  "opus_cost_usd": 0.46611649999999993,
+  "spec_chars": 19615,
+  "exec_duration_s": 113.6,
+  "exec_rc": 0,
+  "wall_s": 269.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_p9ohn8w6",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_inv_grade_ss9v0nus",
+  "file_sizes": {
+    "lib/errors.dart": 709,
+    "lib/types/customers.dart": 814,
+    "lib/types/products.dart": 672,
+    "lib/types/inventory.dart": 0,
+    "lib/types/orders.dart": 0,
+    "lib/persistence.dart": 0,
+    "lib/services/customer_service.dart": 0,
+    "lib/services/inventory_service.dart": 0,
+    "lib/services/order_service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/errors.dart",
+    "lib/types/customers.dart",
+    "lib/types/products.dart",
+    "lib/types/inventory.dart",
+    "lib/types/orders.dart",
+    "lib/persistence.dart",
+    "lib/services/customer_service.dart",
+    "lib/services/inventory_service.dart",
+    "lib/services/order_service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-a4790a64fcfe  status=pending  title='Implement lib/errors.dart per the section labeled `### lib/errors.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_p9ohn8w6  runner: dart_test (replace)\n[exec] prompt: 21197 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/errors.dart...\n[exec] blueprint validated  6.4s  709 chars  in=5872  out=157\n[exec] body prompt with blueprint: 22157 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.4s  in=5822  out=157\n[exec] grading (attempt 1): 1/1\n[exec] result: {\"task_id\": \"TASK-a4790a64fcfe\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_inv_p9ohn8w6\\\\lib\\\\errors.dart\"}\n[exec] task TASK-8efed6fc24f6  status=pending  title='Implement lib/types/customers.dart per the section labeled `### lib/types/customers.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_p9ohn8w6  runner: dart_test (replace)\n[exec] prompt: 21251 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/types/customers.dart...\n[exec] blueprint validated  2.6s  814 chars  in=5886  out=215\n[exec] body prompt with blueprint: 22316 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.7s  in=5892  out=215\n[exec] grading (attempt 1): 2/2\n[exec] result: {\"task_id\": \"TASK-8efed6fc24f6\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_inv_p9ohn8w6\\\\lib\\\\types\\\\customers.dart\"}\n[exec] task TASK-f8c9cf9683ee  status=pending  title='Implement lib/types/products.dart per the section labeled `### lib/types/products.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_p9ohn8w6  runner: dart_test (replace)\n[exec] prompt: 21245 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/types/products.dart...\n[exec] blueprint validated  2.6s  672 chars  in=5879  out=190\n[exec] body prompt with blueprint: 22168 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.6s  in=5861  out=190\n[exec] grading (attempt 1): 2/2\n[exec] result: {\"task_id\": \"TASK-f8c9cf9683ee\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"attempts\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_inv_p9ohn8w6\\\\lib\\\\types\\\\products.dart\"}\n[exec] task TASK-65e73649bfc7  status=pending  title='Implement lib/types/inventory.dart per the section labeled `### lib/types/inventory.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_p9ohn8w6  runner: dart_test (replace)\n[exec] prompt: 21251 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/types/inventory.dart...\n[exec] blueprint validated  2.3s  535 chars  in=5887  out=157\n[exec] body prompt with blueprint: 22037 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.4s  in=5835  out=157\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 23698 chars\n[exec] calling qwen3.5:latest  temp=0.4\n[exec] model: 1.4s  in=6302  out=157\n[exec] grading (attempt 2): 0/1\n[exec] test_fail on attempt 2; retrying with error feedback\n[exec] retry attempt 3/3  prompt: 23698 chars\n[exec] calling qwen3.5:latest  temp=0.7\n[exec] model: 36.9s  in=6302  out=5810\n[exec] grading (attempt 3): 0/1\n[exec] escalating to qwen3.5:27b after 3 attempts with qwen3.5:latest\n[exec] qwen3.5:27b: 35.3s  in=6208  out=157\n[exec] grading (escalated): 0/1\n[exec] result: {\"task_id\": \"TASK-65e73649bfc7\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"00:00 +0: loading test/_gate_lib_types_inventory.dart\\n00:00 +0 -1: loading test/_gate_lib_types_inventory.dart [E]\\n  Failed to load \\\"test/_gate_lib_types_inventory.dart\\\":\\n  test/_gate_lib_types_inventory.dart:7:26: Error: No named parameter with the name 'sku'.\\n      final s = StockLevel(sku: 'A', onHand: 10, reserved: 3);\\n                           ^^^\\n  lib/types/inventory.dart:5:3: Context: Found this candidate, but the arguments don't match.\\n    StockLevel({this.onHand = 0, this.reserved = 0});\\n    ^^^^^^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_lib_types_inventory.dart: loading test/_gate_lib_types_inventory.dart\\n\", \"attempts\": 3}",
+  "grade_stdout_tail": "                           ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:263:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:274:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:284:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:293:29: Error: Undefined name 'OrderStatus'.\n        expect(h[0].toStatus, OrderStatus.newly);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:294:29: Error: Undefined name 'OrderStatus'.\n        expect(h[1].toStatus, OrderStatus.paid);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:295:29: Error: Undefined name 'OrderStatus'.\n        expect(h[2].toStatus, OrderStatus.shipped);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:296:29: Error: Undefined name 'OrderStatus'.\n        expect(h[3].toStatus, OrderStatus.delivered);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:301:37: Error: 'InventoryService' isn't a type.\n        final inv = m['inventory'] as InventoryService;\n                                      ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:302:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:319:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:333:17: Error: Method not found: 'Store'.\n        final s = Store();\n                  ^^^^^\n  test/shop_test.dart:334:18: Error: Method not found: 'CustomerService'.\n        final cs = CustomerService(s);\n                   ^^^^^^^^^^^^^^^\n  test/shop_test.dart:335:19: Error: Method not found: 'InventoryService'.\n        final inv = InventoryService(s);\n                    ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:336:18: Error: Method not found: 'OrderService'.\n        final os = OrderService(s, cs, inv);\n                   ^^^^^^^^^^^^\n  test/shop_test.dart:354:38: Error: Undefined name 'OrderStatus'.\n        expect(s.orders[o.id]!.status, OrderStatus.paid);\n                                       ^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n"
+}

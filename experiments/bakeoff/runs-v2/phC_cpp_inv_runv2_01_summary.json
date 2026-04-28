@@ -1,0 +1,116 @@
+{
+  "phase": "C_cpp_inventory_oneshot_auto",
+  "run_id": "v2_01",
+  "benchmark": "cpp-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 0,
+  "total": 28,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "static_fails": 0,
+  "task_count": 13,
+  "opus_duration_s": 170.2,
+  "opus_cost_usd": 0.5627165,
+  "spec_chars": 47598,
+  "spec_sections_found": [
+    "include/errors.hpp",
+    "include/types/customers.hpp",
+    "include/types/products.hpp",
+    "include/types/inventory.hpp",
+    "include/types/orders.hpp",
+    "include/persistence.hpp",
+    "src/persistence.cpp",
+    "include/services/customer_service.hpp",
+    "src/services/customer_service.cpp",
+    "include/services/inventory_service.hpp",
+    "src/services/inventory_service.cpp",
+    "include/services/order_service.hpp",
+    "src/services/order_service.cpp"
+  ],
+  "qwen_total_elapsed_s": 978.4,
+  "wall_s": 1162.0,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_ccyq_yjv",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_inv_grade_08b6e2mo",
+  "file_outcomes": {
+    "include/errors.hpp": {
+      "elapsed_s": 35.7,
+      "code_chars": 726,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/customers.hpp": {
+      "elapsed_s": 51.5,
+      "code_chars": 1066,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/products.hpp": {
+      "elapsed_s": 36.3,
+      "code_chars": 668,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/inventory.hpp": {
+      "elapsed_s": 45.3,
+      "code_chars": 856,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/types/orders.hpp": {
+      "elapsed_s": 106.2,
+      "code_chars": 2300,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/persistence.hpp": {
+      "elapsed_s": 43.0,
+      "code_chars": 783,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/persistence.cpp": {
+      "elapsed_s": 27.6,
+      "code_chars": 477,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/customer_service.hpp": {
+      "elapsed_s": 29.5,
+      "code_chars": 574,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/customer_service.cpp": {
+      "elapsed_s": 66.6,
+      "code_chars": 1422,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/inventory_service.hpp": {
+      "elapsed_s": 45.5,
+      "code_chars": 977,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/inventory_service.cpp": {
+      "elapsed_s": 189.2,
+      "code_chars": 4069,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "include/services/order_service.hpp": {
+      "elapsed_s": 43.2,
+      "code_chars": 872,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    },
+    "src/services/order_service.cpp": {
+      "elapsed_s": 258.8,
+      "code_chars": 5518,
+      "static_check_ok": true,
+      "static_check_tail": ""
+    }
+  },
+  "grade_stdout_tail": "test/shop_test.cpp: In function 'void t_customers_add_address_appends()':\ntest/shop_test.cpp:74:60: error: no matching function for call to 'Address::Address(<brace-enclosed initializer list>)'\n   74 |     svc.add_address(\"c1\", Address{\"1 Main\", \"Town\", \"00001\"});\n      |                                                            ^\nIn file included from include/persistence.hpp:6,\n                 from include/shop.hpp:7,\n                 from test/shop_test.cpp:4:\ninclude/types/customers.hpp:14:5: note: candidate: 'constexpr Address::Address()'\n   14 |     Address() = default;\n      |     ^~~~~~~\ninclude/types/customers.hpp:14:5: note:   candidate expects 0 arguments, 3 provided\ninclude/types/customers.hpp:9:8: note: candidate: 'constexpr Address::Address(const Address&)'\n    9 | struct Address {\n      |        ^~~~~~~\ninclude/types/customers.hpp:9:8: note:   candidate expects 1 argument, 3 provided\ninclude/types/customers.hpp:9:8: note: candidate: 'constexpr Address::Address(Address&&)'\ninclude/types/customers.hpp:9:8: note:   candidate expects 1 argument, 3 provided\ntest/shop_test.cpp:75:60: error: no matching function for call to 'Address::Address(<brace-enclosed initializer list>)'\n   75 |     svc.add_address(\"c1\", Address{\"2 Side\", \"Town\", \"00002\"});\n      |                                                            ^\ninclude/types/customers.hpp:14:5: note: candidate: 'constexpr Address::Address()'\n   14 |     Address() = default;\n      |     ^~~~~~~\ninclude/types/customers.hpp:14:5: note:   candidate expects 0 arguments, 3 provided\ninclude/types/customers.hpp:9:8: note: candidate: 'constexpr Address::Address(const Address&)'\n    9 | struct Address {\n      |        ^~~~~~~\ninclude/types/customers.hpp:9:8: note:   candidate expects 1 argument, 3 provided\ninclude/types/customers.hpp:9:8: note: candidate: 'constexpr Address::Address(Address&&)'\ninclude/types/customers.hpp:9:8: note:   candidate expects 1 argument, 3 provided\n"
+}

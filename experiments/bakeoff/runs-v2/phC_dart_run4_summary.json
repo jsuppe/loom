@@ -1,0 +1,32 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "4",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 21,
+  "total": 21,
+  "pass_rate": 1.0,
+  "opus_duration_s": 53.9,
+  "opus_cost_usd": 0.21629150000000003,
+  "spec_chars": 10853,
+  "exec_duration_s": 23.2,
+  "exec_rc": 0,
+  "wall_s": 85.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xgs4ht76",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_11gazwik",
+  "file_sizes": {
+    "lib/types.dart": 1663,
+    "lib/history.dart": 555,
+    "lib/service.dart": 1829,
+    "lib/orders.dart": 67
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart",
+    "lib/orders.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-53b60c59ce1c  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xgs4ht76  runner: dart_test (replace)\n[exec] prompt: 4845 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.4s  in=1266  out=467\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-53b60c59ce1c\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_xgs4ht76\\\\lib\\\\types.dart\"}\n[exec] task TASK-ad5832284760  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xgs4ht76  runner: dart_test (replace)\n[exec] prompt: 3393 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.5s  in=906  out=185\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-ad5832284760\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_xgs4ht76\\\\lib\\\\history.dart\"}\n[exec] task TASK-9176dc257b28  status=pending  title='Implement lib/service.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xgs4ht76  runner: dart_test (replace)\n[exec] prompt: 5288 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.5s  in=1409  out=512\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-9176dc257b28\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_xgs4ht76\\\\lib\\\\service.dart\"}\n[exec] task TASK-dc6bc2a750eb  status=pending  title='Implement lib/orders.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xgs4ht76  runner: dart_test (replace)\n[exec] prompt: 2063 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 0.5s  in=563  out=44\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-dc6bc2a750eb\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_xgs4ht76\\\\lib\\\\orders.dart\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "00:00 +0: loading test/orders_test.dart\n00:00 +0: REQ-1: Order model starts with status NEW\n00:00 +1: REQ-1: Order model computes total\n00:00 +2: REQ-1: Order model rejects empty items\n00:00 +3: REQ-1: Order model rejects negative price\n00:00 +4: REQ-2: placeOrder returns order in NEW\n00:00 +5: REQ-2: placeOrder records history entry\n00:00 +6: REQ-2: placeOrder rejects bad items\n00:00 +7: REQ-3: markPaid from NEW\n00:00 +8: REQ-3: markPaid twice raises\n00:00 +9: REQ-3: markPaid unknown id raises\n00:00 +10: REQ-4: ship and deliver ship from PAID\n00:00 +11: REQ-4: ship and deliver ship from NEW raises\n00:00 +12: REQ-4: ship and deliver deliver from SHIPPED\n00:00 +13: REQ-4: ship and deliver deliver from PAID raises\n00:00 +14: REQ-5: cancel from NEW\n00:00 +15: REQ-5: cancel from PAID\n00:00 +16: REQ-5: cancel from SHIPPED raises\n00:00 +17: REQ-5: cancel twice raises\n00:00 +18: REQ-6: history records full lifecycle\n00:00 +19: REQ-6: history empty for unknown order\n00:00 +20: REQ-6: history timestamps strictly increasing\n00:00 +21: All tests passed!\n"
+}

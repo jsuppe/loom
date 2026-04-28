@@ -1,0 +1,21 @@
+{
+  "phase": "C_cpp_oneshot_auto",
+  "run_id": "2",
+  "benchmark": "cpp-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 21,
+  "total": 21,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "opus_duration_s": 55.0,
+  "opus_cost_usd": 0.2613665,
+  "spec_chars": 4956,
+  "exec_duration_s": 272.4,
+  "wall_s": 328.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_7icjf5ve",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_cpp_grade_n837ld5f",
+  "target_file_size": 5136,
+  "qwen_response_preview": "```cpp\n#pragma once\n\n#include <stdexcept>\n#include <string>\n#include <vector>\n#include <optional>\n#include <unordered_map>\n#include <set>\n#include <utility>\n#include <sstream>\n#include <iomanip>\n\nenum class OrderStatus { New, Paid, Shipped, Delivered, Cancelled };\n\nstruct Item {\n    std::string name;\n    double price;\n    int quantity;\n};\n\nclass OrderError : public std::runtime_error {\npublic:\n   ",
+  "grade_stdout_tail": "21 passed, 0 failed\n"
+}

@@ -1,0 +1,32 @@
+{
+  "run_id": 2,
+  "condition": "phB_haiku_sym",
+  "po_model": "haiku",
+  "eng_model": "haiku",
+  "benchmark": "python-state-machine",
+  "loom_mode": "none",
+  "started_at": 1777068096.981308,
+  "duration_s": 88.4,
+  "iterations": 3,
+  "stop_reason": "all_tests_pass",
+  "final_passed": 21,
+  "final_total": 21,
+  "final_pass_rate": 1.0,
+  "iterations_to_80pct": 3,
+  "po_in": 30,
+  "po_out": 1719,
+  "eng_in": 110,
+  "eng_out": 6388,
+  "po_duration_ms": 21614,
+  "eng_duration_ms": 56930,
+  "po_cost_usd": 0.0626,
+  "eng_cost_usd": 0.1369,
+  "total_tokens": 8247,
+  "regression_count": 0,
+  "pass_trace": [
+    0,
+    0,
+    21
+  ],
+  "errors": []
+}

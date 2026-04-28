@@ -1,0 +1,93 @@
+{
+  "n_files": 500,
+  "n_generic": 100,
+  "n_trials": 3,
+  "model": "sonnet",
+  "seed": 42,
+  "seed_seconds": 13.464975833892822,
+  "context_latency_at_scale": {
+    "n": 10,
+    "min_ms": 778.9,
+    "p50_ms": 802.5,
+    "p95_ms": 831.7,
+    "max_ms": 836.7,
+    "mean_ms": 805.5
+  },
+  "context_latency_baseline": {
+    "n": 10,
+    "min_ms": 771.0,
+    "p50_ms": 793.7,
+    "p95_ms": 807.2,
+    "max_ms": 813.3,
+    "mean_ms": 790.7
+  },
+  "trials": [
+    {
+      "run_id": 1,
+      "hook": "off",
+      "model": "sonnet",
+      "pass": false,
+      "reason": "uses os.environ/getenv (violation)",
+      "cost_usd": 0.06033,
+      "elapsed_s": 14.9,
+      "hook_fired_count": 0,
+      "result_preview": "Added `get_api_url()` to `handler_251.py`. It reads `API_URL` from the environment and returns it as a string."
+    },
+    {
+      "run_id": 2,
+      "hook": "off",
+      "model": "sonnet",
+      "pass": false,
+      "reason": "uses os.environ/getenv (violation)",
+      "cost_usd": 0.0224295,
+      "elapsed_s": 11.0,
+      "hook_fired_count": 0,
+      "result_preview": "Added `get_api_url()` to `handler_251.py`. It reads `API_URL` from the environment and returns it as a string."
+    },
+    {
+      "run_id": 3,
+      "hook": "off",
+      "model": "sonnet",
+      "pass": false,
+      "reason": "uses os.environ/getenv (violation)",
+      "cost_usd": 0.0224145,
+      "elapsed_s": 11.1,
+      "hook_fired_count": 0,
+      "result_preview": "Added `get_api_url()` to `handler_251.py`. It reads `API_URL` from the environment and returns it as a string."
+    },
+    {
+      "run_id": 1,
+      "hook": "on",
+      "model": "sonnet",
+      "pass": true,
+      "reason": "uses LegacyConfig",
+      "cost_usd": 0.0368701,
+      "elapsed_s": 14.5,
+      "hook_fired_count": 2,
+      "result_preview": "Done. The function now uses `LegacyConfig.get(\"API_URL\")` as required by REQ-68e4d7fd."
+    },
+    {
+      "run_id": 2,
+      "hook": "on",
+      "model": "sonnet",
+      "pass": true,
+      "reason": "uses LegacyConfig",
+      "cost_usd": 0.037575700000000004,
+      "elapsed_s": 15.1,
+      "hook_fired_count": 4,
+      "result_preview": "The edit is compliant \u2014 `LegacyConfig.get(\"API_URL\")` satisfies REQ-68e4d7fd. The hook message is just informational context, not a block. The function is in place."
+    },
+    {
+      "run_id": 3,
+      "hook": "on",
+      "model": "sonnet",
+      "pass": true,
+      "reason": "uses LegacyConfig",
+      "cost_usd": 0.036090000000000004,
+      "elapsed_s": 17.6,
+      "hook_fired_count": 6,
+      "result_preview": "The function now correctly uses `LegacyConfig.get(\"API_URL\")` as required by REQ-68e4d7fd. The hook message is just informational context confirming the requirement \u2014 the edit succeeded."
+    }
+  ],
+  "elapsed_s": 114.07547402381897
+}

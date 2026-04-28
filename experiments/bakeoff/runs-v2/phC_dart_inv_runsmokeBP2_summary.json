@@ -1,0 +1,43 @@
+{
+  "phase": "C_dart_inventory_oneshot_auto",
+  "run_id": "smokeBP2",
+  "benchmark": "dart-inventory",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "blueprint_enabled": true,
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 115.5,
+  "opus_cost_usd": 0.38943525,
+  "spec_chars": 28839,
+  "exec_duration_s": 39.9,
+  "exec_rc": 0,
+  "wall_s": 164.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_eovsslcn",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_inv_grade_ff231o81",
+  "file_sizes": {
+    "lib/errors.dart": 709,
+    "lib/types/customers.dart": 0,
+    "lib/types/products.dart": 0,
+    "lib/types/inventory.dart": 0,
+    "lib/types/orders.dart": 0,
+    "lib/persistence.dart": 0,
+    "lib/services/customer_service.dart": 0,
+    "lib/services/inventory_service.dart": 0,
+    "lib/services/order_service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/errors.dart",
+    "lib/types/customers.dart",
+    "lib/types/products.dart",
+    "lib/types/inventory.dart",
+    "lib/types/orders.dart",
+    "lib/persistence.dart",
+    "lib/services/customer_service.dart",
+    "lib/services/inventory_service.dart",
+    "lib/services/order_service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-8cc572561dc6  status=pending  title='Implement lib/errors.dart per the section labeled `### lib/errors.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_eovsslcn  runner: dart_test (replace)\n[exec] prompt: 30421 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/errors.dart...\n[exec] blueprint validated  6.8s  667 chars  in=7758  out=150\n[exec] body prompt with blueprint: 31339 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.3s  in=7772  out=150\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 33197 chars\n[exec] calling qwen3.5:latest  temp=0.4\n[exec] model: 1.6s  in=8218  out=157\n[exec] grading (attempt 2): 1/1\n[exec] result: {\"task_id\": \"TASK-8cc572561dc6\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"attempts\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_inv_eovsslcn\\\\lib\\\\errors.dart\"}\n[exec] task TASK-0161d00a22c4  status=pending  title='Implement lib/types/customers.dart per the section labeled `### lib/types/customers.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_inv_eovsslcn  runner: dart_test (replace)\n[exec] prompt: 30475 chars  deps_section: 343 chars\n[exec] claimed by qwen3.5:latest\n[exec] blueprint pass for lib/types/customers.dart...\n[exec] blueprint validated  3.0s  790 chars  in=7774  out=211\n[exec] body prompt with blueprint: 31516 chars\n[exec] calling qwen3.5:latest  temp=0.0\n[exec] model: 1.7s  in=7847  out=211\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 33361 chars\n[exec] calling qwen3.5:latest  temp=0.4\n[exec] model: 1.9s  in=8342  out=212\n[exec] grading (attempt 2): 0/1\n[exec] test_fail on attempt 2; retrying with error feedback\n[exec] retry attempt 3/3  prompt: 33257 chars\n[exec] calling qwen3.5:latest  temp=0.7\n[exec] model: 1.8s  in=8314  out=211\n[exec] grading (attempt 3): 0/1\n[exec] escalating to qwen2.5-coder:32b after 3 attempts with qwen3.5:latest\n[exec] escalation call failed: HTTP Error 500: Internal Server Error\n[exec] result: {\"task_id\": \"TASK-0161d00a22c4\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"00:00 +0: loading test/_gate_lib_types_customers.dart\\n00:00 +0 -1: loading test/_gate_lib_types_customers.dart [E]\\n  Failed to load \\\"test/_gate_lib_types_customers.dart\\\":\\n  test/_gate_lib_types_customers.dart:12:15: Error: Cannot invoke a non-'const' constructor where a const expression is expected.\\n  Try using a constructor or factory that is 'const'.\\n      const a = Address(street: '1 St', city: 'X', postalCode: '1');\\n                ^^^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_lib_types_customers.dart: loading test/_gate_lib_types_customers.dart\\n\", \"attempts\": 3}",
+  "grade_stdout_tail": "                           ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:263:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:274:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:284:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:293:29: Error: Undefined name 'OrderStatus'.\n        expect(h[0].toStatus, OrderStatus.newly);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:294:29: Error: Undefined name 'OrderStatus'.\n        expect(h[1].toStatus, OrderStatus.paid);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:295:29: Error: Undefined name 'OrderStatus'.\n        expect(h[2].toStatus, OrderStatus.shipped);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:296:29: Error: Undefined name 'OrderStatus'.\n        expect(h[3].toStatus, OrderStatus.delivered);\n                              ^^^^^^^^^^^\n  test/shop_test.dart:301:37: Error: 'InventoryService' isn't a type.\n        final inv = m['inventory'] as InventoryService;\n                                      ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:302:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:319:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:333:17: Error: Method not found: 'Store'.\n        final s = Store();\n                  ^^^^^\n  test/shop_test.dart:334:18: Error: Method not found: 'CustomerService'.\n        final cs = CustomerService(s);\n                   ^^^^^^^^^^^^^^^\n  test/shop_test.dart:335:19: Error: Method not found: 'InventoryService'.\n        final inv = InventoryService(s);\n                    ^^^^^^^^^^^^^^^^\n  test/shop_test.dart:336:18: Error: Method not found: 'OrderService'.\n        final os = OrderService(s, cs, inv);\n                   ^^^^^^^^^^^^\n  test/shop_test.dart:354:38: Error: Undefined name 'OrderStatus'.\n        expect(s.orders[o.id]!.status, OrderStatus.paid);\n                                       ^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n"
+}

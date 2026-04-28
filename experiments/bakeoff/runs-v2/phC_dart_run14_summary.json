@@ -1,0 +1,30 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "14",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 46.9,
+  "opus_cost_usd": 0.206179,
+  "spec_chars": 4520,
+  "exec_duration_s": 13.5,
+  "exec_rc": 0,
+  "wall_s": 65.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_o9z3tq4r",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_9z650wv_",
+  "file_sizes": {
+    "lib/types.dart": 1658,
+    "lib/history.dart": 0,
+    "lib/service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-a8bf508ed296  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_o9z3tq4r  runner: dart_test (replace)\n[exec] prompt: 3811 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.2s  in=1004  out=466\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-a8bf508ed296\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_o9z3tq4r\\\\lib\\\\types.dart\"}\n[exec] task TASK-9ad7f91639d4  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_o9z3tq4r  runner: dart_test (replace)\n[exec] prompt: 1157 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.9s  in=319  out=440\n[exec] grading: 0/1\n[exec] result: {\"task_id\": \"TASK-9ad7f91639d4\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"  test/_gate_history.dart:8:15: Error: Method not found: 'OrderHistory'.\\n      final h = OrderHistory();\\n                ^^^^^^^^^^^^\\n  test/_gate_history.dart:16:12: Error: Method not found: 'OrderHistory'.\\n      expect(OrderHistory().getTransitions('nope'), isEmpty);\\n             ^^^^^^^^^^^^\\n  lib/history.dart:40:12: Error: Couldn't find constructor 'History'.\\n      return History()..addAll(entries);\\n             ^^^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_history.dart: loading test/_gate_history.dart\\n\"}",
+  "grade_stdout_tail": "est.dart:185:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:186:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:199:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:200:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:214:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:214:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:228:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:228:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:243:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:244:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:265:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:270:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:271:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}

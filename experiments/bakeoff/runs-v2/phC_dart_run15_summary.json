@@ -1,0 +1,30 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "15",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 130.9,
+  "opus_cost_usd": 0.4034915,
+  "spec_chars": 8541,
+  "exec_duration_s": 0.8,
+  "exec_rc": 1,
+  "wall_s": 138.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xuyrc1x6",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_9oz3ktw0",
+  "file_sizes": {
+    "lib/types.dart": 0,
+    "lib/history.dart": 0,
+    "lib/service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-b03eb093760a  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_xuyrc1x6  runner: dart_test (replace)\n[exec] prompt: 4469 chars",
+  "grade_stdout_tail": "rHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:223:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:228:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:228:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:236:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:243:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:244:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:257:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.new_,\n          ^^^^^^^^^^^\n  test/orders_test.dart:258:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.paid,\n          ^^^^^^^^^^^\n  test/orders_test.dart:259:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.shipped,\n          ^^^^^^^^^^^\n  test/orders_test.dart:260:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.delivered,\n          ^^^^^^^^^^^\n  test/orders_test.dart:265:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:270:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:271:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}

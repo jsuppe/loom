@@ -1,0 +1,32 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "1",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 34.6,
+  "opus_cost_usd": 0.29106125,
+  "spec_chars": 7113,
+  "exec_duration_s": 27.3,
+  "exec_rc": 0,
+  "wall_s": 67.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_67g50gp0",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_rom4uyiu",
+  "file_sizes": {
+    "lib/types.dart": 1660,
+    "lib/history.dart": 686,
+    "lib/service.dart": 1817,
+    "lib/orders.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart",
+    "lib/orders.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-34f72a93d95b  status=pending  title='Implement lib/types.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_67g50gp0  runner: dart_test (replace)\n[exec] prompt: 3846 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 7.3s  in=1047  out=465\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-34f72a93d95b\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_67g50gp0\\\\lib\\\\types.dart\"}\n[exec] task TASK-f092ca5c6141  status=pending  title='Implement lib/history.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_67g50gp0  runner: dart_test (replace)\n[exec] prompt: 2568 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.6s  in=730  out=220\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-f092ca5c6141\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_67g50gp0\\\\lib\\\\history.dart\"}\n[exec] task TASK-43ea8f2db624  status=pending  title='Implement lib/service.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_67g50gp0  runner: dart_test (replace)\n[exec] prompt: 4101 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.6s  in=1121  out=524\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-43ea8f2db624\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_dart_67g50gp0\\\\lib\\\\service.dart\"}\n[exec] task TASK-d22347e70fc7  status=pending  title='Implement lib/orders.dart (Dart)'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_67g50gp0  runner: dart_test (replace)\n[exec] prompt: 1262 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 0.5s  in=363  out=48\n[exec] grading: 0/1\n[exec] result: {\"task_id\": \"TASK-d22347e70fc7\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"  test/_gate_orders.dart:10:30: Error: Method not found: 'OrderHistory'.\\n      final svc = OrderService(OrderHistory());\\n                               ^^^^^^^^^^^^\\n  test/_gate_orders.dart:10:17: Error: Method not found: 'OrderService'.\\n      final svc = OrderService(OrderHistory());\\n                  ^^^^^^^^^^^^\\n  test/_gate_orders.dart:12:19: Error: 'Order' isn't a type.\\n      expect(o, isA<Order>());\\n                    ^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_orders.dart: loading test/_gate_orders.dart\\n\"}",
+  "grade_stdout_tail": "rHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:223:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:228:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:228:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:236:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:243:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:244:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:257:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.new_,\n          ^^^^^^^^^^^\n  test/orders_test.dart:258:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.paid,\n          ^^^^^^^^^^^\n  test/orders_test.dart:259:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.shipped,\n          ^^^^^^^^^^^\n  test/orders_test.dart:260:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.delivered,\n          ^^^^^^^^^^^\n  test/orders_test.dart:265:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:270:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:271:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}

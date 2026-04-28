@@ -1,0 +1,30 @@
+{
+  "phase": "C_dart_oneshot_auto",
+  "run_id": "44",
+  "benchmark": "dart-orders",
+  "planner": "opus(claude -p)",
+  "executor": "qwen3.5:latest",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 48.9,
+  "opus_cost_usd": 0.11362,
+  "spec_chars": 149,
+  "exec_duration_s": 14.6,
+  "exec_rc": 0,
+  "wall_s": 68.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_plhe3_2g",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_grade_29eebf20",
+  "file_sizes": {
+    "lib/types.dart": 0,
+    "lib/history.dart": 0,
+    "lib/service.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/types.dart",
+    "lib/history.dart",
+    "lib/service.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-cd3489864b35  status=pending  title='Implement lib/types.dart per the section labeled `### lib/types.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_dart_plhe3_2g  runner: dart_test (replace)\n[exec] prompt: 1631 chars  deps_section: 298 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.7s  in=475  out=221\n[exec] grading (attempt 1): 0/1\n[exec] test_fail on attempt 1; retrying with error feedback\n[exec] retry attempt 2/3  prompt: 3488 chars\n[exec] calling qwen3.5:latest...\n[exec] model: 3.4s  in=974  out=498\n[exec] grading (attempt 2): 0/1\n[exec] test_fail on attempt 2; retrying with error feedback\n[exec] retry attempt 3/3  prompt: 4552 chars\n[exec] calling qwen3.5:latest...\n[exec] model: 3.6s  in=1243  out=529\n[exec] grading (attempt 3): 0/1\n[exec] result: {\"task_id\": \"TASK-cd3489864b35\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 1, \"tail\": \"00:00 +0: loading test/_gate_types.dart\\n00:00 +0 -1: loading test/_gate_types.dart [E]\\n  Failed to load \\\"test/_gate_types.dart\\\":\\n  test/_gate_types.dart:10:20: Error: Required named parameter 'status' must be provided.\\n      final o = Order(\\n                     ^\\n  lib/types.dart:74:3: Context: Found this candidate, but the arguments don't match.\\n    Order({\\n    ^^^^^\\n00:00 +0 -1: Some tests failed.\\n\\nFailing tests:\\n  test/_gate_types.dart: loading test/_gate_types.dart\\n\", \"attempts\": 3}",
+  "grade_stdout_tail": "rHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:223:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:228:32: Error: Method not found: 'OrderHistory'.\n        final svc = OrderService(OrderHistory());\n                                 ^^^^^^^^^^^^\n  test/orders_test.dart:228:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(OrderHistory());\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:236:21: Error: 'InvalidTransitionError' isn't a type.\n          throwsA(isA<InvalidTransitionError>()),\n                      ^^^^^^^^^^^^^^^^^^^^^^\n  test/orders_test.dart:243:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:244:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n  test/orders_test.dart:257:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.new_,\n          ^^^^^^^^^^^\n  test/orders_test.dart:258:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.paid,\n          ^^^^^^^^^^^\n  test/orders_test.dart:259:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.shipped,\n          ^^^^^^^^^^^\n  test/orders_test.dart:260:9: Error: Undefined name 'OrderStatus'.\n          OrderStatus.delivered,\n          ^^^^^^^^^^^\n  test/orders_test.dart:265:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:270:17: Error: Method not found: 'OrderHistory'.\n        final h = OrderHistory();\n                  ^^^^^^^^^^^^\n  test/orders_test.dart:271:19: Error: Method not found: 'OrderService'.\n        final svc = OrderService(h);\n                    ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/orders_test.dart: loading test/orders_test.dart\n"
+}
