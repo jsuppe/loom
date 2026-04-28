@@ -1,0 +1,20 @@
+{
+  "benchmark": "cpp-inventory",
+  "language": "cpp",
+  "barrel": "include/shop.hpp",
+  "target_files": [
+    "include/errors.hpp",
+    "include/types/customers.hpp",
+    "include/types/products.hpp",
+    "include/types/inventory.hpp",
+    "include/types/orders.hpp",
+    "include/persistence.hpp",
+    "include/services/customer_service.hpp",
+    "include/services/inventory_service.hpp",
+    "include/services/order_service.hpp"
+  ],
+  "test_command": ["g++", "-std=c++20", "-I", "include", "test/shop_test.cpp", "-o", "test_runner.exe"],
+  "run_command": ["./test_runner.exe"],
+  "reference_pass_count": 28,
+  "notes": "Multi-header sibling of cpp-orders. Used to disambiguate language vs complexity ceiling for qwen3.5. Driver bypasses loom_exec (matches cpp-orders pattern); per-file Ollama calls in topological order."
+}

@@ -265,3 +265,124 @@ Milestone 5 (Metrics)
 ```
 
 Milestones 2 and 3 are independent and can run in parallel. Milestone 5 depends on Milestone 1 (JSON output) and benefits from 2 (staleness data feeds metrics).
+
+## Milestone 6: Cross-language validation (in progress)
+
+**Last updated:** 2026-04-28
+
+This milestone tracks empirical evidence for *where* the asymmetric
+pipeline works (Opus plans, qwen executes), broken down by language
+and project size. Companion writeup:
+[`experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md).
+
+### 6.0 Original objectives (recap)
+
+1. **Capture** decisions and their rationale into a structured store,
+   not just chat history.
+2. **Surface** those decisions back to the agent before it edits the
+   relevant code.
+3. **Detect drift** when code changes diverge from documented
+   decisions.
+4. **Coordinate** an asymmetric pipeline: a frontier model plans, a
+   small local model executes.
+5. **Persist** rationale across separate sessions so a successor
+   agent can pick up an absent predecessor's intent.
+
+### 6.1 Data-backed claims
+
+| claim | phase | result | data |
+|---|---|---|---|
+| Pre-edit hook lifts compliance at sub-frontier tiers | E | **+93 pp Sonnet, +60 pp Haiku, 0 pp Opus** | 30 trials |
+| Hook lift transfers across model tiers | E.cross-tier | confirmed Haiku→Sonnet→Opus | 60 trials |
+| Hook hard-block reliably stops drift | E.block | 30/30 mechanism reliable | 30 trials |
+| Hook latency is constant at scale | E.scale | ~800 ms floor at 100/500 files | 16 trials |
+| File-content drift is detected and surfaced | F | gap closed; end-to-end verified | committed |
+| Asymmetric pipeline matches frontier quality at lower cost (single-file Python) | D | **~8× cheaper at N=20 matched-pricing**, parity quality | 60 trials |
+| Cross-session rationale carries forward | G | **100 % citation Haiku, 93 % Sonnet** vs 0 % placebo | 120 trials |
+| Pipeline transfers to single-file C++ | C/cpp-orders | 5/5 = 100% (qwen2.5-coder:32b) | 11 trials |
+| Pipeline transfers to small multi-file Dart | C/dart-orders | 40 % → **100 %** after Tier 1+2 (qwen3.5) | 25 trials |
+
+### 6.2 Null / mixed results
+
+| claim | phase | result |
+|---|---|---|
+| Loom helps in-session at saturated benchmarks | A | Honest null — bounded cost overhead, no measurable correctness lift on benchmarks every Claude tier already passes |
+| Asymmetric pipeline scales to 9-file Dart with qwen3.5 | C/dart-inventory | **0/30** — Dart-specific failure cluster (named-args, `const`, records) |
+| Contract binding lifts the dart-inventory ceiling | C/dart-inventory | Cell A 0/15 vs Cell B 0/15 — no separation |
+
+### 6.3 Per-language fitness map
+
+| language | single-file | small multi-file (≤3) | large multi-file (~9) | verdict |
+|---|---|---|---|---|
+| **Python** | ✅ 100% (Phase D) | (skipped) | ⚠ N=1 smoke 28/28 | use it; collect more N for the 9-file claim |
+| **Dart (pure)** | (skipped) | ✅ 100% after Tier 2 | ❌ 0/30 with qwen3.5 | use for ≤ 3 files; ceiling at 9 |
+| **C++** | ✅ 100% (cpp-orders) | (skipped) | ❓ untested | single-header validated; multi-header open |
+| **Flutter Dart** | ❓ untested | ❓ untested | ❓ untested | unknown |
+| **JS/TS/Go/Rust** | ❓ untested | ❓ untested | ❓ untested | unknown |
+
+### 6.4 Project-size fit (qwen3.5:latest as default executor)
+
+- **≤ 250 LoC, ≤ 3 files of any tested language**: well-supported.
+- **Single-header C++**: well-supported with qwen2.5-coder:32b.
+- **9-file Python**: directionally supported (N=1).
+- **9-file Dart**: not supported. Bring a different executor or a
+  Dart-aware validator.
+- **9-file C++**: unknown.
+- **> 9 files**: unknown.
+
+### 6.5 Design work the data points to
+
+1. **Per-language semantic validators between body pass and grading.**
+   The dart-inventory failures are deterministic and detectable:
+   missing required getter, positional-vs-named arg mismatch,
+   stripped `const`. A `dart analyze` / `pyright` / `clang-tidy`
+   pass between body-write and grading would catch those before
+   they cascade into the next task.
+
+2. **Executor selection should be language-aware.** qwen3.5:latest
+   is fine for Python; insufficient for 9-file Dart. A
+   `LOOM_EXEC_MODEL_FOR_LANG` map (qwen2.5-coder:32b for Dart/C++,
+   qwen3.5:latest for Python) is a small change with potentially
+   large lift.
+
+3. **Negotiated-contract architecture: revisit but evolve.** The
+   `Specification.contracts_json` + `ContractAmendment` data plane
+   was rolled back after experiments showed contracts can't
+   manufacture executor capability. If reintroduced, the binding
+   should focus on *cross-file invariants* (e.g. "every service
+   constructor takes `Store&` first") that qwen *can* follow, not
+   on signatures qwen reproducibly violates.
+
+4. **Production-mode demonstration is missing.** The "your Claude
+   Code session is the architect; loom_exec dispatches body work to
+   qwen; failures surface back as structured tool output" workflow
+   has the data plane to support it but no end-to-end demonstration
+   trial. A worked example on a real (small) project is the
+   clearest sales pitch.
+
+5. **N-confidence on the 9-file Python claim.** N=1 is enough for
+   direction but not for stat confidence. N≥5 in Python at 9 files
+   is the cheapest experiment to firm up the cross-language story.
+
+6. **Flutter / TS / real-world coverage.** Sales-relevant gaps —
+   Flutter especially, given the audience.
+
+### 6.6 In-flight tasks
+
+- [ ] **6.6.1 Python N=5 at 9 files** to firm up cross-language. ~30 min compute.
+- [ ] **6.6.2 C++ N=5 at 9 files.** Driver bypasses loom_exec; cleanest run path. ~50 min compute.
+- [ ] **6.6.3 qwen2.5-coder:32b on dart-inventory.** If it crosses the ceiling, the pipeline-extends story changes shape. ~50 min compute.
+- [ ] **6.6.4 Wire `dart analyze` between body and grading** as the first language-aware validator.
+- [ ] **6.6.5 Worked-example demo** of production-mode workflow on a real small project.
+- [ ] **6.6.6 Flutter multi-widget benchmark** to test the existing audience's actual use case.
+
+Status updated as items land.
+
+### 6.7 Pointers to data and code
+
+- **Bake-off run summaries:** `experiments/bakeoff/runs-v2/`
+- **Benchmarks:** `experiments/bakeoff/benchmarks/<lang>-<scope>/ground_truth/`
+- **Drivers:** `experiments/bakeoff/v2_driver/phC_*_oneshot_auto.py`
+- **Findings docs:** `experiments/bakeoff/FINDINGS-bakeoff-v2-*.md`
+- **Phase C inventory writeup:** `experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md`
+- **Older feature work and contract data plane:** `claude/bakeoff-v1` branch

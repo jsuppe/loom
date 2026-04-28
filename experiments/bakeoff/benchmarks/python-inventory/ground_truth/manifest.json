@@ -1,0 +1,20 @@
+{
+  "benchmark": "python-inventory",
+  "language": "python",
+  "package_name": "shop",
+  "barrel": "shop/__init__.py",
+  "target_files": [
+    "shop/errors.py",
+    "shop/types/customers.py",
+    "shop/types/products.py",
+    "shop/types/inventory.py",
+    "shop/types/orders.py",
+    "shop/persistence.py",
+    "shop/services/customer_service.py",
+    "shop/services/inventory_service.py",
+    "shop/services/order_service.py"
+  ],
+  "test_command": ["python3", "-m", "pytest", "-q", "tests/test_shop.py"],
+  "reference_pass_count": 28,
+  "notes": "Direct port of dart-inventory to Python idioms. Same 28-test scope, same 8-task structure. Used to disambiguate language vs complexity ceiling for qwen3.5."
+}

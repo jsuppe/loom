@@ -37,3 +37,7 @@ Thumbs.db
 .coverage
 htmlcov/
 experiments/bakeoff/runs/
+
+# Per-benchmark Dart tool cache
+experiments/bakeoff/benchmarks/**/.dart_tool/
+experiments/bakeoff/benchmarks/**/pubspec.lock

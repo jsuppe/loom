@@ -1,0 +1,20 @@
+{
+  "benchmark": "dart-inventory",
+  "language": "dart",
+  "package_name": "shop",
+  "barrel": "lib/shop.dart",
+  "target_files": [
+    "lib/errors.dart",
+    "lib/types/customers.dart",
+    "lib/types/products.dart",
+    "lib/types/inventory.dart",
+    "lib/types/orders.dart",
+    "lib/persistence.dart",
+    "lib/services/customer_service.dart",
+    "lib/services/inventory_service.dart",
+    "lib/services/order_service.dart"
+  ],
+  "test_command": ["dart", "test", "test/shop_test.dart"],
+  "reference_pass_count": 28,
+  "notes": "Multi-service domain — customers, inventory, orders + in-memory persistence. Sized so Tier 2 alone does not saturate, leaving headroom for blueprint refinement."
+}

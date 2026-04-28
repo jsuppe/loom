@@ -208,6 +208,73 @@ def apply_code(
     return target
 
 
+def static_check(
+    runner: "runners.Runner",
+    scratch_dir: Path,
+    target_file: str,
+) -> tuple[bool, str]:
+    """Per-language static-analysis pass on the just-written file.
+
+    Returns (ok, error_tail). Runs between apply_code and grading when
+    LOOM_EXEC_STATIC_CHECK=1 is set in the env. The intent is to catch
+    deterministic structural errors (missing required getter, stripped
+    `const`, unbalanced types) cheaply, before the grader spends a
+    full compile cycle on the same diagnosis.
+
+    Per fence:
+      - dart:    `dart analyze --fatal-warnings <target>`
+      - python:  `ast.parse` on the source (syntax only)
+      - c++/cpp: `g++ -fsyntax-only -std=c++20 -I include <target>`
+      - others:  skip (returns (True, "skipped"))
+
+    A missing toolchain (no `dart` on PATH, no `g++`) returns ok=True
+    with a "skipped" reason rather than failing the task, so the
+    static-check feature is graceful when it can't run.
+    """
+    target = scratch_dir / target_file
+    if not target.exists():
+        return False, f"target file does not exist: {target}"
+
+    fence = runner.fence
+    if fence == "dart":
+        try:
+            res = subprocess.run(
+                ["dart", "analyze", "--fatal-warnings", str(target)],
+                cwd=scratch_dir, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+                shell=(sys.platform == "win32"),
+            )
+            if res.returncode == 0:
+                return True, ""
+            return False, (res.stdout + res.stderr)[-1500:]
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            return True, f"dart not available; skipping: {e}"
+
+    if fence == "python":
+        import ast
+        try:
+            ast.parse(target.read_text(encoding="utf-8"))
+            return True, ""
+        except SyntaxError as e:
+            return False, f"python syntax error: {e}"
+
+    if fence in ("c++", "cpp"):
+        try:
+            res = subprocess.run(
+                ["g++", "-fsyntax-only", "-std=c++20", "-I", "include", str(target)],
+                cwd=scratch_dir, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=60,
+                shell=(sys.platform == "win32"),
+            )
+            if res.returncode == 0:
+                return True, ""
+            return False, res.stderr[-1500:]
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            return True, f"g++ unavailable; skipping: {e}"
+
+    return True, f"no static check for fence={fence}; skipping"
+
+
 def run_grading(
     test_target: str, cwd: Path, runner: runners.Runner,
 ) -> tuple[int, int, str]:
@@ -338,6 +405,35 @@ def execute_task(
         else:
             existing = scratch_target.read_text(encoding="utf-8") if scratch_target.exists() else ""
             scratch_target.write_text(existing + "\n\n" + code, encoding="utf-8")
+
+        # Optional language-aware static check before grading. Catches
+        # deterministic structural errors (missing required getter,
+        # stripped `const`, unbalanced types) cheaply, with a clearer
+        # error tail than waiting for the grader to fail at file load.
+        # Off by default; opt in via LOOM_EXEC_STATIC_CHECK=1.
+        if os.environ.get("LOOM_EXEC_STATIC_CHECK", "0") == "1":
+            sc_ok, sc_tail = static_check(
+                runner, scratch, task["files_to_modify"][0])
+            if not sc_ok:
+                print(f"[exec] static_check: FAIL")
+                print(f"[exec] static_check tail: {sc_tail[:300]}")
+                services.task_reject(
+                    store, task_id, f"static_check fail:\n{sc_tail}",
+                    escalate=True)
+                _log_run(store, {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "task_id": task_id, "model": model,
+                    "outcome": "static_fail",
+                    "tail": sc_tail[-500:],
+                    "elapsed_s": round(time.perf_counter() - t0, 2),
+                    "input_tokens": llm["input_tokens"],
+                    "output_tokens": llm["output_tokens"],
+                })
+                return {
+                    "task_id": task_id, "outcome": "static_fail",
+                    "tail": sc_tail,
+                }
+            print(f"[exec] static_check: ok")
 
         # Grade in scratch.
         passed, total, tail = run_grading(task["test_to_write"], cwd=scratch, runner=runner)

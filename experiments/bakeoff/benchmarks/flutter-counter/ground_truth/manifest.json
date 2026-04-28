@@ -1,0 +1,15 @@
+{
+  "benchmark": "flutter-counter",
+  "language": "dart",
+  "framework": "flutter",
+  "package_name": "counter_app",
+  "barrel": null,
+  "target_files": [
+    "lib/counter_model.dart",
+    "lib/counter_widget.dart",
+    "lib/counter_app.dart"
+  ],
+  "test_command": ["flutter", "test"],
+  "reference_pass_count": 17,
+  "notes": "Multi-widget Flutter benchmark. Exercises StatefulWidget, BuildContext, Material3, ScaffoldMessenger SnackBar interaction. Driver not yet authored."
+}
