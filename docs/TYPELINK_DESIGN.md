@@ -517,3 +517,151 @@ then start milestone 7.
 
 Either is defensible. Both should not happen in parallel unless
 we're staffed for it.
+
+---
+
+## 16. Scope resolution (post-audit)
+
+[`FAILURE_AUDIT.md`](../experiments/bakeoff/FAILURE_AUDIT.md)
+empirically settled the "is this fundamental" question with
+**27 / 28 (96 %) of multi-file failures classified as
+typelink-shaped** (real number 28 / 28 with one regex
+mis-classification corrected). With that, the open questions
+worth resolving for v1 are:
+
+### 16.1 Q6 — public_api authorship default
+
+**Audit-driven resolution: leverage what Opus already produces.**
+
+Every failed multi-file trial in our 28-failure cluster used a
+spec that *already contained* a `dart-contract` /
+`python-contract` / `cpp-contract` fenced block, emitted by Opus
+under the planner system prompt we built during the
+negotiated-contract work (then rolled back). Those fenced blocks
+are *exactly* the public_api in machine-extractable form.
+
+The contract data plane we rolled back was right in spirit —
+the implementation bound qwen too tightly to specific tokens.
+Typelink reuses the same data for a different purpose:
+*structural verification* of the produced output, not
+*token-level binding* of the input.
+
+**v1 default:** at `loom spec --add` time:
+
+1. Look for fenced declaration blocks in the spec text
+   (`*-contract` fences). If found, extract them into
+   `public_api_json` directly.
+2. If no fences found AND `LOOM_TYPELINK_LLM_EXTRACT=1`, run a
+   one-shot LLM extraction over the prose (cost: ~$0.05 per spec).
+3. Otherwise: spec is "legacy" — typelink layer is a no-op for it.
+
+**v1 user override:** `loom spec public-api SPEC-xxx --edit` opens
+a structured editor for hand-correction.
+
+**v1 ratchet (deferred to v2):** auto-derive from the first
+passing task. Useful for incremental edits but not for our
+greenfield-failure cluster, so out of v1 scope.
+
+### 16.2 Q7 — language scope
+
+**Audit-driven resolution: Dart-first, Python second, defer C++/TS.**
+
+Per-language failure counts:
+
+| language | typelink-shaped failures | tooling cost |
+|---|---:|---|
+| Dart (orders + inv + flutter) | **24 / 28 (86 %)** | medium (regex v1; dart-analyze v1.5) |
+| C++ | 4 / 28 (14 %) | heavy (libclang) |
+| Python | **0 / 28** | cheapest (stdlib `ast`) |
+| TypeScript | not benchmarked | medium (tsc) |
+
+Conclusion: **the failures live in Dart.** Python has zero
+typelink failures (the python-inventory benchmark passed every
+trial). Building Python-only would validate the architecture
+without addressing where the actual problems live.
+
+**v1 language ship list:**
+
+1. **Dart (regex extractor)** — catches the 24 typelink failures.
+   A careful regex over `class X { ... }` and `Type method(...)`
+   declarations covers the inventory benchmark's surface; matches
+   what we already do in `validate_blueprint`. ~50 ms per file.
+2. **Python (stdlib `ast`)** — adds Python coverage at near-zero
+   cost. Useful for python-inventory regression testing and as
+   the architecture validator.
+
+**v1.5 upgrade path:** Dart `dart analyze --machine` JSON output
+for fuller fidelity (handles edge cases regex misses). ~500 ms
+JIT cold; can be amortized via daemon.
+
+**v2 / deferred:**
+- C++ (libclang or full clang invocation) — covers the 4
+  cpp-inventory failures
+- TypeScript (tsc) — needed when we add TS benchmarks to the
+  bake-off
+
+### 16.3 v1 implementation surface (revised)
+
+With Q6 + Q7 resolved, v1 is significantly tighter than the
+original 7-stage plan:
+
+| stage | original scope | v1 scope (post-audit) | days |
+|---|---|---|---:|
+| 7.1 | manual public_api + Python ast | spec field + extract from `*-contract` fences + Python `ast` extractor + CLI `loom typelink show/check/diff` | 2 |
+| 7.2 | C++ verifier | **Dart regex extractor** (covers the failure cluster) | 1-2 |
+| 7.3 | wire into loom_exec | post-task `typelink_fail` outcome on dart-inventory + cpp-inventory v2 reruns | 1 |
+
+**v1 minimum: 4–5 focused days** (was 5–6 in the original
+estimate). Tightened by:
+- Dropping libclang setup (deferred to v2)
+- Reusing Opus's existing fenced-block emission as the authorship
+  default (no new LLM-extraction code on the critical path)
+- Regex-based Dart extractor (defers dart-analyze daemon work)
+
+### 16.4 What v1 measurably changes
+
+After v1 lands, we re-run:
+
+1. **dart-inventory N=5 with `LOOM_TYPELINK=1`.** Prediction: of
+   the 9/9 typelink-shaped failures we saw, the typelink check
+   intercepts each at task time and emits a structured
+   `typelink_fail` with the missing-symbol/signature-mismatch
+   diff. The chain still terminates (we're not adding retry
+   logic in v1) but the diagnostic is precise — no more
+   "the test couldn't load" tails.
+2. **cpp-inventory v2 N=10 with `LOOM_TYPELINK=1`.** Prediction:
+   v2_01-class failures (1/5 in our existing data) show up as
+   `typelink_fail` rather than final-grade compile fails.
+3. **python-inventory N=5 with `LOOM_TYPELINK=1`.** Prediction:
+   no behavior change (Python had 0 typelink failures); the
+   feature is silently passing. This is the regression check.
+
+The deliverable for v1 is therefore: **structured diagnosis of
+the 28-failure multi-file cluster.** Not yet a fix (that's v2's
+retry-with-typelink-feedback), but a clear signal that we
+*understand* what failed, well enough to feed back to the agent
+in production-mode use.
+
+### 16.5 Out of v1 scope (explicitly)
+
+- Cross-file consumer graph (TypeLink edges into a file) — v2
+- PreToolUse hook integration (warn on edits) — v2
+- LLM extraction from prose for legacy specs — v2
+- TypeScript and C++ verifiers — v2
+- Retry-with-feedback loop in `loom_exec` — separate decision
+- Cross-language unification — v2+
+
+### 16.6 Decision needed
+
+Three things to confirm before I start building v1:
+
+1. **Dart-first scope?** Audit says yes; alternative is
+   Python-first (cheaper but doesn't address actual failures).
+2. **Reuse existing `*-contract` fences as authorship default?**
+   Trades simplicity for reliance on the planner's fence
+   discipline. Alternative is to require structured
+   `--public-api` at `loom spec --add` (more friction; better
+   UX guarantees).
+3. **v1 deliverable = diagnostic only, no retry?** Means v1
+   doesn't *fix* the failures, just *explains* them. The fix
+   layer is a separate decision.
