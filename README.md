@@ -46,6 +46,74 @@ Format: (perfect trials) / (trials).
 
 See [`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md) for methodology, caveats, reproduction steps, and the benchmark runners in `benchmarks/ollama_gaps*.py`.
 
+## Validation — what's been measured (538+ trials)
+
+Loom has been tested through eight phases (A–G plus cross-language
+extensions). All run summaries are committed under
+[`experiments/bakeoff/runs-v2/`](experiments/bakeoff/runs-v2/);
+the auto-generated rollup is
+[`experiments/bakeoff/EVIDENCE_REPORT.md`](experiments/bakeoff/EVIDENCE_REPORT.md)
+(regenerate with `python3 experiments/bakeoff/aggregate_evidence.py`).
+
+### Top-line numbers
+
+| measure | value |
+|---|---|
+| Total trials | **538** across **48 cells** |
+| Trials at 100 % pass | **376** (69.9 %) |
+| Total Opus/PO cost | **$160.67** |
+| Total tokens spent | **1.35 M** |
+| Errors (harness crashes) | **0** |
+
+### Validated claims
+
+| claim | phase | result | data |
+|---|---|---|---|
+| Pre-edit hook lifts compliance at sub-frontier tiers | E | **+93 pp Sonnet, +60 pp Haiku, 0 pp Opus** | 30+60 trials |
+| Hard-block-on-drift mechanism is reliable | E.block | 30/30 reliable across tiers | 30 trials |
+| Hook latency is constant under scale | E.scale | ~800 ms floor at 100 / 500 files | 16 trials |
+| Drift detected and surfaced end-to-end | F | gap closed; verified | committed |
+| Asymmetric pipeline matches frontier quality at lower cost | D | **~8× cheaper at N=20 matched-pricing**, parity quality | 60 trials |
+| Cross-session rationale carries forward | G | **100 % citation Haiku, 93 % Sonnet** vs ≈ 0 % placebo | 120 trials |
+| Pipeline transfers to single-file C++ | C/cpp-orders | 6/6 = 100 % (qwen2.5-coder:32b) | 6 trials |
+| Pipeline transfers to small multi-file Dart | C/dart-orders | 40 % → **100 %** after Tier 1+2 (qwen3.5) | 25 trials |
+| Pipeline transfers to 9-file Python | C/python-inventory | **5/5 = 100 %** (qwen3.5) | 5 trials |
+
+### Per-language fitness map
+
+The asymmetric pipeline holds up well in Python and at small file counts; it hits idiom-specific ceilings at larger Dart and C++ scales. Best pass rate observed per cell:
+
+| language | scale | pass rate | best executor |
+|---|---|:---:|---|
+| **Python** | single-file (Phase D) | **96 % (51/53)** | qwen3.5:latest |
+| **Python** | 9-file (`python-inventory`) | **100 % (5/5)** | qwen3.5:latest |
+| **C++** | single-header (`cpp-orders`) | **100 % (6/6)** | qwen2.5-coder:32b |
+| **C++** | 13-file split (`cpp-inventory` v2) | partial (in flight) | qwen2.5-coder:32b |
+| **C++** | 9-header v1 (`cpp-inventory` v1) | 40 % (2/5) | qwen2.5-coder:32b |
+| **Dart** | 3-file (`dart-orders` Tier 1+2) | **100 %** at top tier | qwen3.5:latest |
+| **Dart** | 9-file (`dart-inventory`) | **0 % (0/35)** | both qwen3.5 and qwen2.5-coder:32b |
+
+**Where it works:** ≤ ~250 LoC, ≤ 3 files of any tested language; single-header C++; 9-file Python; small multi-file Dart with Tier 1+2 orchestration.
+
+**Where it doesn't:** 9-file Dart with qwen3.5 (consistent 0 % — failures cluster on Dart-specific syntax: named-args, `const` constructors, records). The same complexity in Python passes cleanly; bigger qwen2.5-coder:32b doesn't crack it either. Detailed analysis in [`FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md).
+
+### Honest null / mixed results
+
+| claim | phase | result |
+|---|---|---|
+| Loom helps in-session at saturated benchmarks | A | Honest null — bounded cost overhead, no measurable correctness lift on benchmarks every Claude tier already passes (TaskQueue) |
+| Asymmetric pipeline scales to 9-file Dart | C/dart-inventory | **0/35** across executors — Dart-specific failure cluster |
+| Contract binding lifts the dart-inventory ceiling | C/dart-inventory | Cell A 0/15 vs Cell B 0/15 — no separation |
+
+### Documents
+
+- **[`experiments/bakeoff/EVIDENCE_REPORT.md`](experiments/bakeoff/EVIDENCE_REPORT.md)** — full per-phase tables, cell-by-cell pass rates, costs, wall times. Auto-regenerated.
+- **[`ROADMAP.md`](ROADMAP.md) Milestone 6** — cross-language validation state, design work the data points to, in-flight tasks.
+- **[`FINDINGS-bakeoff-v2-phaseA.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseA.md)** — Phase A (TaskQueue saturated, cost-overhead measurement).
+- **[`FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md)** — Phase C cross-language inventory benchmarks; H1 vs H2 disambiguation.
+- **[`FINDINGS-bakeoff-v1.md`](experiments/bakeoff/FINDINGS-bakeoff-v1.md)** + **[`FINDINGS-bakeoff-v2-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pilot.md)** — earlier methodology and direction-reversal notes.
+- **[`docs/WORKED_EXAMPLE.md`](docs/WORKED_EXAMPLE.md)** — end-to-end production-mode walkthrough on a real benchmark.
+
 ## Features
 
 - **Requirement extraction** — Parse decisions from natural language into structured requirements with rationale and domain.
