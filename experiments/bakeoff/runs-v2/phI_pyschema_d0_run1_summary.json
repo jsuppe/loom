@@ -1,0 +1,20 @@
+{
+  "phase": "I_pyschema_d0_greenfield",
+  "cell": "D0",
+  "run_id": "1",
+  "regression_passed": 26,
+  "regression_total": 26,
+  "regression_rate": 1.0,
+  "acceptance_passed": null,
+  "acceptance_total": null,
+  "spec_chars": 12970,
+  "contracts_initial": 5,
+  "opus_duration_s": 107.4,
+  "opus_cost_usd": 0.348254,
+  "exec_duration_s": 17.8,
+  "exec_rc": 0,
+  "wall_s": 128.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk",
+  "exec_stdout_tail": "[exec] task TASK-6e570ea01080  status=pending  title='Implement pyschema/errors.py per the section labeled `### pyschema/errors.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk  runner: pytest_replace (replace)\n[exec] prompt: 14168 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.1s  in=3770  out=193\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-6e570ea01080\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_1ri_cfdk\\\\pyschema\\\\errors.py\"}\n[exec] task TASK-719319ddd14a  status=pending  title='Implement pyschema/coercion.py per the section labeled `### pyschema/coercion.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk  runner: pytest_replace (replace)\n[exec] prompt: 14180 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.1s  in=3781  out=368\n[exec] grading: 4/4\n[exec] result: {\"task_id\": \"TASK-719319ddd14a\", \"outcome\": \"complete\", \"passed\": 4, \"total\": 4, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_1ri_cfdk\\\\pyschema\\\\coercion.py\"}\n[exec] task TASK-8ab364ae616e  status=pending  title='Implement pyschema/validators.py per the section labeled `### pyschema/validators.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk  runner: pytest_replace (replace)\n[exec] prompt: 14192 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.1s  in=3775  out=367\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-8ab364ae616e\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_1ri_cfdk\\\\pyschema\\\\validators.py\"}\n[exec] task TASK-99ae4637cc61  status=pending  title='Implement pyschema/field.py per the section labeled `### pyschema/field.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk  runner: pytest_replace (replace)\n[exec] prompt: 14162 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 4.3s  in=3774  out=562\n[exec] grading: 5/5\n[exec] result: {\"task_id\": \"TASK-99ae4637cc61\", \"outcome\": \"complete\", \"passed\": 5, \"total\": 5, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_1ri_cfdk\\\\pyschema\\\\field.py\"}\n[exec] task TASK-e1d0afa0ca25  status=pending  title='Implement pyschema/schema.py per the section labeled `### pyschema/schema.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_1ri_cfdk  runner: pytest_replace (replace)\n[exec] prompt: 14168 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.5s  in=3767  out=262\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-e1d0afa0ca25\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_1ri_cfdk\\\\pyschema\\\\schema.py\"}\n[exec] no ready tasks",
+  "grade_regression_tail": "..........................                                               [100%]\n26 passed in 0.04s\n"
+}

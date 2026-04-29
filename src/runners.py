@@ -227,6 +227,13 @@ RUNNERS: dict[str, Runner] = {
         build_command=_pytest_command, parse=_pytest_parse,
         skeleton=_pytest_skeleton,
     ),
+    "pytest_replace": Runner(
+        name="pytest_replace", language="python",
+        file_ext=".py", test_ext=".py",
+        apply_mode="replace", fence="python",
+        build_command=_pytest_command, parse=_pytest_parse,
+        skeleton=_pytest_skeleton,
+    ),
     "flutter_test": Runner(
         name="flutter_test", language="dart",
         file_ext=".dart", test_ext=".dart",
