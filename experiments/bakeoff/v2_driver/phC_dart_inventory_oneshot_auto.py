@@ -330,10 +330,13 @@ specific contract block if the executor surfaces a missing symbol;
 amendments are additive (you may add fields/params/methods, never
 rename or remove).
 
-Output ONE top-level ```text``` block wrapping the whole spec.
-Inside it, organize as 9 sections each labeled exactly
+Output the spec as raw markdown (NOT wrapped in any outer fenced
+block). Organize as 9 sections each labeled exactly
 `### lib/<path>.dart` in the listed order. Each section has the prose
-description followed by its `dart-contract` block.
+description followed by its `dart-contract` fenced code block. The
+inner `dart-contract` blocks must be the ONLY fenced code blocks in
+the output — do not wrap the whole response in ```text``` or any
+other outer fence, since 3-backtick fences do not nest.
 """
 
 
@@ -374,7 +377,10 @@ def call_opus(prompt: str, model: str = "opus") -> dict:
 
 
 def extract_spec(opus_response: str) -> str:
-    m = re.search(r"```(?:text|markdown)?\s*\n(.*?)\n```",
+    # Only unwrap if Opus actually used an explicit text/markdown outer
+    # fence. Optional language tag would falsely match between two
+    # inner ```dart-contract``` fences and silently drop spec content.
+    m = re.search(r"```(?:text|markdown)\s*\n(.*?)\n```",
                   opus_response, re.DOTALL)
     return m.group(1).strip() if m else opus_response.strip()
 
@@ -510,7 +516,9 @@ def run_one(run_id: str = "1") -> dict:
         f"sections so a downstream executor can produce each file in "
         f"a single replace pass. Each section MUST end with a "
         f"```dart-contract``` block per the system instructions. "
-        f"Output ONLY a ```text``` block.\n\n"
+        f"Output raw markdown — do not wrap the response in any outer "
+        f"fenced block. The dart-contract blocks must be the only "
+        f"fenced code blocks in your output.\n\n"
         f"---README---\n{readme}\n---END README---"
     )
 
