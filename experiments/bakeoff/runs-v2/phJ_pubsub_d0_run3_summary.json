@@ -1,0 +1,18 @@
+{
+  "phase": "J_pubsub_d0_greenfield",
+  "cell": "D0",
+  "run_id": "3",
+  "passed": 12,
+  "total": 12,
+  "pass_rate": 1.0,
+  "spec_chars": 9197,
+  "contracts_initial": 4,
+  "opus_duration_s": 97.8,
+  "opus_cost_usd": 0.3070665,
+  "exec_duration_s": 14.5,
+  "exec_rc": 0,
+  "wall_s": 116.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phJ_pubsub_d0_7s65haqv",
+  "exec_stdout_tail": "[exec] task TASK-ece6d7b1ec10  status=pending  title='Implement pubsub/errors.py per the section labeled `### pubsub/errors.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phJ_pubsub_d0_7s65haqv  runner: pytest_replace (replace)\n[exec] prompt: 10354 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 5.2s  in=2653  out=119\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-ece6d7b1ec10\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phJ_pubsub_d0_7s65haqv\\\\pubsub\\\\errors.py\"}\n[exec] task TASK-f8d03eb382fa  status=pending  title='Implement pubsub/topic.py per the section labeled `### pubsub/topic.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phJ_pubsub_d0_7s65haqv  runner: pytest_replace (replace)\n[exec] prompt: 10348 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.3s  in=2653  out=98\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-f8d03eb382fa\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phJ_pubsub_d0_7s65haqv\\\\pubsub\\\\topic.py\"}\n[exec] task TASK-196c16a53aa5  status=pending  title='Implement pubsub/subscription.py per the section labeled `### pubsub/subscription.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phJ_pubsub_d0_7s65haqv  runner: pytest_replace (replace)\n[exec] prompt: 10390 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.4s  in=2660  out=118\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-196c16a53aa5\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phJ_pubsub_d0_7s65haqv\\\\pubsub\\\\subscription.py\"}\n[exec] task TASK-6021531a91f4  status=pending  title='Implement pubsub/bus.py per the section labeled `### pubsub/bus.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phJ_pubsub_d0_7s65haqv  runner: pytest_replace (replace)\n[exec] prompt: 10336 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 4.4s  in=2656  out=615\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-6021531a91f4\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phJ_pubsub_d0_7s65haqv\\\\pubsub\\\\bus.py\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "............                                                             [100%]\n12 passed in 0.03s\n"
+}

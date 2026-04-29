@@ -201,6 +201,96 @@ domains × 5 cells × 5 trials) is now justified investment.
 
 ---
 
+## Update — R2 (pubsub rename) replication
+
+**Date added:** 2026-04-29
+**Question:** Does the +95pp D2 vs D3 lift on R1 generalize to a
+different refactor type (rename, signature_mismatch shape) on a
+different domain (in-memory pub/sub)?
+**N:** 5 cells × 5 trials = 25 R2 trials. 2 of the 25 (both in D4)
+crashed before qwen ran due to a ChromaDB internal error
+(`hnsw segment reader: Nothing found on disk`); reported separately.
+
+### Headline: R2 does NOT show a Loom lift
+
+| cell | pass / total | rate | notes |
+|---|---|---|---|
+| D0 | 60/60 | 100% | greenfield baseline replicates |
+| **D1** | **60/60** | **100%** | **qwen alone handles a pure rename** |
+| D2 | 60/60 | 100% | same as D1 — delivery doesn't matter here |
+| D3 | 60/60 | 100% | same as D1 — Loom adds nothing |
+| D4 | 38/60 | 63% | **2/5 crashed at task_claim**; 3/5 that ran = 12/12 |
+
+D4 effective rate (excluding harness crashes): 36/36 = 100%.
+
+### What this tells us
+
+- **Loom's value-add is task-difficulty-dependent.** R1 (add a new
+  class with constraints) had qwen3.5 floor at 0% — the model could
+  not invent the right signature unaided, so the spec carried real
+  information. R2 (rename one method) has qwen3.5 floor at 100% —
+  the task title alone ("rename X to Y, no signature change") is
+  sufficient context. Loom's pipeline cannot lift a 100% baseline.
+- **The R1 result was real, but task-specific.** Not "Loom
+  generally lifts qwen by 95pp on Python refactors" — rather,
+  "Loom lifts qwen on tasks that require generating new code
+  consistent with non-trivial constraints." The R2 result corrects
+  the over-broad reading.
+- **The "value of Loom" depends on which refactors you do.** A
+  codebase whose backlog is rename-heavy may not need Loom. A
+  codebase doing API extension or new-feature work probably does.
+- **D4 had a flaky ChromaDB failure** (2/5 trials crashed at
+  `tasks.get(...)` with "Nothing found on disk"). This is a
+  reliability bug that needs separate investigation; it is NOT
+  evidence that typelink itself broke anything (the failures
+  happened *before* the typelink check could fire). Filed as
+  follow-up.
+
+### Pre-registered prediction check (R2)
+
+| metric | predicted | observed | called it? |
+|---|---|---|---|
+| D1 floor | 30–60% | **100%** | ✗ — much better |
+| D3 ceiling | 60–80% | 100% | ✗ — much better |
+| D2 ≈ D1 | predicted | 100% = 100% ✓ | ✓ |
+| D3 vs D1 lift | ≥15pp | **0pp** | ✗ — opposite of R1 |
+
+The original predictions were anchored to R1's failure pattern.
+R2 is structurally easier; the predictions don't transfer. Worth
+re-anchoring future predictions to *task difficulty* (how much
+does qwen need from the spec?) rather than refactor type taxonomy
+alone.
+
+### Implications for R3/R4/R5
+
+The smoke plan assumed each refactor type would tell us something.
+R2 reveals the more useful axis: **task difficulty for the executor**.
+The five tasks now look like:
+
+- R1 (add field with constraints) — **hard**: qwen alone fails
+- R2 (rename) — **trivial**: qwen alone always succeeds
+- R3 (add new class) — likely hard (similar to R1, new code)
+- R4 (change body behavior, no surface change) — likely **trivial**
+  to **moderate** (mechanical change in one place)
+- R5 (sync → async coordinated refactor) — likely hard (multi-file
+  coordination, signature changes)
+
+Running R3, R4, R5 as originally planned would mostly confirm what
+R1 + R2 already show: hard tasks lift, easy tasks don't. **More
+informative experiments would aim at the boundary**:
+- Where exactly does qwen's floor cross 50%?
+- Does spec quality variance dominate at the boundary, with
+  Loom's lift swamped by Opus's spec quality?
+- Does typelink intervene specifically when qwen drifts on a
+  hard task?
+
+A potentially better next experiment: hold the domain fixed (e.g.
+pyschema) and do a graduated series of refactor tasks of
+increasing complexity (rename → rename + reorder args → rename +
+signature change → add class → multi-file change), with N=5 per
+cell. This maps the difficulty-vs-Loom-lift curve in one
+experimental design instead of five separate domain efforts.
+
 ## Files of record
 
 - `experiments/bakeoff/benchmarks/pyschema/ground_truth/` — domain
