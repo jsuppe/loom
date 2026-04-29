@@ -1652,6 +1652,122 @@ def cmd_task_prompt(args):
     return 0
 
 
+def cmd_typelink(args):
+    """Milestone 7 — cross-file type-link operations.
+
+    Verbs:
+      show <file>            — print the file's extracted public surface
+      check <file> [--spec]  — diff against the spec's declared public_api
+      diff <file> [--spec]   — same as check but always non-strict
+    """
+    import typelink
+    from store import Symbol
+    from pathlib import Path as _Path
+
+    verb = getattr(args, "typelink_verb", None)
+    file_path = _Path(args.file).resolve() if hasattr(args, "file") else None
+
+    if verb == "show":
+        if not file_path or not file_path.exists():
+            print(f"file not found: {file_path}", file=sys.stderr)
+            return 1
+        verifier = typelink.get_verifier_for_file(file_path)
+        if verifier is None:
+            print(f"no verifier registered for {file_path.suffix}", file=sys.stderr)
+            return 1
+        symbols = verifier.extract(file_path)
+        if args.json:
+            print(json.dumps(
+                {"file": str(file_path), "verifier": verifier.name,
+                 "symbols": [s.to_dict() for s in symbols]},
+                indent=2,
+            ))
+            return 0
+        print(f"{file_path}  ({verifier.name}, {len(symbols)} symbols)")
+        for s in symbols:
+            print(f"  {s.kind:9}  {s.name:32}  {s.signature[:80]}")
+        return 0
+
+    if verb in ("check", "diff"):
+        if not file_path or not file_path.exists():
+            print(f"file not found: {file_path}", file=sys.stderr)
+            return 1
+        store = LoomStore(args.project)
+        verifier = typelink.get_verifier_for_file(file_path)
+        if verifier is None:
+            print(f"no verifier registered for {file_path.suffix}", file=sys.stderr)
+            return 1
+        got_symbols = verifier.extract(file_path)
+        # Look up the expected public_api. Either via --spec or by
+        # matching the file path against any spec's public_api keys.
+        spec_id = args.spec
+        if spec_id:
+            spec = store.get_specification(spec_id)
+            if spec is None:
+                print(f"spec not found: {spec_id}", file=sys.stderr)
+                return 1
+            specs = [spec]
+        else:
+            specs = store.list_specifications()
+        # Find the spec entry that mentions this file
+        rel_candidates = [
+            str(file_path),
+            file_path.name,
+        ]
+        try:
+            cwd = _Path.cwd().resolve()
+            rel_candidates.append(str(file_path.relative_to(cwd)))
+        except ValueError:
+            pass
+        expected_dicts = None
+        matched_spec = None
+        matched_path = None
+        for s in specs:
+            api = s.get_public_api()
+            for path, syms in api.items():
+                if path in rel_candidates or _Path(path).name == file_path.name:
+                    expected_dicts = syms
+                    matched_spec = s.id
+                    matched_path = path
+                    break
+            if expected_dicts:
+                break
+        if expected_dicts is None:
+            print(f"no public_api declared for {file_path} in any spec",
+                  file=sys.stderr)
+            return 1 if verb == "check" else 0
+        expected = [Symbol.from_dict(s) for s in expected_dicts]
+        diffs = typelink.diff_symbols(expected, got_symbols)
+        actionable = [d for d in diffs if d.kind != "extra_symbol"]
+        if args.json:
+            print(json.dumps(
+                {"file": str(file_path), "spec": matched_spec,
+                 "spec_path": matched_path,
+                 "expected_count": len(expected),
+                 "got_count": len(got_symbols),
+                 "diffs": [d.to_dict() for d in diffs]},
+                indent=2,
+            ))
+        else:
+            print(f"file: {file_path}")
+            print(f"spec: {matched_spec} (path '{matched_path}')")
+            print(f"expected: {len(expected)} symbols, got: {len(got_symbols)}")
+            print(f"actionable diffs: {len(actionable)}")
+            for d in diffs:
+                marker = "!" if d.kind != "extra_symbol" else "+"
+                print(f"  {marker} {d.kind:20} {d.symbol}")
+                if d.expected:
+                    print(f"      expected: {d.expected[:100]}")
+                if d.got:
+                    print(f"      got:      {d.got[:100]}")
+        if verb == "check" and getattr(args, "strict", False) and actionable:
+            return 2
+        return 0
+
+    print(f"unknown typelink verb: {verb}", file=sys.stderr)
+    return 1
+
+
 def cmd_decompose(args):
     """Decompose a spec into proposed tasks; optionally persist them."""
     store = LoomStore(args.project)
@@ -2025,6 +2141,39 @@ def main():
              "(default: $LOOM_TARGET_DIR or cwd).",
     )
 
+    # typelink (Milestone 7: cross-file type/signature consistency)
+    p_tl = sp(
+        "typelink",
+        help="Cross-file type contract operations (Milestone 7)",
+    )
+    tl_subs = p_tl.add_subparsers(dest="typelink_verb", required=True)
+
+    p_tl_show = tl_subs.add_parser(
+        "show", parents=[_project_parent],
+        help="Print the extracted public surface of a file",
+    )
+    p_tl_show.add_argument("file", help="Source file to extract")
+    p_tl_show.add_argument("--json", "-j", action="store_true")
+
+    p_tl_check = tl_subs.add_parser(
+        "check", parents=[_project_parent],
+        help="Verify a file's public surface against its spec's public_api",
+    )
+    p_tl_check.add_argument("file", help="Source file to verify")
+    p_tl_check.add_argument("--spec", default=None,
+                             help="SPEC-xxx whose public_api is the expectation")
+    p_tl_check.add_argument("--strict", action="store_true",
+                             help="Exit code 2 on any diff (vs 0)")
+    p_tl_check.add_argument("--json", "-j", action="store_true")
+
+    p_tl_diff = tl_subs.add_parser(
+        "diff", parents=[_project_parent],
+        help="Show structural diff between a file and the spec's expectation",
+    )
+    p_tl_diff.add_argument("file")
+    p_tl_diff.add_argument("--spec", default=None)
+    p_tl_diff.add_argument("--json", "-j", action="store_true")
+
     # decompose (spec -> proposed tasks via LLM)
     p_dec = sp(
         "decompose",
@@ -2091,6 +2240,7 @@ def main():
         "cost": cmd_cost,
         "task": cmd_task,
         "decompose": cmd_decompose,
+        "typelink": cmd_typelink,
     }
     
     return commands[args.command](args)

@@ -1,11 +1,25 @@
 """Loom - Requirements traceability for AI-assisted development."""
 
-from .store import LoomStore, Requirement, Implementation, generate_impl_id, generate_content_hash
+from .store import (
+    LoomStore,
+    Requirement,
+    Implementation,
+    Specification,
+    Symbol,
+    TypeContract,
+    generate_impl_id,
+    generate_content_hash,
+    generate_contract_id,
+)
 
 __all__ = [
     "LoomStore",
-    "Requirement", 
+    "Requirement",
     "Implementation",
+    "Specification",
+    "Symbol",
+    "TypeContract",
     "generate_impl_id",
     "generate_content_hash",
+    "generate_contract_id",
 ]

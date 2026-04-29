@@ -1715,6 +1715,20 @@ def spec_add(
         source_doc=source_doc,
         test_file=test_file,
     )
+
+    # Milestone 7 — typelink: auto-extract public_api from any
+    # `*-contract` fenced declaration blocks the spec text contains.
+    # Cheap and idempotent — silently skipped if no fences present or
+    # no language verifier matches.
+    try:
+        import typelink as _typelink
+        public_api = _typelink.extract_public_api_from_spec(description)
+        if public_api:
+            spec.set_public_api(public_api)
+    except Exception:
+        # Never block spec_add on typelink extraction
+        pass
+
     store.add_specification(spec, get_embedding(description))
 
     skeleton_written: bool | None = None

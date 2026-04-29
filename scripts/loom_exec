@@ -435,6 +435,66 @@ def execute_task(
                 }
             print(f"[exec] static_check: ok")
 
+        # Milestone 7 — typelink check. After body pass writes the
+        # scratch file, extract its public surface and diff against the
+        # spec's declared public_api for this file. If the diff is
+        # non-empty, surface a structured `typelink_fail` outcome with
+        # the actionable diff — way more useful than waiting for the
+        # grader to bail on a compile error.
+        # Off by default; opt in via LOOM_TYPELINK=1.
+        if os.environ.get("LOOM_TYPELINK", "0") == "1":
+            try:
+                import typelink as _typelink
+                spec_id = task.get("parent_spec") or ""
+                target_file = task["files_to_modify"][0] if task["files_to_modify"] else ""
+                if spec_id and target_file:
+                    spec_obj = store.get_specification(spec_id)
+                    if spec_obj is not None:
+                        public_api = spec_obj.get_public_api()
+                        expected_dicts = public_api.get(target_file, [])
+                        if expected_dicts:
+                            from store import Symbol
+                            expected = [Symbol.from_dict(s) for s in expected_dicts]
+                            scratch_path = scratch / Path(target_file)
+                            verifier = _typelink.get_verifier_for_fence(runner.fence)
+                            if verifier is not None and scratch_path.exists():
+                                got = verifier.extract(scratch_path)
+                                diffs = _typelink.diff_symbols(expected, got)
+                                # Filter to actionable diffs — extra symbols
+                                # are informational, not failures.
+                                actionable = [d for d in diffs
+                                               if d.kind != "extra_symbol"]
+                                if actionable:
+                                    print(f"[exec] typelink: FAIL ({len(actionable)} diffs)")
+                                    for d in actionable[:5]:
+                                        print(f"  {d.kind}: {d.symbol}")
+                                        if d.expected:
+                                            print(f"    expected: {d.expected[:140]}")
+                                        if d.got:
+                                            print(f"    got:      {d.got[:140]}")
+                                    services.task_reject(
+                                        store, task_id,
+                                        f"typelink_fail: {len(actionable)} diffs",
+                                        escalate=True)
+                                    _log_run(store, {
+                                        "ts": datetime.now(timezone.utc).isoformat(),
+                                        "task_id": task_id, "model": model,
+                                        "outcome": "typelink_fail",
+                                        "diffs": [d.to_dict() for d in actionable],
+                                        "elapsed_s": round(time.perf_counter() - t0, 2),
+                                    })
+                                    return {
+                                        "task_id": task_id,
+                                        "outcome": "typelink_fail",
+                                        "diffs": [d.to_dict() for d in actionable],
+                                    }
+                                else:
+                                    print("[exec] typelink: ok")
+            except Exception as e:
+                # Never block grading on typelink errors during the
+                # rollout. Log but continue.
+                print(f"[exec] typelink check error (non-fatal): {e}")
+
         # Grade in scratch.
         passed, total, tail = run_grading(task["test_to_write"], cwd=scratch, runner=runner)
         print(f"[exec] grading: {passed}/{total}")
