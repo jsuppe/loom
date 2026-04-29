@@ -291,6 +291,32 @@ signature change → add class → multi-file change), with N=5 per
 cell. This maps the difficulty-vs-Loom-lift curve in one
 experimental design instead of five separate domain efforts.
 
+## Update — typelink removed (2026-04-29)
+
+After R1 + R2 produced 50 trials with `typelink_fail=0` across every
+trial that exercised the verifier, typelink was removed entirely. The
+post-task check, the CLI subcommands, the `Specification.public_api_json`
+field, the `Symbol` and `TypeContract` dataclasses, and the
+`type_contracts` ChromaDB collection are all gone (~1300 LoC + tests +
+design doc).
+
+**Why removed:** the data showed the R1 lift came from Opus's
+contract-rich spec text being injected into the executor's prompt
+via the standard `task_build_prompt` path — not from typelink's
+structured `public_api_json` parsing. The contract reaches qwen
+whether or not typelink stores it separately. The verifier never
+intervened, so its only role was decoration.
+
+**What's preserved:** Run summaries from D4 trials (`phI_pyschema_d4_*`,
+`phJ_pubsub_d4_*`) stay in `runs-v2/` as historical record. The
+phI/phJ harnesses now have D0–D3 cells only; D4 was redundant once
+the verifier was removed.
+
+The Milestone 7 design doc and the FAILURE_AUDIT that motivated it
+were deleted with the code; the historical context lives in this
+findings doc and in commit history (commits `61996d2`, `7bb480f`,
+`a6dc436`, and the removal commit).
+
 ## Files of record
 
 - `experiments/bakeoff/benchmarks/pyschema/ground_truth/` — domain

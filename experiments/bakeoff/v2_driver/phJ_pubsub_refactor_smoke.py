@@ -14,7 +14,6 @@ Cells:
        a single task title to rename. No Loom seeding.
   D2 — Loom seeded, delivery suppressed (context_specs=[]).
   D3 — Loom seeded + standard delivery.
-  D4 — D3 + LOOM_TYPELINK=1.
 
 Grading: single hidden test suite (test_pubsub.py). Pre-refactor:
 1/12 (only the topic-not-found test passes). Post-refactor: 12/12.
@@ -198,7 +197,7 @@ Be concrete: the contract becomes a hard commitment.
 
 
 # ---------------------------------------------------------------------------
-# Refactor (D1-D4)
+# Refactor (D1-D3)
 # ---------------------------------------------------------------------------
 
 REFACTOR_TARGETS = ["pubsub/bus.py"]
@@ -370,7 +369,7 @@ def seed_loom_greenfield(store, spec_text: str) -> tuple[dict, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# D1-D4 — refactor
+# D1-D3 — refactor
 # ---------------------------------------------------------------------------
 
 def setup_refactor_workspace() -> Path:
@@ -551,7 +550,7 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     contracts: dict[str, str] = {}
     opus_elapsed = 0.0
     opus_cost = 0.0
-    if cell in ("D2", "D3", "D4"):
+    if cell in ("D2", "D3"):
         existing_code = []
         for ref_file in sorted(REFERENCE_DIR.iterdir()):
             if ref_file.is_file() and ref_file.suffix == ".py":
@@ -588,10 +587,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
 
     exec_env = {**os.environ}
     exec_env.setdefault("LOOM_EXEC_CONTRACT", "1")
-    if cell == "D4":
-        exec_env["LOOM_TYPELINK"] = "1"
-    else:
-        exec_env.pop("LOOM_TYPELINK", None)
     exec_t0 = time.time()
     exec_proc = subprocess.run(
         [sys.executable, str(LOOM_DIR / "scripts" / "loom_exec"),
@@ -610,9 +605,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     print(f"[grade] passed={g['passed']}/{g['total']}")
 
     tail = exec_proc.stdout
-    typelink_fail = tail.count("typelink: FAIL")
-    typelink_ok = tail.count("typelink: ok")
-    typelink_errors = tail.count("typelink check error")
 
     summary = {
         "phase": f"J_pubsub_{cell.lower()}_refactor",
@@ -625,10 +617,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
         "contracts_initial": len(contracts),
         "loom_seeded": cell != "D1",
         "spec_delivered": cell not in ("D1", "D2"),
-        "typelink_enabled": cell == "D4",
-        "typelink_fail": typelink_fail,
-        "typelink_ok": typelink_ok,
-        "typelink_errors": typelink_errors,
         "opus_duration_s": round(opus_elapsed, 1),
         "opus_cost_usd": opus_cost,
         "exec_duration_s": round(exec_elapsed, 1),
@@ -641,7 +629,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     out_path = OUT_DIR / f"phJ_pubsub_{cell.lower()}_run{run_id}_summary.json"
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"SUMMARY: {cell} pass={g['passed']}/{g['total']}  "
-          f"tlk_fail={typelink_fail} tlk_ok={typelink_ok}  "
           f"wall={summary['wall_s']}s")
     print(f"wrote: {out_path}")
     return summary
@@ -655,7 +642,7 @@ def main(argv: list[str]) -> int:
     run_id = argv[2] if len(argv) > 2 else "smoke"
     if cell == "D0":
         run_d0(run_id)
-    elif cell in ("D1", "D2", "D3", "D4"):
+    elif cell in ("D1", "D2", "D3"):
         run_d_refactor(cell, run_id)
     else:
         print(f"unknown cell: {cell}")

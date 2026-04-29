@@ -82,13 +82,6 @@ class Specification:
     # `loom spec --test` so downstream Task decomposition has a real file
     # to grade against (FINDINGS-wild F10).
     test_file: str = ""
-    # Per-file public-API specification (Milestone 7 — typelink). JSON
-    # encoding of `{file_path: [Symbol]}` — the spec's commitment to
-    # what each implementation file's public surface must look like.
-    # Auto-extracted from `*-contract` fenced blocks at spec-add time
-    # when present; manually authorable via `loom spec public-api ...`.
-    # Empty string means "no public_api declared" — verifiers skip.
-    public_api_json: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -106,21 +99,11 @@ class Specification:
         d.setdefault('superseded_at', None)
         d.setdefault('superseded_by', None)
         d.setdefault('test_file', '')
-        d.setdefault('public_api_json', '')
+        # Drop fields removed in the Milestone 7 rollback so old stores
+        # that have `public_api_json` in their persisted metadata can
+        # still deserialize.
+        d.pop('public_api_json', None)
         return cls(**d)
-
-    def get_public_api(self) -> Dict[str, Any]:
-        """Decode public_api_json into a `{file: [symbol_dict]}` map."""
-        if not self.public_api_json:
-            return {}
-        try:
-            return json.loads(self.public_api_json)
-        except json.JSONDecodeError:
-            return {}
-
-    def set_public_api(self, public_api: Dict[str, Any]) -> None:
-        """Encode the dict back into public_api_json. Empty dict -> ""."""
-        self.public_api_json = json.dumps(public_api) if public_api else ""
 
 
 @dataclass
@@ -248,79 +231,6 @@ class Task:
         return all(dep in completed_task_ids for dep in self.depends_on)
 
 
-@dataclass
-class Symbol:
-    """A public symbol declared by a source file (Milestone 7 — typelink).
-
-    Captures the structural surface another file might reference: a class,
-    function, constant, type alias, or method. `signature` is the
-    canonical, language-normalized form (parameter names dropped where
-    they don't matter, whitespace normalized) so cross-trial diffs work.
-    """
-    name: str            # "Customer", "register_customer", "Customer.add_address"
-    kind: str            # "class" | "function" | "type" | "const" | "method" | "field"
-    signature: str       # canonical signature string
-    parent: Optional[str] = None  # for methods/fields: the enclosing class
-    line: int = 0        # source line number (best effort; 0 if unknown)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Symbol":
-        d.setdefault("parent", None)
-        d.setdefault("line", 0)
-        return cls(**d)
-
-
-@dataclass
-class TypeContract:
-    """The public-API surface of a single source file (Milestone 7).
-
-    Persisted alongside Implementation. Embeds the canonical signatures
-    so semantic search across symbols works ("where do we have a class
-    shaped like Customer?"). The content_hash is what the file's bytes
-    were when this contract was extracted; used to detect when the
-    contract is stale relative to the on-disk file.
-    """
-    id: str               # TC-xxx
-    file: str             # path/to/file
-    language: str         # "python" | "typescript" | "dart" | "cpp"
-    extracted_at: str     # ISO timestamp
-    extractor: str        # "manual" | "python_ast" | "dart_regex" | "tsc" | "libclang"
-    content_hash: str     # hash of the file when extracted
-    symbols_json: str     # JSON-encoded list[Symbol] (ChromaDB metadata limits)
-    parent_spec: Optional[str] = None   # SPEC-xxx that authored this file
-    project: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "TypeContract":
-        d.setdefault("parent_spec", None)
-        d.setdefault("project", "")
-        return cls(**d)
-
-    def get_symbols(self) -> List[Symbol]:
-        if not self.symbols_json:
-            return []
-        try:
-            raw = json.loads(self.symbols_json)
-            return [Symbol.from_dict(s) for s in raw]
-        except json.JSONDecodeError:
-            return []
-
-    def set_symbols(self, symbols: List[Symbol]) -> None:
-        self.symbols_json = json.dumps([s.to_dict() for s in symbols])
-
-
-def generate_contract_id() -> str:
-    """Return a fresh TC-xxx id."""
-    import uuid
-    return f"TC-{uuid.uuid4().hex[:12]}"
-
-
 class LoomStore:
     """
     Vector store for Loom data.
@@ -376,11 +286,6 @@ class LoomStore:
         self.tasks = self.client.get_or_create_collection(
             name="tasks",
             metadata={"description": "Atomic work items — executable by small-model runners"}
-        )
-
-        self.type_contracts = self.client.get_or_create_collection(
-            name="type_contracts",
-            metadata={"description": "Per-file public-API surface (Milestone 7 — typelink)"}
         )
     
     # ==================== Requirements ====================
@@ -852,64 +757,6 @@ class LoomStore:
             }
             for i in range(len(results["ids"][0]))
         ]
-
-    # ==================== Type Contracts (Milestone 7) ====================
-
-    def add_type_contract(self, contract: TypeContract,
-                           embedding: List[float]) -> None:
-        """Persist a TypeContract. Embedding indexes the canonical
-        signatures so semantic search across public surfaces works."""
-        contract.project = contract.project or self.project
-        # Document text = symbol names + signatures concatenated, for
-        # cross-file/cross-spec semantic search ("where else do we
-        # declare something shaped like Customer?")
-        symbols = contract.get_symbols()
-        doc = " | ".join(f"{s.name}::{s.signature}" for s in symbols)
-        if not doc:
-            doc = f"{contract.file} ({contract.language})"
-        self.type_contracts.upsert(
-            ids=[contract.id],
-            embeddings=[embedding],
-            metadatas=[contract.to_dict()],
-            documents=[doc],
-        )
-
-    def get_type_contract(self, contract_id: str) -> Optional[TypeContract]:
-        result = self.type_contracts.get(ids=[contract_id], include=["metadatas"])
-        if result["ids"]:
-            return TypeContract.from_dict(result["metadatas"][0])
-        return None
-
-    def get_type_contract_for_file(
-        self, file: str, parent_spec: Optional[str] = None,
-    ) -> Optional[TypeContract]:
-        """Look up the latest contract for a file path. If multiple exist
-        across specs, return the one matching parent_spec (or the most
-        recent if parent_spec is None)."""
-        result = self.type_contracts.get(include=["metadatas"])
-        candidates = [
-            TypeContract.from_dict(m) for m in result["metadatas"]
-            if m.get("file") == file
-        ]
-        if not candidates:
-            return None
-        if parent_spec:
-            for c in candidates:
-                if c.parent_spec == parent_spec:
-                    return c
-        # Most-recent fallback
-        candidates.sort(key=lambda c: c.extracted_at, reverse=True)
-        return candidates[0]
-
-    def list_type_contracts(
-        self, parent_spec: Optional[str] = None,
-    ) -> List[TypeContract]:
-        result = self.type_contracts.get(include=["metadatas"])
-        contracts = [TypeContract.from_dict(m) for m in result["metadatas"]]
-        if parent_spec:
-            contracts = [c for c in contracts if c.parent_spec == parent_spec]
-        contracts.sort(key=lambda c: c.extracted_at)
-        return contracts
 
     # ==================== Chat Messages ====================
 

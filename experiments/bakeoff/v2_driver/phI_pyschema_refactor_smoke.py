@@ -19,11 +19,10 @@ Cells:
   D3 — Loom seeded + standard delivery: refactor spec authored by
        Opus, stored, linked to the task via context_specs. Standard
        Loom pipeline.
-  D4 — D3 + LOOM_TYPELINK=1.
 
 Grading:
   D0     → regression test suite (test_pyschema.py, 26 tests)
-  D1-D4  → regression + acceptance (test_pyschema.py + test_regexfield.py)
+  D1-D3  → regression + acceptance (test_pyschema.py + test_regexfield.py)
            Both rates reported separately so we can distinguish
            "broke existing behavior" from "didn't add new behavior."
 
@@ -240,7 +239,7 @@ becomes a hard commitment.
 
 
 # ---------------------------------------------------------------------------
-# Refactor (D1-D4) — single task that adds RegexField
+# Refactor (D1-D3) — single task that adds RegexField
 # ---------------------------------------------------------------------------
 
 REFACTOR_TARGETS = [
@@ -422,7 +421,7 @@ def seed_loom_greenfield(store, spec_text: str) -> tuple[dict, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# D1-D4 — refactor workspace + single task
+# D1-D3 — refactor workspace + single task
 # ---------------------------------------------------------------------------
 
 def setup_refactor_workspace() -> Path:
@@ -457,7 +456,7 @@ def setup_refactor_workspace() -> Path:
 
 
 def seed_loom_refactor(cell: str, store, refactor_spec_text: str) -> tuple[Any, str]:
-    """Seed Loom for D2/D3/D4. D1 returns (None, "") since no seeding.
+    """Seed Loom for D2/D3. D1 returns (None, "") since no seeding.
 
     Returns (req_obj, task_id).
     """
@@ -491,7 +490,7 @@ def seed_loom_refactor(cell: str, store, refactor_spec_text: str) -> tuple[Any, 
         )
         return None, result["id"]
 
-    # D2/D3/D4: seed req + spec.
+    # D2/D3: seed req + spec.
     req = services.extract(
         store, domain="behavior",
         value=REFACTOR_TASK_TITLE,
@@ -503,7 +502,7 @@ def seed_loom_refactor(cell: str, store, refactor_spec_text: str) -> tuple[Any, 
     if cell == "D2":
         ctx_reqs: list[str] = []
         ctx_specs: list[str] = []
-    else:  # D3, D4
+    else:  # D3
         ctx_reqs = [req["req_id"]]
         ctx_specs = [spec["spec_id"]]
 
@@ -617,7 +616,7 @@ def run_d0(run_id: str) -> dict:
 
 
 def run_d_refactor(cell: str, run_id: str) -> dict:
-    """D1/D2/D3/D4 refactor cells."""
+    """D1/D2/D3 refactor cells."""
     t0 = time.time()
     workspace = setup_refactor_workspace()
     project = f"phI_pyschema_{cell.lower()}_{run_id}"
@@ -628,12 +627,12 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
         shutil.rmtree(store_dir)
     store = LoomStore(project=project)
 
-    # Step 1: For D2/D3/D4, Opus authors a refactor spec.
+    # Step 1: For D2/D3, Opus authors a refactor spec.
     spec_text = ""
     contracts: dict[str, str] = {}
     opus_elapsed = 0.0
     opus_cost = 0.0
-    if cell in ("D2", "D3", "D4"):
+    if cell in ("D2", "D3"):
         existing_code = []
         for ref_file in sorted(REFERENCE_DIR.iterdir()):
             if ref_file.is_file() and ref_file.suffix == ".py":
@@ -673,10 +672,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     # Step 3: loom_exec.
     exec_env = {**os.environ}
     exec_env.setdefault("LOOM_EXEC_CONTRACT", "1")
-    if cell == "D4":
-        exec_env["LOOM_TYPELINK"] = "1"
-    else:
-        exec_env.pop("LOOM_TYPELINK", None)
     exec_t0 = time.time()
     exec_proc = subprocess.run(
         [sys.executable, str(LOOM_DIR / "scripts" / "loom_exec"),
@@ -697,12 +692,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     print(f"[grade] regression={g_reg['passed']}/{g_reg['total']}  "
           f"acceptance={g_acc['passed']}/{g_acc['total']}")
 
-    # Typelink prints in the exec output
-    tail = exec_proc.stdout
-    typelink_fail = tail.count("typelink: FAIL")
-    typelink_ok = tail.count("typelink: ok")
-    typelink_errors = tail.count("typelink check error")
-
     summary = {
         "phase": f"I_pyschema_{cell.lower()}_refactor",
         "cell": cell,
@@ -717,10 +706,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
         "contracts_initial": len(contracts),
         "loom_seeded": cell != "D1",
         "spec_delivered": cell not in ("D1", "D2"),
-        "typelink_enabled": cell == "D4",
-        "typelink_fail": typelink_fail,
-        "typelink_ok": typelink_ok,
-        "typelink_errors": typelink_errors,
         "opus_duration_s": round(opus_elapsed, 1),
         "opus_cost_usd": opus_cost,
         "exec_duration_s": round(exec_elapsed, 1),
@@ -735,7 +720,6 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"SUMMARY: {cell} reg={g_reg['passed']}/{g_reg['total']}  "
           f"acc={g_acc['passed']}/{g_acc['total']}  "
-          f"tlk_fail={typelink_fail} tlk_ok={typelink_ok}  "
           f"wall={summary['wall_s']}s")
     print(f"wrote: {out_path}")
     return summary
@@ -744,13 +728,13 @@ def run_d_refactor(cell: str, run_id: str) -> dict:
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print("usage: phI_pyschema_refactor_smoke.py <cell> [run_id]")
-        print("  cell ∈ D0, D1, D2, D3, D4")
+        print("  cell ∈ D0, D1, D2, D3")
         return 1
     cell = argv[1]
     run_id = argv[2] if len(argv) > 2 else "smoke"
     if cell == "D0":
         run_d0(run_id)
-    elif cell in ("D1", "D2", "D3", "D4"):
+    elif cell in ("D1", "D2", "D3"):
         run_d_refactor(cell, run_id)
     else:
         print(f"unknown cell: {cell}")
