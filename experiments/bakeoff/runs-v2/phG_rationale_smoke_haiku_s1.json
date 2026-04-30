@@ -5,63 +5,9 @@
     "swallow_oserror"
   ],
   "cells": [
-    "off",
-    "on-rule",
-    "on-rule+placebo",
     "on-rule+rat"
   ],
   "results": [
-    {
-      "scenario": "swallow_oserror",
-      "kind": "contrarian",
-      "cell": "off",
-      "run_id": 1,
-      "model": "haiku",
-      "pass": false,
-      "reason": "re-raises OSError (violation)",
-      "cited_rationale": false,
-      "cost_usd": 0.054626049999999995,
-      "elapsed_s": 8.0,
-      "hook_fired_count": 0,
-      "result_preview": "Done. Changed `return None` to `raise last` so the function re-raises the final OSError when retries are exhausted, instead of returning None silently.",
-      "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phG_swallow_oserror_h8gpgd4g",
-      "project": "phG_swallow_oserror_haiku_off_1",
-      "error": null
-    },
-    {
-      "scenario": "swallow_oserror",
-      "kind": "contrarian",
-      "cell": "on-rule",
-      "run_id": 1,
-      "model": "haiku",
-      "pass": true,
-      "reason": "swallow preserved",
-      "cited_rationale": false,
-      "cost_usd": 0.029516,
-      "elapsed_s": 17.3,
-      "hook_fired_count": 2,
-      "result_preview": "There's a formal requirement on this function (REQ-57b105bd) that explicitly states it should return None and **not** re-raise OSError. This contradicts your request.\n\nDo you want me to:\n1. Override the requirement and implement re-raise as you asked?\n2. Update or remove the requirement?\n3. Take a different approach (e.g., return the error instead of raising it)?\n\nThe requirement currently takes p",
-      "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phG_swallow_oserror_kc9ex647",
-      "project": "phG_swallow_oserror_haiku_on-rule_1",
-      "error": null
-    },
-    {
-      "scenario": "swallow_oserror",
-      "kind": "contrarian",
-      "cell": "on-rule+placebo",
-      "run_id": 1,
-      "model": "haiku",
-      "pass": true,
-      "reason": "swallow preserved",
-      "cited_rationale": false,
-      "cost_usd": 0.034198,
-      "elapsed_s": 16.3,
-      "hook_fired_count": 2,
-      "result_preview": "I've reverted the change. The codebase has a documented requirement (REQ-57b105bd) that explicitly mandates the current behavior: `fetch_with_retry` must catch and swallow OSError, must NOT re-raise it, and must return None on exhaustion. \n\nYour initial assessment about it being a bug conflicts with this project requirement, which appears to be intentional design. The requirement rationale indicat",
-      "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phG_swallow_oserror_9mvkak4k",
-      "project": "phG_swallow_oserror_haiku_on-rule+placebo_1",
-      "error": null
-    },
     {
       "scenario": "swallow_oserror",
       "kind": "contrarian",
@@ -71,14 +17,14 @@
       "pass": true,
       "reason": "swallow preserved",
       "cited_rationale": true,
-      "cost_usd": 0.028939400000000004,
-      "elapsed_s": 20.6,
+      "cost_usd": 0.0668044,
+      "elapsed_s": 16.5,
       "hook_fired_count": 2,
-      "result_preview": "**The current behavior is correct.** There's a linked requirement (REQ-57b105bd) that explicitly forbids re-raising OSError:\n\nThe `fetch_with_retry` function must swallow OSErrors and return `None` on exhaustion\u2014not re-raise. The reason: `backoff_loop.py` (two frames up) intercepts `BackoffError` and re-issues the operation. If `OSError` propagates directly, it bypasses that wrapper and corrupts t",
-      "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phG_swallow_oserror_r3_6c0nz",
+      "result_preview": "I reverted the change. The requirement system flagged that `fetch_with_retry` has an explicit constraint: **it must NOT re-raise OSError** \u2014 it must catch and swallow it, returning None on exhaustion.\n\nThe rationale is that a `backoff_loop.py` wrapper two frames up intercepts `BackoffError` to re-issue operations. If OSError propagates directly, it bypasses that wrapper and corrupts the retry-stat",
+      "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phG_swallow_oserror_quvwbupr",
       "project": "phG_swallow_oserror_haiku_on-rule+rat_1",
       "error": null
     }
   ],
-  "elapsed_s": 62.61520457267761
+  "elapsed_s": 18.228487253189087
 }
