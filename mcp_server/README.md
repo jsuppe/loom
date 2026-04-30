@@ -1,39 +1,22 @@
-# Loom MCP Server (skeleton)
+# Loom MCP Server
 
-Thin MCP server that exposes `LoomStore` operations as typed tools to Claude
-Code and other MCP-compatible clients. Status: **skeleton** — structure and
-tool schemas are in place; handlers are TODO.
+Thin MCP server that exposes `LoomStore` operations as typed tools to
+Claude Code and other MCP-compatible clients. Phase A (read) and Phase
+B (write) tools are shipped; handlers all delegate to
+`loom.services.*` so the CLI and MCP surfaces stay in lockstep.
 
 See `ROADMAP.md` → Milestone 4.2 for the design.
-
-## Prerequisite refactors
-
-Before filling in the handlers, two things should be factored out of
-`scripts/loom` into `src/`:
-
-1. ~~**`get_embedding()`** → `src/embedding.py`~~ — **DONE.** The MCP
-   server now imports from `embedding` directly.
-2. **`cmd_*` function bodies** → `src/services.py`. **In progress.** The
-   CLI's `cmd_*` functions mix argparse handling with real logic. We're
-   splitting them so MCP handlers can call shared functions without
-   re-parsing args or rendering strings.
-
-   **Done:** all CLI verbs are now services (`status`, `query`,
-   `list_requirements`, `trace`, `chain`, `coverage`, `doctor`,
-   `conflicts`, `extract`, `check`, `link`, `detect_requirements`,
-   `sync`, `supersede`, `set_status`, `refine`, `spec_add`/`spec_list`/
-   `spec_link`, `pattern_add`/`pattern_list`/`pattern_apply`,
-   `test_add`/`test_verify`/`test_list`/`test_generate`, `incomplete`).
-   Their `cmd_*` counterparts in `scripts/loom` are thin wrappers over
-   `services.py`.
-
-Each MCP handler should collapse to 2-3 lines once its service exists.
 
 ## Installing
 
 ```bash
-pip install mcp
+pip install 'loom-cli[mcp]'
+# Or, from a clone in dev mode:
+pip install -e '.[mcp]'
 ```
+
+The `[mcp]` extra pulls in the `mcp` Python SDK alongside the core
+package.
 
 ## Running standalone (for testing)
 
@@ -92,8 +75,13 @@ Test specs:
 - `loom_test_add`, `loom_test_verify`, `loom_test_list`,
   `loom_test_generate`
 
-Phase B is complete. Only `init-private` remains CLI-only (it
-writes a template file — not appropriate as an MCP tool).
+Phase B is complete. CLI-only verbs (no MCP exposure):
+- `init-private` — writes a template file; not appropriate as an MCP tool
+- `archive`, `stale`, `metrics`, `health-score`, `cost` — added in v1
+  (M2 / M5); MCP coverage TBD as a follow-up if there's demand. The
+  underlying services (`services.archive`, `services.stale`,
+  `services.metrics`, `services.health_score`) already return
+  JSON-shape data, so wiring them up is one handler each.
 
 ## Resources (planned)
 

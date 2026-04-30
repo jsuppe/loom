@@ -182,10 +182,13 @@ Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDIN
 - **Drift detection** — Content hashes on `Implementation` records let `loom check` flag code linked to superseded requirements.
 - **Traceability** — `loom trace`, `loom chain`, `loom coverage` give bidirectional req ↔ spec ↔ impl ↔ test visibility.
 - **Living documentation** — `loom sync` generates REQUIREMENTS.md and TEST_SPEC.md with a traceability matrix; PRIVATE.md filters sensitive reqs from public docs.
-- **Hook instrumentation** — `hooks/loom_pretool.py` injects Loom context as a system-reminder on Edit/Write; logs per-fire latency and bytes to JSONL.
+- **Hook instrumentation** — `hooks/loom_pretool.py` injects Loom context (rule + rationale) as a system-reminder on Edit/Write; logs per-fire latency and bytes to JSONL.
 - **Cost measurement** — `loom cost` reports p50/p95/p99 hook latency, total injected bytes, and skipped-vs-fired ratio.
+- **Effectiveness metrics** — `loom metrics` aggregates an event log into coverage / drift / conflicts / activity / staleness counts; `loom health-score` rolls them into a single 0-100 number for CI gating.
+- **Hygiene** — `Requirement.last_referenced` is stamped passively by every read/link operation; `loom stale` surfaces cold requirements; `loom archive` retires them (recoverable) without forced deletion.
+- **Pluggable embeddings** — Three providers: `ollama` (default, `nomic-embed-text` 768d), `openai` (`text-embedding-3-small` 1536d), `hash` (deterministic). Selectable via `--embedding-provider`, env, or config. The store pins `embedding_dim` on first write and rejects mismatched providers.
 - **Spec → task decomposition** — `loom decompose SPEC-xxx --apply` uses a frontier model (or local fallback) to emit atomic tasks with full context bundles.
-- **Small-model task execution** — `scripts/loom_exec` claims the next ready task, calls Ollama, applies code to a scratch copy, runs grading tests, and promotes on pass.
+- **Small-model task execution** — `loom_exec` claims the next ready task, calls Ollama, applies code to a scratch copy, runs grading tests, and promotes on pass.
 - **MCP server** — Phase A (read) and Phase B (write) tools shipped; wraps `LoomStore` as typed MCP tools for Claude Code and other clients. See [`mcp_server/README.md`](mcp_server/README.md).
 
 ## Installation
@@ -193,35 +196,46 @@ Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDIN
 ### Prerequisites
 
 - Python 3.10+
-- [Ollama](https://ollama.ai) running on `localhost:11434`
+- [Ollama](https://ollama.ai) running on `localhost:11434` (default
+  embedding provider; opt out with `--embedding-provider openai|hash`)
   - `nomic-embed-text` — embeddings
   - `qwen3.5:latest` — recommended local executor (see findings above)
 - SQLite (stdlib via `sqlite3` — no separate install)
-- Optional: `ANTHROPIC_API_KEY` in the environment if you want Opus-driven decomposition
+- Optional: `ANTHROPIC_API_KEY` in the environment if you want Opus-driven
+  decomposition; `OPENAI_API_KEY` if you want OpenAI embeddings.
 
-### As an OpenClaw skill
+### From PyPI (once published)
 
 ```bash
-git clone https://github.com/jsuppe/loom.git ~/.openclaw/skills/loom
-cd ~/.openclaw/skills/loom
-python3 -m venv .venv
-.venv/bin/pip install pyyaml    # sqlite3 is stdlib
+pip install loom-cli
 ollama pull nomic-embed-text
 ollama pull qwen3.5:latest    # for loom_exec
 ```
 
-### Standalone
+This registers two console scripts on PATH: `loom` and `loom_exec`.
+
+### From a clone (development / pre-release)
 
 ```bash
 git clone https://github.com/jsuppe/loom.git
 cd loom
 python3 -m venv .venv
-.venv/bin/pip install pyyaml    # sqlite3 is stdlib
+. .venv/bin/activate          # or .venv/Scripts/activate on Windows
+pip install -e '.[dev]'       # editable install + pytest
 ollama pull nomic-embed-text
-export PATH="$PWD/scripts:$PATH"
+ollama pull qwen3.5:latest
 ```
 
+`pip install -e .` exposes `loom` and `loom_exec` on PATH inside the
+venv. The legacy `scripts/loom` and `scripts/loom_exec` shims still
+work if you'd rather not install (they `sys.path`-bootstrap the
+package).
+
 ## Quick start
+
+For a guided walk-through with success indicators at each step, see
+**[`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)**. The
+condensed path:
 
 ```bash
 # One-time: onboard the target repo (writes .loom-config.json, health-checks)
@@ -255,8 +269,14 @@ loom_exec --loop
 # Regenerate living docs
 loom sync
 
-# Check what the PreToolUse hook is costing you
-loom cost
+# Effectiveness telemetry
+loom cost          # PreToolUse hook latency / overhead
+loom metrics       # coverage, drift, conflicts, activity, staleness
+loom health-score  # single 0-100 score for CI gates
+
+# Hygiene
+loom stale --older-than 90 --json   # cold + unlinked requirements
+loom archive REQ-xxx                # excluded from list/query (recoverable)
 ```
 
 ## End-to-end pipeline
@@ -335,6 +355,8 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | `sync`                   | Regenerate REQUIREMENTS.md + TEST_SPEC.md                            | —        |
 | `conflicts --text`       | Detect conflicting/overlapping reqs (LLM-verified)                   | yes      |
 | `supersede <id>`         | Mark a requirement as superseded                                     | —        |
+| **`archive <id>`**       | Mark a requirement as archived (recoverable; hidden from list/query) | —        |
+| **`stale`**              | Rank requirements by `last_referenced` (`--older-than`, `--unlinked`)| yes      |
 | `test` / `verify` / `tests` / `test-generate` | Manage test specs                               | `tests`  |
 | `trace <target>`         | Bidirectional traceability (req↔files)                               | yes      |
 | `chain <req_id>`         | Full traceability chain (req→patterns→specs→impls→tests)             | yes      |
@@ -346,14 +368,20 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | **`init`**               | Onboard a target repo: write `.loom-config.json` + health-check      | —        |
 | `init-private`           | Create `PRIVATE.md` template                                         | —        |
 | **`cost`**               | Summarize PreToolUse hook cost (latency, bytes, overhead)            | yes      |
+| **`metrics`**            | Effectiveness rollup: coverage, drift, conflicts, activity, staleness (`--since N`) | yes |
+| **`health-score`**       | Single 0-100 score for CI gates (impl + test + freshness + non-drift) | yes      |
 | **`task`**               | Atomic work-item CRUD (`add`/`list`/`show`/`claim`/`release`/`complete`/`reject`/`prompt`) | yes |
 | **`decompose <SPEC>`**   | Propose atomic-task decomposition (`--apply` persists)               | —        |
 
+The top-level CLI also accepts `--embedding-provider {ollama,openai,hash}`
+to switch the embedding backend per call (default: `ollama`; falls back
+to env `LOOM_EMBEDDING_PROVIDER`, then `.loom-config.json::embedding_provider`).
+
 Separate entry point for execution:
 
-| Tool                 | Purpose |
-|----------------------|---------|
-| `scripts/loom_exec`  | Drive Ollama against the Task queue. Flags: `--next`, `--loop`, `--dry-run`, `--model`, `-p`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`. |
+| Tool         | Purpose |
+|--------------|---------|
+| `loom_exec`  | Drive Ollama against the Task queue. Flags: `--next`, `--loop`, `--dry-run`, `--model`, `-p`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`. (Also runnable as `python -m loom.exec_cli` or via the `scripts/loom_exec` shim.) |
 
 Project is auto-detected from the git repo name; override with `-p/--project` or the `LOOM_PROJECT` env var.
 
@@ -367,12 +395,19 @@ Project is auto-detected from the git repo name; override with `-p/--project` or
   "target_dir": ".",
   "decomposer_model": null,
   "executor_model": "qwen3.5:latest",
+  "embedding_provider": null,
   "embedding_model": "nomic-embed-text",
   "test_runner": "pytest",
   "test_dir": "tests",
   "ignore": [".git", "__pycache__", ".venv", "venv", "node_modules", ...]
 }
 ```
+
+`embedding_provider` is one of `ollama` (default), `openai`, or `hash`.
+`null` → resolve via `LOOM_EMBEDDING_PROVIDER` env, then default to
+`ollama`. Per-provider model defaults: `nomic-embed-text` (768d) for
+ollama, `text-embedding-3-small` (1536d) for openai, `hash:768` for
+the deterministic provider.
 
 `loom init` also runs a health-check on the way in — Ollama reachable, required models pulled, pytest declared in the target's deps, `tests/` directory present (creating it if not). A warning lists anything missing without blocking.
 
@@ -443,14 +478,20 @@ Hook is designed never to block unrelated work — missing CLI, malformed stdin,
 
 All dataclasses ship with `to_dict`/`from_dict` for serialization. Empty lists are stored as `["TBD"]` (legacy convention from the prior ChromaDB backend, kept on the SQLite backend so older stores round-trip cleanly; read them back as "unset.")
 
-- **Requirement** — `id`, `domain`, `value`, `rationale`, `status` (pending/in_progress/implemented/verified/superseded), `acceptance_criteria`, `elaboration`, `test_spec_id`, `source_msg_id`, `source_session`, `timestamp`, optional `superseded_at`.
+- **Requirement** — `id`, `domain`, `value`, `rationale`, `status` (pending/in_progress/implemented/verified/superseded/**archived**), `acceptance_criteria`, `elaboration`, `test_spec_id`, `source_msg_id`, `source_session`, `timestamp`, `last_referenced` (stamped by `query`/`check`/`link`/`trace`/`chain`), optional `superseded_at`.
 - **Specification** — Detailed HOW for a `parent_req`. Status: draft/approved/implemented/verified/superseded.
 - **Pattern** — Shared design standard with an `applies_to` list.
 - **Implementation** — Code chunk linked to reqs/specs with a content hash (drift detection).
 - **Task** — Atomic work item. Fields: `title`, `files_to_modify`, `test_to_write`, `context_reqs`/`specs`/`patterns`/`sidecars`/`files`, `size_budget_files`, `size_budget_loc`, `depends_on`, `status`, `claimed_by`, `claimed_at`, `completed_at`, `rejected_reason`, `escalated_reason`, `created_by`, `parent_spec`.
 - **TestSpec** (JSON-backed, not in the SQLite store) — steps, expected outcome, automated flag, links to reqs/specs.
 
-Six tables in `loom.db`: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`. Each row carries `id` (PK), `embedding` (BLOB), `metadata` (JSON), `document` (TEXT). Brute-force cosine similarity for nearest-neighbor search — no HNSW indexing.
+Six entity tables in `loom.db`: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`. Each row carries `id` (PK), `embedding` (BLOB), `metadata` (JSON), `document` (TEXT). Brute-force cosine similarity for nearest-neighbor search — no HNSW indexing.
+
+A seventh small table, `_loom_meta`, pins per-store invariants —
+notably `embedding_dim`, recorded on the first vector write so a
+provider switch (e.g. `ollama` → `openai`) can't silently corrupt
+search. Mismatched writes raise `EmbeddingDimensionMismatch` with
+actionable advice.
 
 ## Source of truth
 
@@ -480,11 +521,12 @@ Generate public docs: `loom sync --public`.
 
 ```
 ~/.openclaw/loom/<project>/
-├── loom.db                  # SQLite (6 tables)
-├── .loom-specs.json        # Test specifications
-├── .hook-log.jsonl         # PreToolUse hook activity log
-├── .exec-log.jsonl         # loom_exec run log
-└── PRIVATE.md              # Private requirement IDs
+├── loom.db                  # SQLite — 6 entity tables + _loom_meta
+├── .loom-specs.json         # Test specifications
+├── .loom-events.jsonl       # User-meaningful event log (M5: feeds `loom metrics` + `loom health-score`)
+├── .hook-log.jsonl          # PreToolUse hook activity log (feeds `loom cost`)
+├── .exec-log.jsonl          # loom_exec run log
+└── PRIVATE.md               # Private requirement IDs
 ```
 
 ## Requirement format

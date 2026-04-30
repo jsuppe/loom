@@ -65,7 +65,7 @@ path (since `CLAUDE_PROJECT_DIR` expands per-project):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LOOM_BIN` | `loom` on PATH, else sibling `scripts/loom` | Loom CLI path |
+| `LOOM_BIN` | `loom` on PATH (registered by `pip install loom-cli`), else sibling `scripts/loom` shim | Loom CLI path |
 | `LOOM_PROJECT` | auto-detected from git | Override project name |
 | `LOOM_HOOK_BLOCK_ON_DRIFT` | `0` | Set to `1` to fail the tool call on drift |
 | `LOOM_HOOK_DEBUG` | `0` | Set to `1` to log hook activity to stderr |
@@ -98,8 +98,16 @@ system-reminder like:
 ```
 Loom: src/auth/login.py linked to 2 req(s) — DRIFT on REQ-abc12345
   - REQ-abc12345 [behavior] [SUPERSEDED]: users must confirm via email
+    Rationale: legal review 2025-08-12 mandated double opt-in
   - REQ-def67890 [behavior]: session cookies rotate every 24h
 ```
+
+The `Rationale:` line shows up when the requirement was extracted with
+`--rationale`. This is the cross-session memory channel — a future
+agent reading it gets the *why*, not just the *what*. Phase G (in
+`experiments/bakeoff/FINDINGS-bakeoff-v2-phaseG.md`) showed Haiku's
+compliance rises from 67% to 93% and citation rate from 0% to 100%
+when the rationale is delivered alongside the rule.
 
 If `LOOM_HOOK_BLOCK_ON_DRIFT=1` is set and any linked requirement is
 superseded, the edit is rejected and the message is returned as the

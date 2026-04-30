@@ -46,13 +46,20 @@ Hidden test suite (the grader)
 ## Setup
 
 ```bash
-# Install dependencies (one-time):
-ollama pull qwen3.5:latest
-ollama pull nomic-embed-text          # for embeddings
-ollama serve                           # background
+# Install Loom (one-time):
+pip install loom-cli                   # registers `loom` and `loom_exec` on PATH
+# Or, from a clone in dev mode:
+#   pip install -e .
 
-# Loom CLI is on PATH (or invoke as `python3 scripts/loom`).
+# Install Ollama deps (one-time):
+ollama pull qwen3.5:latest
+ollama pull nomic-embed-text           # default embedding provider
+ollama serve                            # must be running on localhost:11434
 ```
+
+For a step-by-step onboarding guide with success indicators, see
+[`docs/GETTING_STARTED.md`](GETTING_STARTED.md). This document is
+the deeper-dive walkthrough on a real benchmark.
 
 ## Step 1 — Capture the requirement
 

@@ -21,9 +21,13 @@ This skill is always active via AGENTS.md integration. Invoke at these moments:
 | Manual drift check                   | Inspect a file                          | `loom check <file>`              |
 | After implementing                   | Link to reqs or specs                   | `loom link <file> --req/--spec`  |
 | Spec ready for implementation        | Decompose into atomic tasks             | `loom decompose SPEC-xxx --apply`|
-| Task queue has ready work            | Execute locally                         | `scripts/loom_exec --next`       |
+| Task queue has ready work            | Execute locally                         | `loom_exec --next`               |
 | Heartbeat                            | Surface staleness / drift               | `loom status --json`             |
+| Cold requirements piling up          | Surface stale + unlinked                | `loom stale --older-than 90`     |
+| Decision retired (not replaced)      | Archive instead of supersede            | `loom archive REQ-xxx`           |
 | Any time                             | Measure hook cost                       | `loom cost`                      |
+| Effectiveness telemetry              | Coverage + drift + activity rollup      | `loom metrics`                   |
+| CI gate                              | Single 0-100 health number              | `loom health-score --json`       |
 
 ## Core commands
 
@@ -41,11 +45,18 @@ This skill is always active via AGENTS.md integration. Invoke at these moments:
 - **`loom spec REQ-xxx -d <description> [-c <criterion>]... [-s <status>]`** — Detailed HOW for a requirement. `-c` is repeatable for each acceptance criterion.
 - **`loom pattern`, `loom patterns`, `loom pattern-apply`** — Shared design standards across requirements.
 
-### Tasks & execution (new)
+### Tasks & execution
 
 - **`loom decompose SPEC-xxx [--model provider:name] [--apply] [--out file.yaml]`** — Proposes atomic tasks. Defaults to `anthropic:claude-opus-4-7` if `ANTHROPIC_API_KEY` is set, else `ollama:qwen2.5-coder:32b`. Validates atomicity (≤2 files, ≤80 LoC, single grading criterion) and the dep graph before persisting.
 - **`loom task {add|list|show|claim|release|complete|reject|prompt}`** — Atomic-task lifecycle. `loom task list --ready` filters by dependency completion.
-- **`scripts/loom_exec [TASK-id | --next | --loop]`** — Drives Ollama end-to-end: claims, assembles context bundle, calls executor, applies code to scratch copy, runs grading test, promotes on pass. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`.
+- **`loom_exec [TASK-id | --next | --loop]`** — Drives Ollama end-to-end: claims, assembles context bundle, calls executor, applies code to scratch copy, runs grading test, promotes on pass. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`.
+
+### Hygiene & metrics
+
+- **`loom stale [--older-than N] [--unlinked] [--json]`** — Rank requirements by `last_referenced` ascending. Never-touched ones rank coldest (sorted by creation timestamp).
+- **`loom archive REQ-xxx`** — Mark a requirement as archived. Distinct from supersede; recoverable via `loom set-status REQ-xxx pending`.
+- **`loom metrics [--since N]`** — Effectiveness rollup: requirements (active/archived/superseded), coverage (impl + test-spec %), drift events + ratio, conflicts caught, activity (extracted/linked over the window), staleness buckets.
+- **`loom health-score`** — Single 0-100 score over impl coverage + test coverage + freshness + non-drift. CI-friendly via `--json | jq .score`.
 
 ### Docs & measurement
 
@@ -74,7 +85,7 @@ When a decision is made about how something should work:
 → `echo "REQUIREMENT: domain | text" | loom extract --rationale "why"`
 
 When a spec is ready for implementation:
-→ `loom decompose SPEC-xxx --apply` then `scripts/loom_exec --loop`
+→ `loom decompose SPEC-xxx --apply` then `loom_exec --loop`
 
 Before modifying code (automatic via PreToolUse hook):
 → Linked reqs, specs, and drift are injected as a system-reminder.
@@ -100,12 +111,12 @@ During heartbeats:
 
 ```
 ~/.openclaw/loom/<project>/
-├── loom.db                  # SQLite — 6 tables (reqs, specs, patterns,
-│                           #   implementations, chat_messages, tasks)
-├── .loom-specs.json        # TestSpec JSON store
-├── .hook-log.jsonl         # PreToolUse hook activity (read with `loom cost`)
-├── .exec-log.jsonl         # loom_exec run log (per-task latency, tokens, pass/fail)
-└── PRIVATE.md              # Private requirement IDs (excluded from public docs)
+├── loom.db                  # SQLite — 6 entity tables + _loom_meta (pins embedding_dim)
+├── .loom-specs.json         # TestSpec JSON store
+├── .loom-events.jsonl       # User-meaningful event log (feeds `loom metrics`, `health-score`)
+├── .hook-log.jsonl          # PreToolUse hook activity (feeds `loom cost`)
+├── .exec-log.jsonl          # loom_exec run log (per-task latency, tokens, pass/fail)
+└── PRIVATE.md               # Private requirement IDs (excluded from public docs)
 ```
 
 ## Example flow (three-layer + execution)
@@ -124,7 +135,7 @@ Agent:    loom spec REQ-042 -d "TimeSelector component: dropdown 00:00..23:30 st
 Agent:    loom decompose SPEC-042a --apply
           → 3 tasks persisted: dataclass, widget, wiring
 
-Agent:    scripts/loom_exec --loop --model qwen3.5:latest
+Agent:    loom_exec --loop --model qwen3.5:latest
           → T1 passes 4/4 tests in 4.6s
           → T2 passes 6/6 tests in 8.1s
           → T3 passes 3/3 tests in 5.2s
@@ -144,16 +155,20 @@ Agent:    loom status --json
 
 ## Files
 
-- `scripts/loom` — Main CLI (argparse, ~2100 lines)
-- `scripts/loom_exec` — Small-model task executor
-- `src/store.py` — SQLite-backed LoomStore + dataclasses (Requirement, Specification, Pattern, Implementation, Task)
-- `src/services.py` — Shared logic between CLI and MCP server (includes `decompose`, `apply_decomposition`, task lifecycle, cost aggregation, conflict verification)
-- `src/docs.py` — REQUIREMENTS.md / TEST_SPEC.md generation, traceability matrix
-- `src/testspec.py` — JSON-backed TestSpec store
-- `src/embedding.py` — Ollama embedding wrapper + LRU cache
-- `src/conflict_verify.py` — LLM-verified conflict pass
+- `src/loom/cli.py` — Main argparse CLI (registered as `loom` console script)
+- `src/loom/exec_cli.py` — Small-model task executor (registered as `loom_exec`)
+- `src/loom/store.py` — SQLite-backed LoomStore + dataclasses (Requirement, Specification, Pattern, Implementation, Task)
+- `src/loom/services.py` — Shared logic between CLI and MCP server (decompose, apply_decomposition, task lifecycle, cost, metrics, health_score, conflict verification)
+- `src/loom/docs.py` — REQUIREMENTS.md / TEST_SPEC.md generation, traceability matrix
+- `src/loom/testspec.py` — JSON-backed TestSpec store
+- `src/loom/embedding.py` — Pluggable provider dispatch (ollama / openai / hash) + LRU cache
+- `src/loom/conflict_verify.py` — LLM-verified conflict pass
+- `src/loom/runners.py` — Pluggable test-runner registry (pytest / dart_test / vitest / …)
+- `src/loom/templates.py` — `loom init --template` scaffolding
+- `src/loom/prompts/` — extract / link / decompose prompt templates (in-package; ship in the wheel)
+- `src/loom/templates/` — starter templates per runtime
+- `scripts/loom`, `scripts/loom_exec` — thin shims for repo-clone use; pip install registers PATH equivalents
 - `hooks/loom_pretool.py` — PreToolUse hook that injects context on Edit/Write
 - `mcp_server/server.py` — MCP server exposing LoomStore as typed tools (Phase A + B shipped)
-- `prompts/extract.md`, `prompts/link.md`, `prompts/decompose.md` — prompt templates
-- `benchmarks/` — ollama_gaps_*.py runners + results JSON
-- `experiments/gaps/` — experiment artifacts + FINDINGS.md
+- `benchmarks/` — capability + retrieval microbenchmarks
+- `experiments/` — bake-off harnesses and findings docs

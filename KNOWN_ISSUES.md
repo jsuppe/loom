@@ -38,13 +38,9 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 ## CLI
 
-### C1. `-p/--project` must come before the subcommand
+### C1. `-p/--project` must come before the subcommand — **RESOLVED**
 
-**Observed:** `loom doctor -p myproject` fails with `unrecognized arguments: -p myproject` — the flag must be `loom -p myproject doctor`.
-
-**Why deferred:** argparse's default behavior. Documented in CLAUDE.md examples but not a blocker.
-
-**Fix:** Add `-p/--project` to each subparser as well as the parent parser, so it works in either position. Or restructure with `dest=` to collapse them.
+**Resolution:** Milestone 0.5d (commit covered in [`experiments/wild/FINDINGS-wild.md`](experiments/wild/FINDINGS-wild.md), F1). A shared parent parser now attaches `-p/--project` to every subcommand, so `loom doctor -p myproj` and `loom -p myproj doctor` both work. Subparser values take precedence over top-level via post-parse coalescing in `main()`.
 
 ### C2. Shebang warning fallback log message is noisy
 
@@ -76,23 +72,23 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 ### M3. No backwards migration for existing stores
 
-**Observed:** Stores created before the `rationale` / `spec_ids` fields exist will load fine (thanks to `setdefault` in `from_dict`), but there's no command to backfill these fields or upgrade stored data.
+**Observed:** Stores created before fields like `rationale`, `spec_ids`, `last_referenced` (M2.1), or `archived` status (M2.3) existed will load fine — `setdefault` in each `from_dict` keeps reads tolerant — but there's no command to backfill these fields or upgrade stored data. `_loom_meta::embedding_dim` (M3.2) does back-fill from any existing vector on next open, but that's the only field with auto-migration today.
 
-**Why deferred:** `setdefault` handles read compatibility; no stores exist in the wild yet that need writing migration.
+**Why deferred:** `setdefault` handles read compatibility, and v1 wasn't published. After v1.0 ships and real-world stores accumulate, a `loom migrate` command may be worth the effort.
 
-**Fix (if/when needed):** A `loom migrate` command that reads, enriches, and rewrites entries.
+**Fix (if/when needed):** A `loom migrate` command that reads, enriches, and rewrites entries — or per-field opt-in repair commands.
 
 ---
 
 ## Testing
 
-### T1. CLI tests require the skill to be installed
+### T1. `tests/test_cli.py` skipped by default
 
-**Observed:** `tests/test_cli.py` shells out to `~/.openclaw/skills/loom/scripts/loom` — it won't run against the source tree directly.
+**Observed:** The CLI subprocess tests in `tests/test_cli.py` shell out to `scripts/loom`, which has Unix-style shebang behavior that fails on Windows ("%1 is not a valid Win32 application"). They also predate the M9 package refactor and target a path that's now a thin shim.
 
-**Why deferred:** Documented in CLAUDE.md. Requires manual install step.
+**Current state:** `pyproject.toml::tool.pytest.ini_options.addopts = "--ignore=tests/test_cli.py"`, so the default `pytest` invocation skips them. The 313 tests that do run cover behavior via service-layer + subprocess tests for the hook (`tests/test_hook.py`).
 
-**Fix:** Make the path configurable via env var (`LOOM_CLI_PATH`) defaulting to the repo's `scripts/loom`.
+**Fix:** Either rewrite the tests to invoke `python -m loom.cli` (works cross-platform once the package is on `sys.path`), or convert them into service-level tests with a small subset that still exercises argparse via `argparse.Namespace` directly. Drop the `--ignore` clause once they pass on Windows + Linux.
 
 ### T2. No test coverage for `cmd_coverage` or `cmd_link --spec`
 
@@ -120,18 +116,14 @@ Each issue lists: what breaks, why it was deferred, and what the fix looks like.
 
 **Resolution:** README.md and SKILL.md were rewritten to cover the full three-layer model (requirements → specifications → implementations) plus the new task/execution layer (`loom decompose` → `loom_exec`). Both files now include the validated small-model capability results.
 
-### D2. MCP server skeleton has no handler implementations
+### D2. MCP server skeleton has no handler implementations — **RESOLVED**
 
-**Observed:** `mcp_server/server.py` declares tools and dispatch but all handlers except `loom_query` and `loom_list` raise `NotImplementedError`. `_embed()` is also a stub.
-
-**Why deferred:** Needs one remaining upstream refactor — split `cmd_*` functions so the MCP handlers can share logic with the CLI without reimplementing it. (The embedding extraction — the other prerequisite — is done.) Filling in handlers before the `cmd_*` split would create duplication.
-
-**Fix:** Milestone 4.2 proper. See `mcp_server/README.md` for the sequence.
+**Resolution:** Milestone 4.2 closed. `mcp_server/server.py` ships Phase A (read) and Phase B (write) tools, all delegating to `loom.services.*`. Only the M2/M5 verbs added in v1 (`archive`, `stale`, `metrics`, `health-score`) remain CLI-only — wiring them up is one handler each, tracked as a v1.x follow-up.
 
 ### D3. `prompts/extract.md` and `prompts/link.md` not updated
 
-**Observed:** Extraction and linking prompt templates may reference the old model.
+**Observed:** Extraction and linking prompt templates may reference the old model — single-pass req→impl rather than the three-layer flow.
 
-**Why deferred:** Not reviewed in this session.
+**Why deferred:** Not reviewed in v1. The decompose prompt (`src/loom/prompts/decompose.md`) was rewritten in M8/M9 to teach detailed task titles; the others have not been audited.
 
-**Fix:** Audit both prompt files and update to encourage spec creation after extract, and --spec linking instead of --req.
+**Fix:** Audit both prompt files and update to encourage spec creation after extract, and `--spec` linking instead of `--req`.
