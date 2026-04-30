@@ -1,0 +1,63 @@
+{
+  "phase": "V_pyschema_extended_autodecompose",
+  "cell": "D3d",
+  "run_id": "2",
+  "tasks_complete": 3,
+  "tasks_test_fail": 0,
+  "auto_task_titles": [
+    "Implement RegexField in strings.py",
+    "Re-export RegexField in fields/__init__.py",
+    "Re-export RegexField in __init__.py"
+  ],
+  "auto_task_files": [
+    [
+      "pyschema/fields/strings.py"
+    ],
+    [
+      "pyschema/fields/__init__.py"
+    ],
+    [
+      "pyschema/__init__.py"
+    ]
+  ],
+  "auto_task_deps": [
+    null,
+    [
+      "TASK-984b283919f5"
+    ],
+    [
+      "TASK-59ea8fa6f813"
+    ]
+  ],
+  "decompose_elapsed_s": 31.4,
+  "acceptance_passed": 5,
+  "acceptance_total": 5,
+  "acceptance_rate": 1.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": true,
+    "inherits_strfield": true,
+    "uses_dataclass": true,
+    "validate_calls_super": true
+  },
+  "idiom_score": 4,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": true,
+    "top_barrel_import": true,
+    "top_barrel_all": true,
+    "top_level_import_works": true
+  },
+  "wiring_score": 4,
+  "wiring_total": 4,
+  "import_works": true,
+  "exec_rc": 0,
+  "exec_duration_s": 47.7,
+  "wall_s": 48.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_0a3u7wp5",
+  "exec_stdout_tail": "[exec] task TASK-984b283919f5  status=pending  title='Implement RegexField in strings.py'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_0a3u7wp5  runner: pytest_replace (replace)\n[exec] prompt: 3721 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 10.6s  in=1007  out=568\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-984b283919f5\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phV_autodecomp_0a3u7wp5\\\\pyschema\\\\fields\\\\strings.py\"}\n[exec] task TASK-59ea8fa6f813  status=pending  title='Re-export RegexField in fields/__init__.py'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_0a3u7wp5  runner: pytest_replace (replace)\n[exec] prompt: 2491 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.2s  in=687  out=149\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-59ea8fa6f813\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phV_autodecomp_0a3u7wp5\\\\pyschema\\\\fields\\\\__init__.py\"}\n[exec] task TASK-3ba57da11cf1  status=pending  title='Re-export RegexField in __init__.py'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_0a3u7wp5  runner: pytest_replace (replace)\n[exec] prompt: 3130 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.4s  in=885  out=353\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-3ba57da11cf1\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phV_autodecomp_0a3u7wp5\\\\pyschema\\\\__init__.py\"}\n[exec] no ready tasks",
+  "grade_acceptance_tail": ".....                                                                    [100%]\n5 passed in 0.03s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.05s\n"
+}
