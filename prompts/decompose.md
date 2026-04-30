@@ -102,6 +102,43 @@ Aim for 3–6 tasks per typical spec. More than 8 suggests the spec is too
 broad — consider `SPEC_TOO_BIG`. Fewer than 2 suggests the spec is already
 atomic — output a single task or `NEED_CONTEXT` if you can't tell.
 
+## Title precision (important)
+
+The `title` is the executor's primary instruction. The executor model
+is small (qwen3.5:latest at 9.7B); a vague title like "Implement
+RegexField" forces it to guess class structure, base class,
+decorator, default values, and placement — and small models guess
+wrong. A precise title gives the executor everything it needs to
+produce idiomatic correct code in one shot.
+
+**Bad title (vague — forces guessing):**
+```
+title: Implement services.greet
+```
+
+**Good title (precise — recipe-style; ~150–250 chars):**
+```
+title: |
+  Add `services.greet(name=None) -> str` to src/services.py.
+  Returns "Hello, world" when name is None and "Hello, {name}"
+  otherwise. Place after the existing `services.farewell`
+  function; match its docstring and type-hint style.
+```
+
+A good title typically includes:
+- File path the change lands in (already in `files_to_modify`, but
+  repeating it inside the title scopes the executor's attention).
+- The exact symbol(s) being added or modified, with full signature.
+- Inheritance / decorator / dataclass-pattern commitments.
+- Where in the file the new code goes (before/after a sibling,
+  alphabetical placement, end-of-file).
+- Any convention the executor should match (docstring style, error
+  type, naming pattern, default-value choice).
+
+YAML pipe-style (`title: |`) is fine when the title needs multiple
+lines. Single-line titles work for trivial tasks (≤10 LoC) but
+should still name the file and signature.
+
 ## Example
 
 Given this spec:
@@ -113,7 +150,11 @@ You would output:
 
 ```yaml
 tasks:
-  - title: Implement services.greet
+  - title: |
+      Add `services.greet(name=None) -> str` to src/services.py.
+      Returns "Hello, world" when name is None and "Hello, {name}"
+      otherwise. Place after the existing `services.farewell`
+      function; match its docstring style.
     files_to_modify:
       - src/services.py
     test_to_write: tests/test_services.py::TestGreet
