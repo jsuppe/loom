@@ -40,8 +40,8 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception: pass
 
 sys.path.insert(0, str(LOOM_DIR / "src"))
-from store import LoomStore  # noqa
-import services  # noqa
+from loom.store import LoomStore  # noqa
+from loom import services  # noqa
 
 
 PROJECT = "phC_dart_inventory_oneshot_auto"

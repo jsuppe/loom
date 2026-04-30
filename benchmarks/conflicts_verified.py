@@ -36,8 +36,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
-import services  # noqa: E402
-from store import LoomStore, Requirement  # noqa: E402
+from loom import services  # noqa: E402
+from loom.store import LoomStore, Requirement  # noqa: E402
 
 from retrieval_dataset import REQUIREMENTS  # noqa: E402
 from conflict_dataset import CANDIDATES  # noqa: E402
@@ -74,7 +74,7 @@ def require_ollama() -> None:
 
 def seed(store: LoomStore) -> dict[str, str]:
     """Seed corpus and return {req_id: value} for quick lookup during verification."""
-    from embedding import get_embedding
+    from loom.embedding import get_embedding
     text_by_id: dict[str, str] = {}
     for (rid, domain, value) in REQUIREMENTS:
         req = Requirement(

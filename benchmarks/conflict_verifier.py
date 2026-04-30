@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from conflict_verify import (  # noqa: E402,F401
+from loom.conflict_verify import (  # noqa: E402,F401
     DEFAULT_MODEL,
     OLLAMA_URL,
     SYSTEM_PROMPT,

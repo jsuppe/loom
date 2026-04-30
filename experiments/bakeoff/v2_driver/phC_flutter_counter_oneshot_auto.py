@@ -37,8 +37,8 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception: pass
 
 sys.path.insert(0, str(LOOM_DIR / "src"))
-from store import LoomStore  # noqa
-import services  # noqa
+from loom.store import LoomStore  # noqa
+from loom import services  # noqa
 
 
 PROJECT = "phC_flutter_counter_oneshot_auto"
@@ -68,7 +68,7 @@ dev_dependencies:
 # basic surface area before the chain advances.
 GATING_TESTS = {
     "lib/counter_model.dart": '''
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:counter_app/counter_model.dart';
 
 void main() {

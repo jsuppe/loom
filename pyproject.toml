@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loom-cli"
+version = "1.0.0"
+description = "Semantic requirements traceability for AI-assisted development."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Jonathan Suppe", email = "jon.suppe@gmail.com" },
+]
+keywords = [
+    "ai-coding",
+    "requirements",
+    "traceability",
+    "agents",
+    "claude-code",
+    "mcp",
+    "rag",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-xdist>=3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jsuppe/loom"
+Repository = "https://github.com/jsuppe/loom"
+Issues = "https://github.com/jsuppe/loom/issues"
+
+[project.scripts]
+loom = "loom.cli:main"
+loom_exec = "loom.exec_cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["loom*"]
+
+[tool.setuptools.package-data]
+# Ship the prompt templates and the per-runtime starter templates
+# (manifest.yaml + templated source files) inside the wheel so the
+# installed package finds them via Path(__file__).parent / "prompts"
+# and shipped_templates_dir().
+loom = [
+    "prompts/*.md",
+    "templates/**/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--ignore=tests/test_cli.py"

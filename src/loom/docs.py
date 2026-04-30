@@ -6,8 +6,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple, Set
 
-from store import LoomStore, Requirement
-from testspec import TestSpec, TestSpecStore
+from .store import LoomStore, Requirement
+from .testspec import TestSpec, TestSpecStore
 
 
 def _format_spec_block(store: LoomStore, req_id: str, superseded_req_ids: Set[str]) -> List[str]:

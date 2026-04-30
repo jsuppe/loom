@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from store import LoomStore, Requirement, Implementation, generate_impl_id, Task, generate_task_id
+from loom.store import LoomStore, Requirement, Implementation, generate_impl_id, Task, generate_task_id
 
 
 @pytest.fixture
@@ -271,7 +271,7 @@ class TestDocGeneration:
         """Generated REQUIREMENTS.md includes linked implementation files."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_requirements_doc
+        from loom.docs import generate_requirements_doc
 
         req = Requirement(
             id="REQ-001",
@@ -305,7 +305,7 @@ class TestDocGeneration:
         """Requirements with no linked code show 'None yet'."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_requirements_doc
+        from loom.docs import generate_requirements_doc
 
         req = Requirement(
             id="REQ-002",
@@ -327,7 +327,7 @@ class TestDocGeneration:
         """Generated REQUIREMENTS.md includes a traceability matrix table."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_requirements_doc
+        from loom.docs import generate_requirements_doc
 
         req = Requirement(
             id="REQ-001",
@@ -362,8 +362,8 @@ class TestDocGeneration:
         """Generated TEST_SPEC.md shows linked code under test specs."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_test_spec_doc
-        from testspec import TestSpec
+        from loom.docs import generate_test_spec_doc
+        from loom.testspec import TestSpec
 
         req = Requirement(
             id="REQ-001",
@@ -406,7 +406,7 @@ class TestDocGeneration:
         """TEST_SPEC.md shows 'Uncovered code' for impls without test specs."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_test_spec_doc
+        from loom.docs import generate_test_spec_doc
 
         req = Requirement(
             id="REQ-001",
@@ -440,8 +440,8 @@ class TestDocGeneration:
         """REQUIREMENTS.md shows specs under each requirement, with impls nested under specs."""
         import tempfile
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-        from docs import generate_requirements_doc
-        from store import Specification
+        from loom.docs import generate_requirements_doc
+        from loom.store import Specification
 
         req = Requirement(
             id="REQ-001",
@@ -487,7 +487,7 @@ class TestDocGeneration:
 
 class TestSpecificationTestFile:
     def test_defaults_to_empty_string(self):
-        from store import Specification
+        from loom.store import Specification
         spec = Specification(
             id="SPEC-x", parent_req="REQ-x",
             description="d", timestamp="2026-01-01T00:00:00Z",
@@ -495,7 +495,7 @@ class TestSpecificationTestFile:
         assert spec.test_file == ""
 
     def test_roundtrip_through_dict(self):
-        from store import Specification
+        from loom.store import Specification
         spec = Specification(
             id="SPEC-y", parent_req="REQ-y",
             description="d", timestamp="2026-01-01T00:00:00Z",
@@ -506,7 +506,7 @@ class TestSpecificationTestFile:
 
     def test_backward_compat_missing_field(self):
         """Old stores with no test_file key still load."""
-        from store import Specification
+        from loom.store import Specification
         d = {
             "id": "SPEC-old", "parent_req": "REQ-old",
             "description": "d", "timestamp": "2026-01-01T00:00:00Z",
@@ -662,7 +662,7 @@ class TestEmbeddingDimensionPin:
         assert temp_store._get_meta("embedding_dim") == "768"
 
     def test_mismatched_dim_raises(self, temp_store, sample_embedding):
-        from store import EmbeddingDimensionMismatch
+        from loom.store import EmbeddingDimensionMismatch
         req = Requirement(
             id="REQ-1", domain="behavior", value="x",
             source_msg_id="m", source_session="s",
@@ -682,7 +682,7 @@ class TestEmbeddingDimensionPin:
     def test_legacy_store_backfills_dim_on_open(self, sample_embedding):
         """A store created before _loom_meta existed must learn its dim
         from existing data on the next open."""
-        from store import LoomStore
+        from loom.store import LoomStore
         temp_dir = Path(tempfile.mkdtemp())
         try:
             store = LoomStore(project="legacy", data_dir=temp_dir)
@@ -706,7 +706,7 @@ class TestEmbeddingDimensionPin:
     def test_each_collection_routes_through_check(self, temp_store, sample_embedding):
         """All six collections share the same dim check — flipping any
         of them with a wrong-sized vector must raise."""
-        from store import EmbeddingDimensionMismatch, Specification, Pattern, Implementation
+        from loom.store import EmbeddingDimensionMismatch, Specification, Pattern, Implementation
         req = Requirement(
             id="REQ-1", domain="behavior", value="x",
             source_msg_id="m", source_session="s",

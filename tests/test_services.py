@@ -15,9 +15,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import embedding  # noqa: E402
-import services  # noqa: E402
-from store import LoomStore, Requirement, Implementation  # noqa: E402
+from loom import embedding  # noqa: E402
+from loom import services  # noqa: E402
+from loom.store import LoomStore, Requirement, Implementation  # noqa: E402
 
 
 @pytest.fixture
@@ -444,7 +444,7 @@ class TestInit:
             (user_path / "needs-var" / "files" / "x.txt").write_text(
                 "{{ mandatory }}", encoding="utf-8",
             )
-            import templates as _tpl
+            from loom import templates as _tpl
             monkeypatch.setattr(_tpl, "user_templates_dir", lambda: user_path)
             with pytest.raises(ValueError):
                 services.init(
@@ -504,7 +504,7 @@ class TestDoctor:
 
     def test_ollama_models_not_truncated(self, store, monkeypatch):
         """FINDINGS-wild F3: the old [:5] slice hid models on multi-model setups."""
-        import services as _services
+        from loom import services as _services
         import json as _json
 
         class _Resp:
@@ -592,7 +592,7 @@ class TestCheck:
         assert data["requirements"] == []
 
     def test_drift_detected_when_req_superseded(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
         f = tmp_path / "x.py"
         f.write_text("# impl\n")
@@ -876,7 +876,7 @@ class TestValidateWithSpecTestFile:
     """Validator should force-override LLM test_to_write when spec has test_file."""
 
     def test_override_when_llm_invents_different_path(self):
-        from services import _validate_task_proposals
+        from loom.services import _validate_task_proposals
         proposals = [{
             "title": "Add route",
             "files_to_modify": ["src/main.py"],
@@ -891,7 +891,7 @@ class TestValidateWithSpecTestFile:
         assert any("replaced" in w for w in warnings)
 
     def test_passthrough_when_already_correct(self):
-        from services import _validate_task_proposals
+        from loom.services import _validate_task_proposals
         proposals = [{
             "title": "Add route",
             "files_to_modify": ["src/main.py"],
@@ -1082,7 +1082,7 @@ class TestContext:
         assert data["summary"] == ""
 
     def test_linked_file_lists_requirements(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-a", "behavior", "must do A", fake_embedding)
         _mk_req(store, "REQ-b", "data", "data rule B", fake_embedding)
         f = tmp_path / "a.py"
@@ -1108,7 +1108,7 @@ class TestContext:
         assert "DRIFT" not in data["summary"]
 
     def test_drift_flagged_and_in_summary(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-stale", "behavior", "stale rule", fake_embedding)
         f = tmp_path / "x.py"
         f.write_text("pass\n")
@@ -1134,7 +1134,7 @@ class TestContext:
         so the PreToolUse hook can render it. Without this, agents see only
         the *what* of a requirement, never the *why* — defeating the
         cross-session memory claim."""
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         services.extract(
             store, domain="behavior", value="swallow OSError in fetch_with_retry",
             rationale="The retry wrapper in app/backoff_loop.py re-issues on BackoffError; "
@@ -1164,7 +1164,7 @@ class TestContext:
 
     def test_aggregates_across_multiple_impls(self, store, fake_embedding, tmp_path):
         """`check()` wants an exact (file, lines) match; `context()` must not."""
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-a", "behavior", "A", fake_embedding)
         _mk_req(store, "REQ-b", "behavior", "B", fake_embedding)
         f = tmp_path / "wide.py"
@@ -1312,7 +1312,7 @@ class TestGaps:
 
     def _mk_impl(self, store, impl_id_file, impl_id_lines, satisfies_req_ids, fake_embedding=None):
         """Create an implementation with satisfies list."""
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         impl = Implementation(
             id=generate_impl_id(impl_id_file, impl_id_lines),
             file=impl_id_file,
@@ -1434,7 +1434,7 @@ class TestGaps:
 
 
 def _mk_spec(store, spec_id, parent_req, fake_embedding):
-    from store import Specification
+    from loom.store import Specification
     spec = Specification(
         id=spec_id, parent_req=parent_req,
         description=f"spec for {parent_req}",
@@ -1870,7 +1870,7 @@ class TestLastReferencedTouch:
         assert after is not None
 
     def test_check_stamps_for_linked_reqs(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-1", "behavior", "rule", fake_embedding)
         f = tmp_path / "f.py"
         f.write_text("pass\n")
@@ -1987,7 +1987,7 @@ class TestStale:
         assert [r["id"] for r in rows] == ["REQ-OLD"]
 
     def test_unlinked_only_filter(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-LINKED", "behavior", "x", fake_embedding)
         _mk_req(store, "REQ-ORPHAN", "behavior", "y", fake_embedding)
 
@@ -2065,7 +2065,7 @@ class TestEventRecording:
         assert {e["req_id"] for e in linked} == {"REQ-1", "REQ-2"}
 
     def test_check_logs_drift_detected_when_drifted(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
         f = tmp_path / "f.py"
         f.write_text("pass\n")
@@ -2086,7 +2086,7 @@ class TestEventRecording:
         assert "check_clean" not in types
 
     def test_check_logs_check_clean_when_no_drift(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
         f = tmp_path / "f.py"
         f.write_text("pass\n")
@@ -2131,7 +2131,7 @@ class TestMetrics:
         assert r["archived"] == 1
 
     def test_coverage_with_impls(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-A", "behavior", "linked", fake_embedding)
         _mk_req(store, "REQ-B", "behavior", "orphan", fake_embedding)
 
@@ -2151,7 +2151,7 @@ class TestMetrics:
         assert m["coverage"]["with_impls_pct"] == 50.0
 
     def test_drift_ratio_from_check_events(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
 
         f = tmp_path / "f.py"
@@ -2218,9 +2218,9 @@ class TestHealthScore:
         assert h["active_requirements"] == 0
 
     def test_perfect_score_with_full_coverage(self, store, fake_embedding, tmp_path):
-        from store import generate_impl_id
+        from loom.store import generate_impl_id
         from datetime import datetime, timezone
-        from testspec import TestSpecStore, TestSpec
+        from loom.testspec import TestSpecStore, TestSpec
 
         _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
         # Touch to mark as fresh.

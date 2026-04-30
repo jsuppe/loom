@@ -28,7 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from store import LoomStore
+from .store import LoomStore
 
 EVENTS_FILENAME = ".loom-events.jsonl"
 
@@ -124,7 +124,7 @@ def query(
     results should monkeypatch `embedding.urllib.request.urlopen` to force
     the hash-fallback path.
     """
-    from embedding import get_embedding
+    from .embedding import get_embedding
     vec = get_embedding(text)
     # Over-fetch when we plan to filter so a small `limit` doesn't return
     # fewer results than expected when all top-k hits are archived.
@@ -168,7 +168,7 @@ def list_requirements(
     `include_archived=True` to surface them. Superseded requirements
     follow the same opt-in pattern via `include_superseded`.
     """
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
 
     reqs = store.list_requirements(include_superseded=include_superseded)
@@ -212,7 +212,7 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
                                              superseded} | {id, orphan: True}]}
     """
     from pathlib import Path
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
     import json as _json
 
     if target.lower().startswith("req-"):
@@ -308,7 +308,7 @@ def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
          direct_implementations: [{file, lines}],  # impls with no spec link
          test_spec: {description, verified} | None}
     """
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
 
     req = store.get_requirement(req_id)
     if req is None:
@@ -376,7 +376,7 @@ def coverage(store: LoomStore) -> dict[str, Any]:
     depend on cwd and the filesystem, which the CLI handles in its
     own _scan_project_for_specs helper. MCP can layer that on later.
     """
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
 
     reqs = store.list_requirements(include_superseded=False)
     spec_store = TestSpecStore(store.data_dir)
@@ -488,9 +488,9 @@ def conflicts(
                  similarity? (float), overlap? (list[str])}.
     """
     from datetime import datetime, timezone
-    from docs import check_conflicts
-    from store import Requirement
-    from embedding import get_embedding
+    from .docs import check_conflicts
+    from .store import Requirement
+    from .embedding import get_embedding
 
     if "|" in text:
         domain, value = text.split("|", 1)
@@ -530,7 +530,7 @@ def conflicts(
     # Pool: unfiltered top-N semantic + same-domain keyword-overlap hits.
     # We want recall here; precision comes from the LLM verifier.
     if verify_fn is None:
-        from conflict_verify import verify as verify_fn  # type: ignore
+        from .conflict_verify import verify as verify_fn  # type: ignore
 
     new_embedding = get_embedding(value)
     similar = store.search_requirements(new_embedding, n=pool_top_n)
@@ -588,7 +588,7 @@ def doctor(store: LoomStore) -> dict[str, Any]:
     """
     import urllib.request
     import json as _json
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
 
     checks: dict[str, Any] = {}
     issues: list[str] = []
@@ -865,7 +865,7 @@ def init(
     import urllib.request
     import urllib.error
     import json as _json
-    import config as _config
+    from . import config as _config
 
     td = Path(target_dir).expanduser().resolve()
     if not td.is_dir():
@@ -883,7 +883,7 @@ def init(
     template_result: dict[str, Any] | None = None
     template_config_overrides: dict[str, Any] = {}
     if template:
-        import templates as _templates
+        from . import templates as _templates
         tmpl = _templates.load_template(template)
         provided = dict(variables or {})
         missing = _templates.required_variables(tmpl, provided)
@@ -1013,8 +1013,8 @@ def extract(
     """
     from datetime import datetime, timezone
     import hashlib as _hashlib
-    from store import Requirement
-    from embedding import get_embedding
+    from .store import Requirement
+    from .embedding import get_embedding
 
     domain = domain.strip().lower()
     value = value.strip()
@@ -1034,7 +1034,7 @@ def extract(
     # Conflict check is best-effort. Done before adding so the conflict
     # list reflects pre-existing reqs, not this one.
     try:
-        from docs import check_conflicts
+        from .docs import check_conflicts
         raw_conflicts = check_conflicts(store, req, get_embedding_fn=get_embedding)
     except Exception:
         raw_conflicts = []
@@ -1107,7 +1107,7 @@ def check(
     Raises:
         LookupError: file not found.
     """
-    from store import generate_impl_id
+    from .store import generate_impl_id
 
     # Resolve early so a missing file fails fast (without a stray read).
     if not __import__("pathlib").Path(file_path).exists():
@@ -1476,7 +1476,7 @@ def metrics(
         }
     """
     from datetime import datetime, timezone
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
 
     events = _read_events(store, since_days=since_days)
 
@@ -1601,7 +1601,7 @@ def health_score(store: LoomStore) -> dict[str, Any]:
             "active_requirements": 0,
         }
 
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
 
     with_impls = sum(
@@ -1657,7 +1657,7 @@ def detect_requirements(
     Excludes superseded requirements. Returns up to `n` matches as
     [{req_id, value, distance}]. Raises LookupError if file missing.
     """
-    from embedding import get_embedding
+    from .embedding import get_embedding
     content = _read_file_content(file_path, lines)
     vec = get_embedding(content)
     results = store.search_requirements(vec, n=n)
@@ -1704,8 +1704,8 @@ def link(
         LookupError: file not found.
     """
     from datetime import datetime, timezone
-    from store import Implementation, generate_impl_id, generate_content_hash
-    from embedding import get_embedding
+    from .store import Implementation, generate_impl_id, generate_content_hash
+    from .embedding import get_embedding
 
     content = _read_file_content(file_path, lines)
     impl_id = generate_impl_id(file_path, lines or "all")
@@ -1824,8 +1824,8 @@ def sync(
     that were filtered out, even when `public=False` (informational).
     """
     from pathlib import Path
-    from docs import generate_requirements_doc, generate_test_spec_doc
-    from testspec import TestSpecStore
+    from .docs import generate_requirements_doc, generate_test_spec_doc
+    from .testspec import TestSpecStore
 
     out = Path(output_dir)
     spec_store = TestSpecStore(store.data_dir)
@@ -1857,8 +1857,8 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
         LookupError: req_id not found.
         ValueError: requirement is already superseded.
     """
-    from docs import analyze_test_impact
-    from testspec import TestSpecStore
+    from .docs import analyze_test_impact
+    from .testspec import TestSpecStore
 
     req = store.get_requirement(req_id)
     if req is None:
@@ -2108,8 +2108,8 @@ def spec_add(
         ValueError: description is empty, or test_file is malformed.
     """
     from datetime import datetime, timezone
-    from store import Specification
-    from embedding import get_embedding
+    from .store import Specification
+    from .embedding import get_embedding
 
     description = (description or "").strip()
     if not description:
@@ -2156,7 +2156,7 @@ def spec_add(
     skeleton_written: bool | None = None
     if test_file and target_dir is not None:
         # Read the target's test_runner so the skeleton matches.
-        import config as _config
+        from . import config as _config
         cfg = _config.load_config(target_dir)
         skeleton_written = _write_test_skeleton(
             Path(target_dir), test_file, spec_id,
@@ -2196,7 +2196,7 @@ def _write_test_skeleton(
     if dest.exists():
         return False
 
-    import runners as _runners
+    from . import runners as _runners
     runner = _runners.get_runner(runner_name)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(runner.skeleton(name_part or "Grading"), encoding="utf-8")
@@ -2255,8 +2255,8 @@ def spec_link(
     """
     from pathlib import Path
     from datetime import datetime, timezone
-    from store import Implementation, generate_impl_id, generate_content_hash
-    from embedding import get_embedding
+    from .store import Implementation, generate_impl_id, generate_content_hash
+    from .embedding import get_embedding
 
     spec = store.get_specification(spec_id)
     if spec is None:
@@ -2336,8 +2336,8 @@ def pattern_add(
         ValueError: name or description empty.
     """
     from datetime import datetime, timezone
-    from store import Pattern
-    from embedding import get_embedding
+    from .store import Pattern
+    from .embedding import get_embedding
 
     name = (name or "").strip()
     description = (description or "").strip()
@@ -2446,7 +2446,7 @@ def test_add(
         ValueError: no description provided and no existing spec to
                     inherit from.
     """
-    from testspec import TestSpec, TestSpecStore
+    from .testspec import TestSpec, TestSpecStore
 
     if store.get_requirement(req_id) is None:
         raise LookupError(f"Requirement {req_id} not found")
@@ -2485,7 +2485,7 @@ def test_verify(store: LoomStore, req_id: str) -> dict[str, Any]:
     Raises:
         LookupError: no test spec for this req.
     """
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
 
     spec_store = TestSpecStore(store.data_dir)
     if not spec_store.mark_verified(req_id):
@@ -2498,7 +2498,7 @@ def test_list(
     store: LoomStore, include_private: bool = True
 ) -> list[dict[str, Any]]:
     """List test specs as dicts."""
-    from testspec import TestSpecStore
+    from .testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
     return [s.to_dict() for s in spec_store.list_specs(include_private=include_private)]
 
@@ -2513,7 +2513,7 @@ def test_generate(store: LoomStore, force: bool = False) -> dict[str, Any]:
     Returns:
         {generated: [req_id], skipped: [req_id], no_criteria: [req_id]}
     """
-    from testspec import TestSpec, TestSpecStore
+    from .testspec import TestSpec, TestSpecStore
 
     spec_store = TestSpecStore(store.data_dir)
     generated: list[str] = []
@@ -2999,8 +2999,8 @@ def task_add(
                     a task that doesn't exist.
     """
     from datetime import datetime, timezone
-    from store import Task, generate_task_id
-    from embedding import get_embedding
+    from .store import Task, generate_task_id
+    from .embedding import get_embedding
 
     title = (title or "").strip()
     if not title:
@@ -3239,7 +3239,7 @@ def task_build_prompt(
 
     # Default to pytest/Python if no runner provided (legacy callers).
     if runner is None:
-        import runners as _runners
+        from . import runners as _runners
         runner = _runners.get_runner("pytest")
 
     td = _Path(target_dir) if target_dir is not None else None
@@ -3480,8 +3480,9 @@ def _build_decompose_prompt(spec, parent_req, patterns: list) -> str:
     """Assemble the decomposer user message from the spec + related context."""
     from pathlib import Path as _Path
 
-    repo_root = _Path(__file__).resolve().parent.parent
-    template_path = repo_root / "prompts" / "decompose.md"
+    # prompts/ now lives inside the package (src/loom/prompts/) so it
+    # ships in the wheel; sibling of services.py in the source tree.
+    template_path = _Path(__file__).resolve().parent / "prompts" / "decompose.md"
     try:
         system = template_path.read_text(encoding="utf-8")
     except OSError:

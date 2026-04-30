@@ -25,9 +25,9 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-import embedding  # noqa: E402
-import services  # noqa: E402
-from store import LoomStore, Requirement, Implementation, generate_impl_id  # noqa: E402
+from loom import embedding  # noqa: E402
+from loom import services  # noqa: E402
+from loom.store import LoomStore, Requirement, Implementation, generate_impl_id  # noqa: E402
 
 
 FAKE_EMBEDDING = [0.1] * 768

@@ -1,0 +1,2263 @@
+"""
+Loom CLI — argparse entry point.
+
+This module replaces the old ``scripts/loom`` script. Users invoke it
+either as ``loom`` (after ``pip install`` registers the console
+script) or ``python -m loom.cli``. The legacy ``scripts/loom`` shim
+still works for repo clones.
+
+Exit codes:
+    0 — Success
+    1 — Error (bad input, missing resource, store failure)
+    2 — Warning condition detected (drift, conflicts found)
+
+Most read-only commands accept ``--json`` / ``-j`` for machine-
+readable output.
+"""
+
+import sys
+import os
+import json
+import argparse
+import hashlib
+from pathlib import Path
+from datetime import datetime, timezone
+
+# Force UTF-8 on stdout/stderr so emoji etc. don't crash on Windows cp1252
+# when the CLI is piped or redirected (FINDINGS-wild F5).
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+from loom.store import LoomStore, Requirement, Implementation, Specification, Pattern, generate_impl_id, generate_content_hash
+from loom.embedding import get_embedding  # noqa: F401 — re-exported for back-compat
+from loom import services
+
+
+def get_project_name():
+    """Detect project name.
+
+    Precedence: LOOM_PROJECT env > .loom-config.json in cwd > git repo name > "default".
+    """
+    if os.environ.get("LOOM_PROJECT"):
+        return os.environ["LOOM_PROJECT"]
+
+    # Config file in cwd (skip if it doesn't exist or doesn't pin a project).
+    try:
+        from loom import config as _config
+        cfg = _config.load_config(os.getcwd())
+        if cfg.get("project"):
+            return cfg["project"]
+    except Exception:
+        pass
+
+    # Git repo name
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).name
+    except:
+        pass
+
+    return "default"
+
+
+def cmd_extract(args):
+    """Extract requirements from current session context."""
+    store = LoomStore(args.project)
+
+    print(f"🧵 Loom Extract — Project: {args.project}")
+    print()
+    print("To extract requirements, provide them in this format:")
+    print()
+    print("  REQUIREMENT: <domain> | <requirement text>")
+    print()
+    print("Domains: terminology, behavior, ui, data, architecture")
+    print()
+    print("Example:")
+    print("  REQUIREMENT: behavior | Reset button requires 3-second hold with visual feedback")
+    print()
+
+    # For agent use: read from stdin or args
+    if args.text:
+        lines = [args.text]
+    elif not sys.stdin.isatty():
+        lines = sys.stdin.read().strip().split('\n')
+    else:
+        print("Provide requirements via --text or stdin")
+        return 1
+
+    extracted = 0
+    for line in lines:
+        if not line.strip().upper().startswith("REQUIREMENT:"):
+            continue
+        content = line.split(":", 1)[1].strip()
+        if "|" not in content:
+            continue
+        domain, value = content.split("|", 1)
+
+        result = services.extract(
+            store,
+            domain=domain,
+            value=value,
+            msg_id=args.msg_id or "manual",
+            session=args.session or "cli",
+            rationale=getattr(args, 'rationale', None),
+        )
+
+        if result["conflicts"]:
+            print(f"⚠️  CONFLICT DETECTED for: {result['value']}")
+            for c in result["conflicts"]:
+                print(f"   Conflicts with {c['existing_id']}: {c['existing_value']}")
+            print(f"   → Consider using `loom supersede {result['conflicts'][0]['existing_id']}` first")
+            print()
+
+        print(f"✓ {result['req_id']}: [{result['domain']}] {result['value']}")
+        extracted += 1
+
+    print()
+    print(f"Extracted {extracted} requirement(s)")
+    return 0
+
+
+def cmd_check(args):
+    """Check a file for drift against linked requirements."""
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+
+    try:
+        data = services.check(store, args.file, lines=args.lines)
+    except LookupError as e:
+        if use_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(str(e))
+        return 1
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 2 if data["drift_detected"] else 0
+
+    if not data["linked"]:
+        print(f"🧵 Loom Check — {args.file}")
+        print()
+        print("No requirements linked to this file/section.")
+        print("Run `loom link` to create links.")
+        return 0
+
+    print(f"🧵 Loom Check — {args.file}")
+    print()
+    for r in data["requirements"]:
+        if r["drifted"]:
+            print(f"⚠️  DRIFT: {r['req_id']} was superseded at {r['superseded_at']}")
+            print(f"   Old: {r['value']}")
+        else:
+            print(f"✓ {r['req_id']}: {r['value']}")
+    if data["drift_detected"]:
+        print()
+        print("Some linked requirements have changed. Review before modifying.")
+
+    return 2 if data["drift_detected"] else 0
+
+
+def cmd_context(args):
+    """Briefing for a file: linked reqs, specs, and drift. JSON by default.
+
+    This is the hook-friendly form of `check` + `trace`: it matches every
+    implementation that touches the file (not just exact line ranges) so
+    a PreToolUse hook can surface links the agent didn't know existed.
+    """
+    store = LoomStore(args.project)
+    use_pretty = getattr(args, 'pretty', False)
+
+    try:
+        data = services.context(store, args.file)
+    except LookupError as e:
+        if use_pretty:
+            print(str(e))
+        else:
+            print(json.dumps({"error": str(e)}))
+        return 1
+
+    if not use_pretty:
+        print(json.dumps(data, indent=2))
+        return 2 if data["drift_detected"] else 0
+
+    print(f"🧵 Loom Context — {args.file}")
+    print()
+    if not data["linked"]:
+        print("No requirements or specs linked to this file.")
+        return 0
+
+    if data["requirements"]:
+        print("Requirements:")
+        for r in data["requirements"]:
+            marker = "⚠️ superseded" if r["superseded"] else "✓"
+            print(f"  {marker} {r['id']} [{r['domain']}] ({r['lines']})")
+            print(f"     {r['value']}")
+    if data["specifications"]:
+        print()
+        print("Specifications:")
+        for s in data["specifications"]:
+            print(f"  {s['id']} [{s['status']}] → {s['parent_req']} ({s['lines']})")
+            print(f"     {s['description']}")
+    if data["drift_detected"]:
+        print()
+        print("⚠️  Drift detected — review before editing.")
+
+    return 2 if data["drift_detected"] else 0
+
+
+def cmd_cost(args):
+    """Summarize PreToolUse hook cost from the JSONL log.
+
+    Shows latency percentiles, bytes/tokens injected, and overhead %
+    (fires where the hook ran but had nothing to inject). Pairs with
+    effectiveness measurement done separately (dogfooding notes, A/B).
+    """
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+    tail = getattr(args, 'tail', None)
+
+    data = services.cost(store, tail=tail)
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Cost — {args.project}")
+    print(f"   log: {data['log_path']}")
+    if not data["exists"]:
+        print("   (no hook log yet — run some tool calls with the hook enabled)")
+        return 0
+    if data["fires"] == 0:
+        print("   (log is empty)")
+        return 0
+
+    fires = data["fires"]
+    print()
+    print(f"Fires:         {fires}")
+    print(f"  injected:    {data['injections']} ({100 - data['overhead_pct']:.1f}%)")
+    print(f"  empty:       {data['empty_fires']} ({data['overhead_pct']:.1f}% overhead)")
+    if data["drift_events"]:
+        print(f"  drift hits:  {data['drift_events']}")
+    print()
+    lat = data["latency_ms"]
+    print(f"Latency (ms):  p50={lat['p50']}  p95={lat['p95']}  p99={lat['p99']}  max={lat['max']}")
+    b = data["bytes"]; t = data["tokens_est"]
+    print(f"Injected:      {b['total']} bytes total, {b['avg']} avg  (~{t['total']} tokens total, ~{t['avg']} avg)")
+    if data["by_tool"]:
+        print()
+        print("By tool:")
+        for tool, count in sorted(data["by_tool"].items(), key=lambda kv: -kv[1]):
+            print(f"  {tool:<14} {count}")
+    if data["skipped"]:
+        print()
+        print("Skipped reasons:")
+        for reason, count in sorted(data["skipped"].items(), key=lambda kv: -kv[1]):
+            print(f"  {reason:<16} {count}")
+    return 0
+
+
+def cmd_metrics(args):
+    """Effectiveness metrics: coverage, drift, conflicts, activity, staleness (M5.2)."""
+    store = LoomStore(args.project)
+    data = services.metrics(store, since_days=getattr(args, "since", None))
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Metrics — {args.project}")
+    if data["since_days"]:
+        print(f"   (activity window: last {data['since_days']}d)")
+    print()
+    r = data["requirements"]
+    print(f"Requirements:  {r['total']} total — "
+          f"{r['active']} active, {r['archived']} archived, {r['superseded']} superseded")
+    c = data["coverage"]
+    print(f"Coverage:      {c['with_impls']}/{r['active']} have linked code "
+          f"({c['with_impls_pct']}%); "
+          f"{c['with_test_specs']}/{r['active']} have test specs ({c['with_test_specs_pct']}%)")
+    d = data["drift"]
+    if d["events"] or d["clean_checks"]:
+        print(f"Drift:         {d['events']} events on {d['files_affected']} file(s) "
+              f"({d['drift_ratio_pct']}% of {d['events'] + d['clean_checks']} checks)")
+    if data["conflicts"]["caught"]:
+        print(f"Conflicts:     {data['conflicts']['caught']} caught at extract time")
+    a = data["activity"]
+    print(f"Activity:      {a['extracted']} extracted, {a['linked']} linked")
+    s = data["staleness"]
+    print(f"Staleness:     never={s['never']}  >30d={s['over_30d']}  "
+          f">60d={s['over_60d']}  >90d={s['over_90d']}")
+    return 0
+
+
+def cmd_health_score(args):
+    """Single 0-100 health score combining coverage, freshness, drift (M5.3)."""
+    store = LoomStore(args.project)
+    data = services.health_score(store)
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Health — {args.project}")
+    print()
+    print(f"Score: {data['score']}/100  ({data['active_requirements']} active reqs)")
+    print()
+    cs = data["components"]
+    print(f"  impl_coverage:  {cs['impl_coverage']}%")
+    print(f"  test_coverage:  {cs['test_coverage']}%")
+    print(f"  freshness:      {cs['freshness']}%  (referenced ≤90d)")
+    print(f"  non_drift:      {cs['non_drift']}%  (clean checks ratio, 90d window)")
+    return 0
+
+
+def cmd_link(args):
+    """Link code to requirements and/or specifications."""
+    store = LoomStore(args.project)
+
+    print(f"🧵 Loom Link — {args.file}")
+    print()
+
+    spec_ids = list(getattr(args, 'spec', None) or [])
+    req_ids = list(getattr(args, 'req', None) or [])
+
+    # Auto-detect if nothing specified.
+    if not spec_ids and not req_ids:
+        try:
+            detected = services.detect_requirements(
+                store, args.file, lines=args.lines, n=3
+            )
+        except LookupError as e:
+            print(str(e))
+            return 1
+        if not detected:
+            print("No requirements or specs to link.")
+            return 1
+        print("Detected requirements (confirm with --req or --spec):")
+        for d in detected:
+            print(f"  {d['req_id']}: {d['value']}")
+        req_ids = [d["req_id"] for d in detected]
+
+    try:
+        result = services.link(
+            store, args.file,
+            lines=args.lines,
+            req_ids=req_ids,
+            spec_ids=spec_ids,
+        )
+    except LookupError as e:
+        print(str(e))
+        return 1
+
+    # Surface warnings (spec-not-found, req-not-found, has-active-spec lint).
+    for w in result["warnings"]:
+        if w.startswith("spec ") or w.startswith("requirement "):
+            print(f"Warning: {w}")
+        else:
+            # The "has N active spec(s); prefer --spec" lint.
+            print(f"⚠️  {w}")
+    if result["warnings"]:
+        print()
+
+    if not result["linked"]:
+        print("No requirements or specs to link.")
+        return 1
+
+    n_specs = len(result["satisfies_specs"])
+    n_reqs = len(result["satisfies"])
+    if n_specs:
+        print(f"✓ Linked {args.file} to {n_specs} spec(s) and {n_reqs} requirement(s)")
+    else:
+        print(f"✓ Linked {args.file} to {n_reqs} requirement(s)")
+    return 0
+
+
+def cmd_status(args):
+    """Show requirements status."""
+    store = LoomStore(args.project)
+    data = services.status(store)
+
+    if getattr(args, 'json', False):
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Status — Project: {data['project']}")
+    print()
+    print(f"Requirements: {data['requirements']}")
+    print(f"Implementations: {data['implementations']}")
+    print(f"Chat messages: {data['chat_messages']}")
+    print()
+
+    if data['superseded']:
+        print(f"Superseded requirements: {data['superseded']}")
+        for d in data['drift']:
+            print(f"  ⚠️ {d['file']} → {d['req_id']} (superseded)")
+        if data['drift']:
+            print()
+            print(f"⚠️  {data['drift_count']} implementation(s) need review")
+    else:
+        print("No drift detected ✓")
+
+    return 0
+
+
+def cmd_query(args):
+    """Search requirements semantically."""
+    store = LoomStore(args.project)
+    results = services.query(store, args.text, limit=args.limit or 5)
+
+    if getattr(args, 'json', False):
+        print(json.dumps(results, indent=2))
+        return 0
+
+    print(f"🧵 Loom Query: {args.text}")
+    print()
+
+    if not results:
+        print("No matching requirements found.")
+        return 0
+
+    for r in results:
+        marker = "⚠️ superseded" if r['superseded'] else "✓"
+        print(f"{r['id']} [{r['domain']}] {marker}")
+        print(f"  {r['value']}")
+        print(f"  Source: {r['source']} @ {r['timestamp']}")
+        print()
+
+    return 0
+
+
+def cmd_list(args):
+    """List all requirements."""
+    store = LoomStore(args.project)
+    reqs = services.list_requirements(
+        store,
+        include_superseded=args.all,
+        include_archived=getattr(args, "include_archived", False) or args.all,
+    )
+
+    if args.json:
+        print(json.dumps(reqs, indent=2))
+        return 0
+
+    # Human-readable output
+    print(f"🧵 Loom Requirements — Project: {args.project}")
+    print()
+
+    if not reqs:
+        print("No requirements found.")
+        return 0
+
+    for r in reqs:
+        status_parts = []
+        if r['superseded']:
+            status_parts.append("superseded")
+        if r['status'] != "pending":
+            status_parts.append(r['status'])
+        if not r['is_complete']:
+            status_parts.append("needs refinement")
+
+        status = f" ({', '.join(status_parts)})" if status_parts else ""
+        print(f"{r['id']} [{r['domain']}]{status}")
+        print(f"  {r['text']}")
+        if r['elaboration']:
+            print(f"  📝 {r['elaboration'][:60]}...")
+
+    print()
+    print(f"Total: {len(reqs)}")
+
+    incomplete = [r for r in reqs if not r['is_complete']]
+    if incomplete:
+        print(f"⚠️  {len(incomplete)} need refinement (run: loom incomplete)")
+
+    return 0
+
+
+def cmd_sync(args):
+    """Sync/regenerate REQUIREMENTS.md and TEST_SPEC.md."""
+    store = LoomStore(args.project)
+    output_dir = args.output or str(Path.cwd())
+
+    mode_label = " (PUBLIC)" if args.public else ""
+    print(f"🧵 Loom Sync — Project: {args.project}{mode_label}")
+    print()
+
+    result = services.sync(store, output_dir, public=args.public)
+
+    if args.public and result["private_excluded"]:
+        print(f"Excluding {result['private_excluded']} private requirement(s)")
+        print()
+
+    print(f"✓ Generated {result['requirements_path']}")
+    print(f"✓ Generated {result['test_spec_path']}")
+    return 0
+
+
+def cmd_conflicts(args):
+    """Check for conflicts with a potential new requirement."""
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+
+    if not args.text:
+        if use_json:
+            print(json.dumps({"error": "Provide requirement text with --text"}))
+        else:
+            print("Provide requirement text with --text")
+        return 1
+
+    try:
+        found = services.conflicts(
+            store, args.text,
+            verify=getattr(args, 'verify', False),
+            verify_model=getattr(args, 'verify_model', None),
+        )
+    except RuntimeError as e:
+        # LLM-verifier blew up (Ollama down, model missing, etc).
+        if use_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"Verify error: {e}")
+        return 1
+
+    # Re-derive the parsed value for the human-readable display below.
+    if "|" in args.text:
+        _, value = args.text.split("|", 1)
+        value = value.strip()
+    else:
+        value = args.text.strip()
+
+    if use_json:
+        print(json.dumps({
+            "conflicts_found": len(found) > 0,
+            "count": len(found),
+            "conflicts": found,
+        }, indent=2))
+    else:
+        print(f"🧵 Loom Conflict Check")
+        print()
+
+        if not found:
+            print("✓ No conflicts detected")
+            return 0
+
+        print(f"⚠️  Found {len(found)} potential conflict(s):")
+        print()
+
+        for c in found:
+            print(f"  {c['existing_id']} [{c['existing_domain']}]")
+            print(f"    Existing: {c['existing_value']}")
+            print(f"    New:      {value}")
+            print(f"    Reason:   {c['reason']}")
+            print()
+
+        print("Consider:")
+        print("  1. Supersede the existing requirement if this replaces it")
+        print("  2. Clarify the scope if both should coexist")
+        print("  3. Reject the new requirement if it's invalid")
+
+    return 2 if found else 0
+
+
+def cmd_supersede(args):
+    """Supersede an existing requirement."""
+    store = LoomStore(args.project)
+
+    print(f"🧵 Loom Supersede — {args.req_id}")
+    print()
+
+    try:
+        result = services.supersede(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    except ValueError as e:
+        print(str(e))
+        return 1
+
+    print(f"✓ Superseded: {result['value']}")
+
+    affected = result["affected_tests"]
+    if affected:
+        print()
+        print(f"⚠️  Tests affected ({len(affected)}):")
+        for test_id in affected:
+            print(f"  - {test_id}")
+        print()
+        print("Run `loom sync` to update TEST_SPEC.md")
+
+    return 0
+
+
+def cmd_archive(args):
+    """Archive a requirement (M2.3) — distinct from supersede."""
+    store = LoomStore(args.project)
+    try:
+        result = services.archive(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(f"✓ Archived {result['req_id']}")
+    print("  (excluded from list/query/conflicts; recover via "
+          "`loom set-status REQ-xxx pending`)")
+    return 0
+
+
+def cmd_stale(args):
+    """List requirements ranked by staleness (M2.2)."""
+    store = LoomStore(args.project)
+    rows = services.stale(
+        store,
+        older_than_days=args.older_than,
+        unlinked_only=args.unlinked,
+        include_archived=args.include_archived,
+    )
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(rows, indent=2))
+        return 0
+
+    if not rows:
+        print("No stale requirements.")
+        return 0
+
+    print(f"🧵 Stale requirements ({len(rows)}):")
+    print()
+    for r in rows:
+        last = r["last_referenced"] or "(never referenced)"
+        kind = "🔗 unlinked" if r["linked_files"] == 0 else f"📎 {r['linked_files']} linked"
+        print(f"  {r['id']}  [{r['domain']}]  {kind}")
+        print(f"    {r['value'][:70]}{'...' if len(r['value']) > 70 else ''}")
+        print(f"    last_referenced: {last}  ({r['days_since_referenced']}d ago)")
+    return 0
+
+
+def cmd_test_add(args):
+    """Add or update a test specification."""
+    store = LoomStore(args.project)
+
+    print(f"🧵 Loom Test Add — {args.req_id}")
+    print()
+
+    req = store.get_requirement(args.req_id)
+    if req:
+        print(f"Requirement: {req.value}")
+        print()
+
+    try:
+        result = services.test_add(
+            store, args.req_id,
+            description=args.description,
+            steps=args.steps.split(";") if args.steps else (),
+            expected=args.expected,
+            automated=args.automated,
+            test_file=args.test_file,
+            private=args.private,
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+
+    print(f"✓ Test spec saved for {args.req_id}")
+    if result["steps"]:
+        print(f"  Steps: {len(result['steps'])}")
+    if result["expected"]:
+        print(f"  Expected: {result['expected'][:50]}...")
+    if result["automated"]:
+        print(f"  Automated: Yes ({result['test_file']})")
+    return 0
+
+
+def cmd_test_verify(args):
+    """Mark a test as verified."""
+    store = LoomStore(args.project)
+    print(f"🧵 Loom Test Verify — {args.req_id}")
+    print()
+    try:
+        services.test_verify(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(f"✓ Marked {args.req_id} as verified")
+    return 0
+
+
+def cmd_test_list(args):
+    """List all test specifications."""
+    store = LoomStore(args.project)
+    specs = services.test_list(store, include_private=not args.public)
+
+    if args.json:
+        print(json.dumps(specs, indent=2))
+        return 0
+
+    print(f"🧵 Loom Test Specs — Project: {args.project}")
+    print()
+
+    if not specs:
+        print("No test specs defined yet.")
+        print("Use `loom test add REQ-xxx --description '...'` to add one.")
+        return 0
+
+    for s in specs:
+        status = "✅" if s.get("last_verified") else "⚠️"
+        auto = "🤖" if s.get("automated") else "👤"
+        private = "🔒" if s.get("private") else ""
+
+        print(f"{status} {auto} {s['req_id']} {private}")
+        print(f"   {s['description']}")
+        if s.get("last_verified"):
+            print(f"   Last verified: {s['last_verified'][:10]}")
+        print()
+    return 0
+
+
+def cmd_test_generate(args):
+    """Auto-generate test specifications from acceptance criteria."""
+    store = LoomStore(args.project)
+
+    print(f"🧵 Loom Test Generate — Project: {args.project}")
+    print()
+
+    result = services.test_generate(store, force=args.force)
+
+    if not args.quiet:
+        for rid in result["generated"]:
+            print(f"✓ {rid}")
+
+    print()
+    print(f"Generated: {len(result['generated'])}")
+    print(f"Skipped (existing): {len(result['skipped'])}")
+    print(f"No acceptance criteria: {len(result['no_criteria'])}")
+    return 0
+
+
+def cmd_init_private(args):
+    """Initialize PRIVATE.md template."""
+    from loom.testspec import create_private_template
+
+    store = LoomStore(args.project)
+    path = create_private_template(store.data_dir)
+
+    print(f"🧵 Loom Private — Created {path}")
+    print()
+    print("Edit this file to list requirement IDs that should remain private.")
+    print("Private requirements will be excluded from public documentation.")
+
+    return 0
+
+
+def cmd_init(args):
+    """Onboard an existing target repo: write .loom-config.json + health check."""
+    sys.path.insert(0, str(SKILL_DIR / "src"))
+    from loom import templates as _templates
+
+    # --list-templates short-circuits everything else.
+    if getattr(args, "list_templates", False):
+        tmpls = _templates.list_templates()
+        if not tmpls:
+            print("No templates found.")
+            print(f"  Shipped:       {_templates.shipped_templates_dir()}")
+            print(f"  User-authored: {_templates.user_templates_dir()}  (author your own here)")
+            return 0
+        print("Available templates:")
+        for t in tmpls:
+            desc = (t.description.strip().splitlines() or [""])[0]
+            print(f"  {t.name:20}  {desc}")
+        print()
+        print("Author your own by dropping a directory under "
+              f"{_templates.user_templates_dir()} with a manifest.yaml "
+              "and files/ tree. User-authored templates override shipped "
+              "ones with the same name.")
+        return 0
+
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
+    project = args.project  # top-level -p / coalesced from subparser / falls back
+
+    # Parse --var key=value pairs and collect missing variables
+    # interactively if stdin is a tty.
+    variables: dict[str, str] = {}
+    for kv in (getattr(args, "var", None) or []):
+        if "=" not in kv:
+            print(f"✗ --var expected key=value, got {kv!r}")
+            return 1
+        k, v = kv.split("=", 1)
+        variables[k.strip()] = v
+
+    template_name = getattr(args, "template", None)
+    if template_name:
+        try:
+            tmpl = _templates.load_template(template_name)
+        except LookupError as e:
+            print(f"✗ {e}")
+            print("   Run `loom init --list-templates` to see available templates.")
+            return 1
+        # Prompt for anything missing
+        missing = _templates.required_variables(tmpl, variables)
+        if missing and sys.stdin.isatty():
+            print(f"Template {template_name!r} needs these values:")
+            for v in missing:
+                prompt = v.prompt or v.name
+                default_hint = f" [{v.default}]" if v.default else ""
+                ans = input(f"  {prompt}{default_hint}: ").strip()
+                if ans:
+                    variables[v.name] = ans
+                elif v.default is not None:
+                    variables[v.name] = v.default
+            print()
+        elif missing:
+            names = ", ".join(v.name for v in missing)
+            print(f"✗ template {template_name!r} requires --var for: {names}")
+            return 1
+
+    try:
+        result = services.init(
+            target_dir=target_dir, project=project, force=args.force,
+            template=template_name, variables=variables,
+        )
+    except NotADirectoryError as e:
+        print(f"✗ {e}")
+        return 1
+    except FileExistsError as e:
+        print(f"✗ {e}")
+        print("   Pass --force to overwrite.")
+        return 1
+    except LookupError as e:
+        print(f"✗ {e}")
+        return 1
+    except (ValueError, FileNotFoundError) as e:
+        print(f"✗ {e}")
+        return 1
+
+    print(f"🧵 Loom Init — {project}")
+    print(f"   target_dir: {result['target_dir']}")
+    print(f"   config:     {result['config_path']}")
+
+    # Template output, if applied
+    if result.get("template_files"):
+        tf = result["template_files"]
+        print(f"   template:   {result['template']}")
+        for w in tf["written"]:
+            print(f"     + {w}")
+        for s in tf["skipped"]:
+            print(f"     · {s}  (kept — not overwritten)")
+    print()
+
+    # Health checks
+    ch = result["checks"]
+    def _mark(ok): return "✓" if ok else "⚠"
+
+    print(f"   {_mark(ch['ollama']['ok'])} Ollama reachable"
+          + ("" if ch["ollama"]["ok"] else f"  ({ch['ollama']['error']})"))
+    print(f"   {_mark(ch['embedding_model']['ok'])} Embedding model:  "
+          f"{ch['embedding_model']['name']}")
+    print(f"   {_mark(ch['executor_model']['ok'])} Executor model:   "
+          f"{ch['executor_model']['name']}")
+    runner_check = ch.get("test_runner_deps") or {
+        "ok": ch.get("pytest", {}).get("ok", False),
+        "runner": "pytest",
+        "where": ch.get("pytest", {}).get("where"),
+    }
+    label = f"{runner_check.get('runner', 'runner')} available"
+    where = f"  ({runner_check['where']})" if runner_check.get("where") else ""
+    print(f"   {_mark(runner_check['ok'])} {label}{where}")
+    tests_msg = "already existed" if not result["created_tests_dir"] else "created"
+    print(f"   ✓ tests dir:      {ch['tests_dir']['path']}/  ({tests_msg})")
+
+    if result["warnings"]:
+        print()
+        for w in result["warnings"]:
+            print(f"   ⚠ {w}")
+
+    print()
+    print("Next steps:")
+    for step in result["next_steps"]:
+        print(f"   → {step}")
+
+    return 0
+
+
+def cmd_doctor(args):
+    """Run health checks on the Loom installation and project."""
+    use_json = getattr(args, 'json', False)
+    store = LoomStore(args.project)
+    data = services.doctor(store)
+    checks = data["checks"]
+    issues = data["issues"]
+    warnings = data["warnings"]
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 1 if issues else 0
+
+    print(f"🧵 Loom Doctor — Project: {args.project}")
+    print()
+
+    # 1. Ollama
+    print("Checking Ollama...")
+    if checks["ollama"]["ok"]:
+        print("  ✅ Ollama running with nomic-embed-text")
+    elif "Ollama not reachable" in " ".join(issues):
+        for issue in issues:
+            if issue.startswith("Ollama"):
+                print(f"  ❌ {issue}")
+    else:
+        models = checks["ollama"].get("models", [])
+        print(f"  ⚠️  nomic-embed-text not found. Available: {', '.join(models)}")
+
+    # 2. Store
+    print("Checking store...")
+    if checks["store"]["ok"]:
+        s = checks["store"]
+        print(f"  ✅ Store accessible ({s['requirements']} reqs, {s['implementations']} impls)")
+    else:
+        print(f"  ❌ Store error: {checks['store']['error']}")
+        return 1
+
+    # 3. Orphans
+    print("Checking for orphans...")
+    n = checks["orphans"]["count"]
+    print("  ✅ No orphan implementations" if n == 0 else f"  ⚠️  {n} orphan link(s) found")
+
+    # 4. Drift
+    print("Checking for drift...")
+    n = checks["drift"]["count"]
+    if n == 0:
+        print("  ✅ No drift detected")
+    else:
+        print(f"  ⚠️  {n} implementation(s) need review (linked to superseded reqs)")
+
+    # 5. Test coverage
+    print("Checking test coverage...")
+    tc = checks.get("test_coverage", {})
+    if "error" in tc:
+        print(f"  ⚠️  Could not check test specs: {tc['error']}")
+    elif tc.get("missing", 0) == 0:
+        print(f"  ✅ 100% test spec coverage")
+    else:
+        print(f"  ⚠️  {tc['missing']} requirement(s) missing test specs ({tc['coverage_pct']:.0f}% coverage)")
+        for rid in tc.get("missing_ids", []):
+            print(f"      - {rid}")
+
+    # 6. Domains
+    print("Checking domains...")
+    custom = checks["domains"]["custom"]
+    if custom:
+        print(f"  ⚠️  Non-standard domains: {', '.join(custom)}")
+    else:
+        print("  ✅ All domains are standard")
+
+    # 7. Duplicate non-superseded specs per requirement
+    dup_specs = checks.get("duplicate_specs", {})
+    if dup_specs.get("count"):
+        print("Checking for duplicate specs...")
+        print(f"  ⚠️  {dup_specs['count']} requirement(s) have more than one "
+              f"non-superseded spec")
+        for entry in dup_specs["items"][:5]:
+            print(f"      - {entry['req_id']}: {', '.join(entry['spec_ids'])}")
+        if len(dup_specs["items"]) > 5:
+            print(f"      ... and {len(dup_specs['items']) - 5} more")
+    # (no message when count is 0 — absence of bad news is already clear)
+
+    print()
+    print("─" * 40)
+    if issues:
+        print(f"❌ {len(issues)} issue(s) found:")
+        for issue in issues:
+            print(f"   - {issue}")
+        return 1
+    elif warnings:
+        print(f"⚠️  {len(warnings)} warning(s):")
+        for warning in warnings[:5]:
+            print(f"   - {warning}")
+        if len(warnings) > 5:
+            print(f"   ... and {len(warnings) - 5} more")
+        return 0
+    else:
+        print("✅ All checks passed!")
+
+    return 0
+
+
+def cmd_trace(args):
+    """Show bidirectional traceability for a requirement or file."""
+    store = LoomStore(args.project)
+    target = args.target
+    use_json = getattr(args, 'json', False)
+
+    try:
+        data = services.trace(store, target)
+    except LookupError as e:
+        if use_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"❌ {e}")
+        return 1
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 0
+
+    if data["type"] == "requirement":
+        req_id = data["id"]
+        print(f"🧵 Loom Trace — {req_id}")
+        print()
+        print(f"📋 Requirement [{data['domain']}]")
+        print(f"   {data['value']}")
+        print()
+
+        if data["superseded_at"]:
+            print(f"⚠️  SUPERSEDED on {data['superseded_at'][:10]}")
+            print()
+
+        impls = data["implementations"]
+        if not impls:
+            print("📁 Implemented by: (none)")
+            print(f"   Run: loom link <file> --req {req_id}")
+        else:
+            print(f"📁 Implemented by ({len(impls)} file(s)):")
+            for impl in impls:
+                lines_info = f" (lines {impl['lines']})" if impl['lines'] else ""
+                print(f"   📄 {impl['file']}{lines_info}")
+
+        print()
+        spec = data["test_spec"]
+        if spec:
+            status = "✅ verified" if spec["verified"] else "⏳ pending"
+            print(f"🧪 Test Spec: {status}")
+            print(f"   {spec['description'][:80]}...")
+        else:
+            print("🧪 Test Spec: (none)")
+            print(f"   Run: loom test {req_id} --desc \"...\"")
+        return 0
+
+    # file branch
+    print(f"🧵 Loom Trace — {target}")
+    print()
+
+    reqs = data["requirements"]
+    if not reqs:
+        print("📋 Implements: (none)")
+        print(f"   Run: loom link {target} --req REQ-xxx")
+        return 0
+
+    print(f"📋 Implements ({len(reqs)} requirement(s)):")
+    print()
+    for r in reqs:
+        if r.get("orphan"):
+            print(f"   ❌ {r['id']} (not found - orphan link)")
+        else:
+            status = "⚠️ superseded" if r["superseded"] else "✓"
+            print(f"   {status} {r['id']} [{r['domain']}]")
+            print(f"      {r['value'][:70]}...")
+        print()
+
+    return 0
+
+
+def cmd_refine(args):
+    """Elaborate on a requirement with acceptance criteria and conversation context."""
+    store = LoomStore(args.project)
+    req_id = args.req_id
+
+    # Resolve elaboration source: --elaboration > --text > stdin (interactive).
+    if args.elaboration:
+        elaboration = args.elaboration
+    elif args.text:
+        elaboration = args.text
+    else:
+        # Look up the req purely so we can show "Original: ..." before
+        # blocking on stdin; keeps the existing UX.
+        existing = store.get_requirement(req_id)
+        if existing:
+            print(f"🔍 Refining {req_id}")
+            print(f"   Original: {existing.value}")
+            print()
+        print("Enter elaboration (how to satisfy this requirement):")
+        print("(Press Ctrl+D when done)")
+        try:
+            elaboration = sys.stdin.read().strip()
+        except KeyboardInterrupt:
+            print("\nCancelled")
+            return 1
+
+    # Parse acceptance criteria — CLI input formats; service takes a list.
+    if args.criteria:
+        criteria = list(args.criteria)
+    elif args.criteria_text:
+        text = args.criteria_text
+        sep = ';' if ';' in text else '\n'
+        criteria = [c.strip() for c in text.split(sep) if c.strip()]
+    else:
+        criteria = None
+
+    try:
+        result = services.refine(
+            store, req_id,
+            elaboration=elaboration,
+            acceptance_criteria=criteria,
+            conversation_context=args.context,
+            status=args.status,
+        )
+    except LookupError as e:
+        print(f"❌ {e}")
+        return 1
+    except ValueError as e:
+        print(f"❌ {e}")
+        return 1
+
+    print(f"✅ Refined {req_id}")
+    print()
+    print(f"📝 Elaboration:")
+    print(f"   {result['elaboration']}")
+    print()
+    if result['acceptance_criteria']:
+        print(f"✓ Acceptance Criteria ({len(result['acceptance_criteria'])}):")
+        for i, c in enumerate(result['acceptance_criteria'], 1):
+            print(f"   {i}. {c}")
+    if result['status'] != "pending":
+        print(f"📊 Status: {result['status']}")
+    print()
+    if result['is_complete']:
+        print("🎯 Requirement is fully refined!")
+    else:
+        missing = "acceptance criteria" if not result['acceptance_criteria'] else ""
+        print(f"⚠️  Missing: {missing}")
+
+    return 0
+
+
+def cmd_set_status(args):
+    """Set the implementation status of a requirement."""
+    store = LoomStore(args.project)
+    try:
+        result = services.set_status(store, args.req_id, args.status)
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
+        return 1
+    print(f"✅ {result['req_id']} → {result['status']}")
+    return 0
+
+
+def cmd_incomplete(args):
+    """List requirements that need refinement."""
+    store = LoomStore(args.project)
+    incomplete = services.incomplete(store)
+
+    if not incomplete:
+        print("✅ All requirements are fully refined!")
+        return 0
+
+    print(f"⚠️  {len(incomplete)} requirement(s) need refinement:")
+    print()
+
+    for req in incomplete:
+        print(f"  {req['id']} [{req['domain']}] — missing: {', '.join(req['missing'])}")
+        print(f"    {req['value'][:70]}...")
+        print()
+
+    print(f"Run: loom refine <req-id> --elaboration '...' --criteria '...'")
+    return 0
+
+
+# ==================== Specifications ====================
+
+def generate_spec_id() -> str:
+    """Generate a unique specification ID."""
+    import uuid
+    return f"SPEC-{uuid.uuid4().hex[:8]}"
+
+
+def cmd_spec_add(args):
+    """Add a specification to a requirement."""
+    store = LoomStore(args.project)
+
+    if args.description:
+        description = args.description
+    else:
+        req = store.get_requirement(args.req_id)
+        if req:
+            print(f"Adding specification to {args.req_id}: {req.value[:60]}...")
+        print("Enter specification description:")
+        try:
+            description = sys.stdin.read().strip()
+        except KeyboardInterrupt:
+            print("\nCancelled")
+            return 1
+
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
+    force = getattr(args, "force", False)
+    try:
+        result = services.spec_add(
+            store, args.req_id, description,
+            acceptance_criteria=args.criteria or None,
+            status=args.status or "draft",
+            source_doc=args.source_doc,
+            test_file=getattr(args, "test", "") or "",
+            target_dir=target_dir,
+            force=force,
+        )
+    except services.DuplicateSpecError as e:
+        print(f"❌ {e}")
+        print()
+        print("   Existing non-superseded spec(s):")
+        for s in e.siblings:
+            desc = (s["description"] or "")[:80]
+            tfile = s.get("test_file") or "(none)"
+            print(f"     • {s['id']}  [{s['status']}]  test={tfile}")
+            print(f"       {desc}")
+        print()
+        print("   Options:")
+        print("     1. Supersede the outdated spec first:   loom supersede <SPEC-id>")
+        print("     2. Bypass (create alongside, not typical): re-run with --force")
+        return 1
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
+        return 1
+
+    print(f"✅ Created {result['spec_id']}")
+    print(f"   Parent: {result['parent_req']}")
+    print(f"   Description: {result['description'][:80]}...")
+    if result["acceptance_criteria"]:
+        print(f"   Criteria: {len(result['acceptance_criteria'])} item(s)")
+    if result.get("siblings_bypassed"):
+        print(f"   ⚠ --force used: {len(result['siblings_bypassed'])} sibling "
+              f"spec(s) still non-superseded — consider superseding them")
+    if result.get("test_file"):
+        written = result["test_skeleton_written"]
+        path_part = result["test_file"].split("::", 1)[0]
+        if written is True:
+            print(f"   Test skeleton: wrote {path_part}")
+        elif written is False:
+            print(f"   Test file:     {result['test_file']}  (skeleton exists — not overwritten)")
+        else:
+            print(f"   Test file:     {result['test_file']}")
+    return 0
+
+
+def cmd_spec_list(args):
+    """List specifications."""
+    store = LoomStore(args.project)
+    specs = services.spec_list(
+        store,
+        req_id=args.req_id,
+        include_superseded=getattr(args, 'all', False),
+    )
+
+    if args.json:
+        # Use raw dataclass dict for faithful --json output.
+        if args.req_id:
+            raw = store.get_specifications_for_requirement(args.req_id)
+        else:
+            raw = store.list_specifications(include_superseded=args.all)
+        print(json.dumps([s.to_dict() for s in raw], indent=2))
+        return 0
+
+    if args.req_id:
+        print(f"📋 Specifications for {args.req_id}")
+    else:
+        print(f"📋 All Specifications — Project: {args.project}")
+    print()
+
+    if not specs:
+        print("No specifications found.")
+        return 0
+
+    for s in specs:
+        status = f" ({s['status']})" if s['status'] != "draft" else ""
+        superseded = " [SUPERSEDED]" if s['superseded_at'] else ""
+        print(f"{s['id']} → {s['parent_req']}{status}{superseded}")
+        print(f"  {s['description'][:80]}...")
+        if s['implementation_count']:
+            print(f"  📁 {s['implementation_count']} implementation(s)")
+
+    print()
+    print(f"Total: {len(specs)}")
+    return 0
+
+
+def cmd_spec_link(args):
+    """Link code to a specification."""
+    store = LoomStore(args.project)
+
+    try:
+        result = services.spec_link(store, args.spec_id, args.file, lines=args.lines)
+    except LookupError as e:
+        print(f"❌ {e}")
+        return 1
+
+    if result["reused"]:
+        if result["already_linked"]:
+            print(f"⚠️  Already linked")
+        else:
+            print(f"✅ Linked existing implementation to {result['spec_id']}")
+    else:
+        fname = Path(result["file"]).name
+        print(f"✅ Linked {fname}:{result['lines']} to {result['spec_id']}")
+        print(f"   (Also linked to parent requirement {result['parent_req']})")
+    return 0
+
+
+# ==================== Patterns ====================
+
+def generate_pattern_id() -> str:
+    """Generate a unique pattern ID."""
+    import uuid
+    return f"PAT-{uuid.uuid4().hex[:8]}"
+
+
+def cmd_pattern_add(args):
+    """Add a shared design pattern."""
+    store = LoomStore(args.project)
+
+    if args.description:
+        description = args.description
+    else:
+        print("Enter pattern description:")
+        try:
+            description = sys.stdin.read().strip()
+        except KeyboardInterrupt:
+            print("\nCancelled")
+            return 1
+
+    try:
+        result = services.pattern_add(
+            store, args.name or "", description, applies_to=args.reqs or []
+        )
+    except ValueError as e:
+        print(f"❌ {e}")
+        return 1
+
+    for rid in result["missing_reqs"]:
+        print(f"⚠️  Requirement {rid} not found (continuing anyway)")
+
+    print(f"✅ Created {result['pattern_id']}: {result['name']}")
+    print(f"   {result['description'][:80]}...")
+    if result["applies_to"]:
+        print(f"   Applies to: {', '.join(result['applies_to'])}")
+    return 0
+
+
+def cmd_pattern_list(args):
+    """List patterns."""
+    store = LoomStore(args.project)
+
+    if args.json:
+        raw = store.list_patterns(include_deprecated=args.all)
+        print(json.dumps([p.to_dict() for p in raw], indent=2))
+        return 0
+
+    patterns = services.pattern_list(store, include_deprecated=args.all)
+
+    print(f"🔷 Design Patterns — Project: {args.project}")
+    print()
+
+    if not patterns:
+        print("No patterns found.")
+        return 0
+
+    for p in patterns:
+        status = f" [DEPRECATED]" if p['status'] == "deprecated" else ""
+        print(f"{p['id']}: {p['name']}{status}")
+        print(f"  {p['description'][:80]}...")
+        print(f"  Applies to: {len(p['applies_to'])} requirement(s)")
+        if p['implementation_count']:
+            print(f"  📁 {p['implementation_count']} implementation(s)")
+        print()
+
+    print(f"Total: {len(patterns)}")
+    return 0
+
+
+def cmd_pattern_apply(args):
+    """Apply a pattern to additional requirements."""
+    store = LoomStore(args.project)
+
+    try:
+        result = services.pattern_apply(store, args.pattern_id, args.reqs)
+    except LookupError as e:
+        print(f"❌ {e}")
+        return 1
+
+    for rid in result["added"]:
+        print(f"✅ Applied {result['pattern_id']} to {rid}")
+    for rid in result["skipped"]:
+        print(f"⚠️  {rid} already has this pattern or not found")
+
+    print(f"\nAdded {len(result['added'])} requirement(s) to pattern")
+    return 0
+
+
+# ==================== Coverage ====================
+
+def cmd_coverage(args):
+    """Three-layer coverage analysis: Requirements → Specs → Implementations/Tests."""
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+    data = services.coverage(store)
+
+    l1 = data["layer_1_req_to_spec"]
+    l2 = data["layer_2_spec_to_impl"]
+    l3 = data["layer_3_spec_to_test"]
+
+    # Optional filesystem scan (CLI-only — depends on cwd).
+    scan_suggestions = {}
+    if getattr(args, 'scan', False) and l2["without_impls"]:
+        active_specs = [s for s in store.list_specifications() if not s.superseded_at]
+        scan_suggestions = _scan_project_for_specs(
+            store, active_specs, l2["without_impls"], args
+        )
+
+    if use_json:
+        output = dict(data)
+        if scan_suggestions:
+            output["scan_suggestions"] = scan_suggestions
+        print(json.dumps(output, indent=2))
+        return 0
+
+    print(f"🧵 Loom Coverage — Project: {args.project}")
+    print()
+    print("Three-layer traceability: Requirements → Specs → Implementations/Tests")
+    print()
+    print(f"Layer 1 — Requirements have specs:    {l1['with_specs']}/{l1['total_requirements']} ({l1['coverage_pct']:.0f}%)")
+    print(f"Layer 2 — Specs have implementations: {l2['with_impls']}/{l2['total_specs']} ({l2['coverage_pct']:.0f}%)")
+    print(f"Layer 3 — Specs have tests:           {l3['with_tests']}/{l3['total_specs']} ({l3['coverage_pct']:.0f}%)")
+
+    if l1["without_specs"]:
+        print()
+        print(f"--- Requirements Without Specs ({len(l1['without_specs'])}) ---")
+        print("(These requirements need a specification describing HOW to implement them.)")
+        for e in l1["without_specs"]:
+            direct = f"  [{len(e['direct_implementations'])} direct impl link(s)]" if e['direct_implementations'] else ""
+            print(f"  {e['id']} [{e['domain']}] {e['value'][:60]}{direct}")
+            print(f"    → Run: loom spec {e['id']} -d \"specification text\"")
+
+    if l2["without_impls"]:
+        print()
+        print(f"--- Specs Without Implementations ({len(l2['without_impls'])}) ---")
+        for e in l2["without_impls"]:
+            print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
+            if e['id'] in scan_suggestions:
+                for s in scan_suggestions[e['id']]:
+                    print(f"    ? possible match: {s['file']} (similarity {s['similarity']:.0%})")
+            else:
+                print(f"    → Run: loom spec-link {e['id']} <file>")
+
+    if l3["without_tests"]:
+        print()
+        print(f"--- Specs Without Tests ({len(l3['without_tests'])}) ---")
+        for e in l3["without_tests"]:
+            files = ", ".join(e['implementation_files'][:3]) if e['implementation_files'] else "no code linked"
+            print(f"  {e['id']} (parent: {e['parent_req']}) {e['description'][:60]}")
+            print(f"    code: {files}")
+
+    if not l1["without_specs"] and not l2["without_impls"] and not l3["without_tests"]:
+        print()
+        print("All requirements have specs, and all specs have implementations and tests.")
+
+    return 0
+
+
+def _scan_project_for_specs(store, all_specs, specs_without_impls, args):
+    """Scan project source files to find likely implementations for unlinked specifications."""
+    import glob as glob_mod
+
+    scan_dir = getattr(args, 'scan_dir', None) or '.'
+    suggestions = {}
+
+    # Find source files (skip tests, docs, venvs)
+    patterns = ['**/*.py', '**/*.js', '**/*.ts', '**/*.dart', '**/*.go', '**/*.rs', '**/*.java']
+    skip_dirs = {'.venv', 'venv', 'node_modules', '__pycache__', '.git', 'docs', '.pytest_cache'}
+
+    source_files = []
+    for pattern in patterns:
+        for path in glob_mod.glob(os.path.join(scan_dir, pattern), recursive=True):
+            if not any(skip in path.split(os.sep) for skip in skip_dirs):
+                source_files.append(path)
+
+    if not source_files:
+        return suggestions
+
+    # Only scan specs that have no impls
+    unlinked_spec_ids = {s['id'] for s in specs_without_impls}
+    specs_to_scan = [s for s in all_specs if s.id in unlinked_spec_ids]
+
+    for spec in specs_to_scan:
+        spec_embedding = get_embedding(spec.description)
+        matches = []
+
+        for fpath in source_files:
+            try:
+                content = Path(fpath).read_text(errors='ignore')[:1000]
+                if len(content.strip()) < 20:
+                    continue
+                file_embedding = get_embedding(content)
+
+                dist = sum((a - b) ** 2 for a, b in zip(spec_embedding, file_embedding)) ** 0.5
+                similarity = max(0, 1 - (dist / 2))
+
+                if similarity > 0.6:
+                    matches.append({"file": fpath, "similarity": round(similarity, 3)})
+            except Exception:
+                continue
+
+        if matches:
+            matches.sort(key=lambda m: m['similarity'], reverse=True)
+            suggestions[spec.id] = matches[:3]
+
+    return suggestions
+
+
+# ==================== Traceability Chain ====================
+
+def cmd_chain(args):
+    """Show full traceability chain for a requirement."""
+    store = LoomStore(args.project)
+    use_json = getattr(args, 'json', False)
+    req_id = args.req_id
+
+    try:
+        data = services.chain(store, req_id)
+    except LookupError as e:
+        if use_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"❌ {e}")
+        return 1
+
+    if use_json:
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🔗 Traceability Chain — {req_id}")
+    print()
+
+    print(f"📋 REQUIREMENT [{data['domain']}]")
+    print(f"   {data['value']}")
+    if data['elaboration']:
+        print(f"   📝 {data['elaboration'][:60]}...")
+    print()
+
+    patterns = data['patterns']
+    if patterns:
+        print(f"🔷 PATTERNS ({len(patterns)})")
+        for p in patterns:
+            print(f"   {p['id']}: {p['name']}")
+        print()
+
+    specs = data['specifications']
+    if specs:
+        print(f"📐 SPECIFICATIONS ({len(specs)})")
+        for spec in specs:
+            status_icon = "✓" if spec['status'] == "implemented" else "○"
+            print(f"   {status_icon} {spec['id']}: {spec['description'][:50]}...")
+            for impl in spec['implementations']:
+                print(f"      📁 {impl['file']}:{impl['lines']}")
+        print()
+
+    direct = data['direct_implementations']
+    if direct:
+        print(f"📁 DIRECT IMPLEMENTATIONS ({len(direct)})")
+        for impl in direct:
+            print(f"   {impl['file']}:{impl['lines']}")
+        print()
+
+    test = data['test_spec']
+    if test:
+        status = "✅ verified" if test['verified'] else "⏳ pending"
+        print(f"🧪 TEST SPECIFICATION: {status}")
+        print(f"   {test['description'][:60]}...")
+    else:
+        print("🧪 TEST SPECIFICATION: (none)")
+
+    return 0
+
+
+# ============================================================
+# Task subcommand group: loom task <verb> ...
+# ============================================================
+
+
+def cmd_task(args):
+    """Dispatch `loom task <verb>` to the right sub-handler."""
+    verb = getattr(args, "task_verb", None)
+    handlers = {
+        "add": cmd_task_add,
+        "list": cmd_task_list,
+        "show": cmd_task_show,
+        "claim": cmd_task_claim,
+        "release": cmd_task_release,
+        "complete": cmd_task_complete,
+        "reject": cmd_task_reject,
+        "prompt": cmd_task_prompt,
+    }
+    if verb not in handlers:
+        print("Usage: loom task {add|list|show|claim|release|complete|reject|prompt} ...")
+        return 1
+    return handlers[verb](args)
+
+
+def cmd_task_add(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_add(
+            store,
+            parent_spec=args.spec,
+            title=args.title,
+            files_to_modify=args.files or [],
+            test_to_write=args.test,
+            context_reqs=args.context_req or None,
+            context_specs=args.context_spec or None,
+            context_patterns=args.context_pattern or None,
+            context_sidecars=args.context_sidecar or None,
+            context_files=args.context_file or None,
+            size_budget_files=args.budget_files,
+            size_budget_loc=args.budget_loc,
+            depends_on=args.depends_on or None,
+            created_by=args.created_by,
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"✓ {result['id']}: {result['title']} (parent: {result['parent_spec']})")
+    return 0
+
+
+def cmd_task_list(args):
+    store = LoomStore(args.project)
+    tasks = services.task_list(
+        store,
+        status=args.status,
+        parent_spec=args.spec,
+        claimed_by=args.claimed_by,
+        ready_only=args.ready,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(tasks, indent=2))
+        return 0
+
+    if not tasks:
+        print("(no tasks)")
+        return 0
+
+    print(f"🧵 Tasks — {args.project}  ({len(tasks)})")
+    for t in tasks:
+        deps = f"  deps: {','.join(t['depends_on'])}" if t["depends_on"] else ""
+        claimed = f"  [{t['claimed_by']}]" if t["claimed_by"] else ""
+        print(f"  {t['id']}  [{t['status']:>10}]{claimed}  {t['title']}{deps}")
+    return 0
+
+
+def cmd_task_show(args):
+    store = LoomStore(args.project)
+    try:
+        task = services.task_get(store, args.task_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(json.dumps(task, indent=2))
+    return 0
+
+
+def cmd_task_claim(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_claim(store, args.task_id, claimed_by=args.as_worker)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {result['id']} claimed by {result['claimed_by']}")
+    return 0
+
+
+def cmd_task_release(args):
+    store = LoomStore(args.project)
+    try:
+        services.task_release(store, args.task_id)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {args.task_id} released (status: pending)")
+    return 0
+
+
+def cmd_task_complete(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_complete(store, args.task_id, impl_ids=args.impl or None)
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    print(f"✓ {result['id']} complete at {result['completed_at']}")
+    if result["linked_impls"]:
+        print(f"  linked impls: {', '.join(result['linked_impls'])}")
+    return 0
+
+
+def cmd_task_reject(args):
+    store = LoomStore(args.project)
+    try:
+        result = services.task_reject(
+            store, args.task_id, reason=args.reason, escalate=args.escalate
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+    marker = "↑ ESCALATED" if result["status"] == "escalated" else "✗ rejected"
+    print(f"{marker} {result['id']}: {result['rejection_reason']}")
+    if result["status"] == "escalated":
+        print(f"  escalation_count now {result['escalation_count']}")
+    return 0
+
+
+def cmd_task_prompt(args):
+    store = LoomStore(args.project)
+    target_dir = (
+        getattr(args, "target_dir", None)
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
+    try:
+        prompt = services.task_build_prompt(store, args.task_id, target_dir=target_dir)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(prompt)
+    return 0
+
+
+def cmd_decompose(args):
+    """Decompose a spec into proposed tasks; optionally persist them."""
+    store = LoomStore(args.project)
+    target_dir = (
+        args.target_dir
+        or os.environ.get("LOOM_TARGET_DIR")
+        or os.getcwd()
+    )
+    # Config precedence: --model > LOOM_DECOMPOSER_MODEL > .loom-config.json
+    # > services._default_decomposer_model().
+    from loom import config as _config
+    cfg = _config.load_config(target_dir)
+    model = _config.resolve(
+        "decomposer_model",
+        cli=args.model,
+        env_var="LOOM_DECOMPOSER_MODEL",
+        config=cfg,
+        default=None,
+    )
+    try:
+        result = services.decompose(
+            store, args.spec_id, model=model, target_dir=target_dir,
+        )
+    except (LookupError, ValueError, RuntimeError) as e:
+        print(str(e))
+        return 1
+
+    if result["outcome"] != "tasks":
+        print(f"decomposer {result['outcome']}: {result['reason']}")
+        if args.verbose:
+            print("--- raw response (first 400 chars) ---")
+            print((result.get("raw_response") or "")[:400])
+        return 2
+
+    # Dump tasks as YAML so the user can edit before --apply.
+    import yaml as _yaml
+
+    tasks_yaml = _yaml.safe_dump(
+        {"spec_id": args.spec_id, "model": result["model"], "tasks": result["tasks"]},
+        sort_keys=False, default_flow_style=False,
+    )
+    if args.out:
+        from pathlib import Path as _P
+        _P(args.out).write_text(tasks_yaml, encoding="utf-8")
+        print(f"✓ wrote {len(result['tasks'])} proposed task(s) to {args.out}")
+    else:
+        print(tasks_yaml)
+
+    for w in result["warnings"]:
+        print(f"warning: {w}")
+
+    tok_in, tok_out = result["input_tokens"], result["output_tokens"]
+    print(f"[decompose] {result['elapsed_s']}s  in={tok_in}  out={tok_out}  "
+          f"model={result['model']}")
+
+    if args.apply:
+        applied = services.apply_decomposition(
+            store, result["tasks"], created_by=result["model"]
+        )
+        for t in applied["created"]:
+            print(f"✓ created {t['id']}: {t['title']}")
+        for s in applied["skipped"]:
+            print(f"✗ skipped {s['title']}: {s['error']}")
+    else:
+        print("(re-run with --apply to persist these tasks into the store)")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="loom",
+        description="Loom - Requirements traceability",
+    )
+    parser.add_argument("--project", "-p", default=None, help="Project name")
+    parser.add_argument(
+        "--embedding-provider",
+        choices=["ollama", "openai", "hash"],
+        default=None,
+        help="Embedding backend. Overrides LOOM_EMBEDDING_PROVIDER and "
+             ".loom-config.json::embedding_provider. Default resolves "
+             "to ollama.",
+    )
+
+    # Parent parser so subcommands also accept -p/--project (FINDINGS-wild F1).
+    # Without this, `loom doctor -p foo` fails because argparse only looks at
+    # the top-level parser for -p. Each subparser below gets this parent so -p
+    # is recognized in both positions. Post-parse we coalesce _sub_project into
+    # args.project.
+    _project_parent = argparse.ArgumentParser(add_help=False)
+    # default=SUPPRESS so that when the inner parser re-inherits the parent,
+    # it doesn't clobber a value the outer parser already captured. Without
+    # this, `loom task -p foo list` loses the -p because the inner `list`
+    # parser resets _sub_project to None.
+    _project_parent.add_argument(
+        "--project", "-p", dest="_sub_project", default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    def sp(name, **kwargs):
+        """subparsers.add_parser() with the project parent attached."""
+        kwargs["parents"] = list(kwargs.get("parents", [])) + [_project_parent]
+        return subparsers.add_parser(name, **kwargs)
+    
+    # extract
+    p_extract = sp("extract", help="Extract requirements")
+    p_extract.add_argument("--session", help="Session key")
+    p_extract.add_argument("--msg-id", help="Message ID for provenance")
+    p_extract.add_argument("--text", "-t", help="Requirement text")
+    p_extract.add_argument("--rationale", "-r", help="Why this requirement exists")
+    
+    # check
+    p_check = sp("check", help="Check for drift")
+    p_check.add_argument("file", help="File to check")
+    p_check.add_argument("--lines", help="Line range (e.g., 42-78)")
+    p_check.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    # context (pre-edit briefing — JSON by default for agent/hook consumption)
+    p_context = sp(
+        "context",
+        help="Pre-edit briefing: linked reqs, specs, and drift for a file",
+    )
+    p_context.add_argument("file", help="File to brief on")
+    p_context.add_argument("--pretty", action="store_true", help="Human-readable output (default: JSON)")
+    
+    # link
+    p_link = sp("link", help="Link code to requirements or specifications")
+    p_link.add_argument("file", help="File to link")
+    p_link.add_argument("--lines", help="Line range")
+    p_link.add_argument("--req", action="append", help="Requirement ID(s) — direct link (use sparingly; prefer --spec)")
+    p_link.add_argument("--spec", action="append", help="Specification ID(s) — preferred link target")
+    
+    # status
+    p_status = sp("status", help="Show status")
+    p_status.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # query
+    p_query = sp("query", help="Search requirements")
+    p_query.add_argument("text", help="Search text")
+    p_query.add_argument("--limit", "-n", type=int, default=5)
+    p_query.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # list
+    p_list = sp("list", help="List requirements")
+    p_list.add_argument("--all", "-a", action="store_true", help="Include superseded + archived")
+    p_list.add_argument("--include-archived", action="store_true",
+                        help="Include archived (default: hidden)")
+    p_list.add_argument("--json", "-j", action="store_true", help="Output as JSON (for API)")
+    
+    # sync
+    p_sync = sp("sync", help="Generate REQUIREMENTS.md and TEST_SPEC.md")
+    p_sync.add_argument("--output", "-o", help="Output directory (default: current)")
+    p_sync.add_argument("--public", action="store_true", help="Exclude private requirements")
+    
+    # conflicts
+    p_conflicts = sp("conflicts", help="Check for conflicts")
+    p_conflicts.add_argument("--text", "-t", required=True, help="Requirement to check")
+    p_conflicts.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    p_conflicts.add_argument(
+        "--verify", action="store_true",
+        help="Use LLM verifier for higher precision (adds ~1s/check; requires Ollama)",
+    )
+    p_conflicts.add_argument(
+        "--verify-model", default=None,
+        help="Ollama model for verification (default: qwen3.5:latest, or $LOOM_VERIFY_MODEL)",
+    )
+    
+    # supersede
+    p_supersede = sp("supersede", help="Supersede a requirement")
+    p_supersede.add_argument("req_id", help="Requirement ID to supersede")
+
+    # archive (M2.3) — distinct from supersede
+    p_archive = sp("archive", help="Archive a requirement (recoverable; "
+                                    "excluded from list/query by default)")
+    p_archive.add_argument("req_id", help="Requirement ID to archive")
+
+    # stale (M2.2) — surface cold requirements
+    p_stale = sp("stale", help="List requirements ranked by staleness")
+    p_stale.add_argument("--older-than", type=int, default=None,
+                         help="Only requirements older than N days")
+    p_stale.add_argument("--unlinked", action="store_true",
+                         help="Only requirements with no linked files")
+    p_stale.add_argument("--include-archived", action="store_true",
+                         help="Include archived requirements (excluded by default)")
+    p_stale.add_argument("--json", "-j", action="store_true",
+                         help="JSON output")
+    
+    # test add
+    p_test_add = sp("test", help="Add/update test specification")
+    p_test_add.add_argument("req_id", help="Requirement ID")
+    p_test_add.add_argument("--description", "-d", help="Test description")
+    p_test_add.add_argument("--steps", "-s", help="Test steps (semicolon-separated)")
+    p_test_add.add_argument("--expected", "-e", help="Expected outcome")
+    p_test_add.add_argument("--automated", "-a", action="store_true", help="Mark as automated")
+    p_test_add.add_argument("--test-file", help="Path to test file")
+    p_test_add.add_argument("--private", action="store_true", help="Mark test as private")
+    
+    # test verify
+    p_verify = sp("verify", help="Mark test as verified")
+    p_verify.add_argument("req_id", help="Requirement ID")
+    
+    # test list
+    p_tests = sp("tests", help="List test specifications")
+    p_tests.add_argument("--public", action="store_true", help="Exclude private tests")
+    p_tests.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # test-generate
+    p_test_gen = sp("test-generate", help="Auto-generate test specs from acceptance criteria")
+    p_test_gen.add_argument("--force", "-f", action="store_true", help="Overwrite existing test specs")
+    p_test_gen.add_argument("--quiet", "-q", action="store_true", help="Minimal output")
+    
+    # init-private
+    p_private = sp("init-private", help="Initialize PRIVATE.md template")
+
+    # init
+    p_init = sp(
+        "init",
+        help="Onboard a target repo: write .loom-config.json + health check",
+    )
+    p_init.add_argument(
+        "--target-dir", default=None,
+        help="Repo to onboard (default: $LOOM_TARGET_DIR or cwd)",
+    )
+    p_init.add_argument(
+        "--force", action="store_true",
+        help="Overwrite an existing .loom-config.json and template files",
+    )
+    p_init.add_argument(
+        "--template",
+        help="Scaffold files from a template. See `loom init --list-templates`. "
+             "User templates in ~/.loom/templates/ override shipped ones.",
+    )
+    p_init.add_argument(
+        "--var", action="append", default=None, metavar="KEY=VALUE",
+        help="Set a template variable. Repeat for multiple. Missing required "
+             "variables are prompted interactively when stdin is a tty.",
+    )
+    p_init.add_argument(
+        "--list-templates", action="store_true",
+        help="List available templates and exit (other flags ignored).",
+    )
+
+    # doctor
+    p_doctor = sp("doctor", help="Run health checks")
+    p_doctor.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # trace (bidirectional traceability)
+    p_trace = sp("trace", help="Show bidirectional traceability for a requirement or file")
+    p_trace.add_argument("target", help="Requirement ID (REQ-xxx) or file path")
+    p_trace.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # refine (elaborate requirements)
+    p_refine = sp("refine", help="Elaborate a requirement with acceptance criteria")
+    p_refine.add_argument("req_id", help="Requirement ID")
+    p_refine.add_argument("--elaboration", "-e", help="How to satisfy this requirement")
+    p_refine.add_argument("--text", "-t", help="Elaboration text (alternative to -e)")
+    p_refine.add_argument("--criteria", "-c", action="append", help="Acceptance criterion (repeatable)")
+    p_refine.add_argument("--criteria-text", help="Acceptance criteria (semicolon or newline separated)")
+    p_refine.add_argument("--context", help="Conversation context excerpt")
+    p_refine.add_argument("--status", "-s", help="Set status (pending, in_progress, implemented, verified)")
+    
+    # set-status
+    p_set_status = sp("set-status", help="Set requirement implementation status")
+    p_set_status.add_argument("req_id", help="Requirement ID")
+    p_set_status.add_argument("status", help="Status: pending, in_progress, implemented, verified, superseded")
+    
+    # incomplete (list requirements needing refinement)
+    p_incomplete = sp("incomplete", help="List requirements needing refinement")
+    
+    # spec (add specification to requirement)
+    p_spec = sp("spec", help="Add specification to a requirement")
+    p_spec.add_argument("req_id", help="Parent requirement ID")
+    p_spec.add_argument("--description", "-d", help="Specification description")
+    p_spec.add_argument("--criteria", "-c", action="append", help="Acceptance criterion (repeatable)")
+    p_spec.add_argument("--status", "-s", help="Status: draft, approved, implemented, verified")
+    p_spec.add_argument("--source-doc", help="Source document path")
+    p_spec.add_argument(
+        "--force", action="store_true",
+        help="Bypass the 'no duplicate non-superseded spec' check. "
+             "Normally prefer `loom supersede <SPEC-id>` on the old spec first.",
+    )
+    p_spec.add_argument(
+        "--test",
+        help="Pytest grading target in 'path::Class' form "
+             "(e.g. 'tests/test_foo.py::TestFoo'). Writes a failing-"
+             "placeholder skeleton at that path inside --target-dir if "
+             "the file doesn't exist. Populates Specification.test_file "
+             "so loom decompose / loom_exec can use it.",
+    )
+    p_spec.add_argument(
+        "--target-dir", default=None,
+        help="Where to write the test skeleton (default: $LOOM_TARGET_DIR "
+             "or cwd). Has no effect unless --test is set.",
+    )
+    
+    # specs (list specifications)
+    p_specs = sp("specs", help="List specifications")
+    p_specs.add_argument("--req", dest="req_id", help="Filter by requirement ID")
+    p_specs.add_argument("--all", "-a", action="store_true", help="Include superseded")
+    p_specs.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # spec-link (link code to specification)
+    p_spec_link = sp("spec-link", help="Link code to a specification")
+    p_spec_link.add_argument("spec_id", help="Specification ID")
+    p_spec_link.add_argument("file", help="File to link")
+    p_spec_link.add_argument("--lines", help="Line range (e.g., 42-78)")
+    
+    # pattern (add design pattern)
+    p_pattern = sp("pattern", help="Add a shared design pattern")
+    p_pattern.add_argument("--name", "-n", required=True, help="Pattern name")
+    p_pattern.add_argument("--description", "-d", help="Pattern description")
+    p_pattern.add_argument("--reqs", action="append", help="Requirement IDs this applies to")
+    
+    # patterns (list patterns)
+    p_patterns = sp("patterns", help="List design patterns")
+    p_patterns.add_argument("--all", "-a", action="store_true", help="Include deprecated")
+    p_patterns.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    
+    # pattern-apply (apply pattern to requirements)
+    p_pattern_apply = sp("pattern-apply", help="Apply pattern to requirements")
+    p_pattern_apply.add_argument("pattern_id", help="Pattern ID")
+    p_pattern_apply.add_argument("reqs", nargs="+", help="Requirement IDs to apply to")
+    
+    # coverage (gap analysis)
+    p_coverage = sp("coverage", help="Show requirements missing implementations or tests")
+    p_coverage.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    p_coverage.add_argument("--scan", action="store_true", help="Scan project files for likely implementations")
+    p_coverage.add_argument("--scan-dir", help="Directory to scan (default: current)")
+
+    # chain (full traceability chain)
+    p_chain = sp("chain", help="Show full traceability chain for a requirement")
+    p_chain.add_argument("req_id", help="Requirement ID")
+    p_chain.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    # cost (PreToolUse hook activity)
+    p_cost = sp(
+        "cost",
+        help="Summarize PreToolUse hook cost (latency, tokens, overhead)",
+    )
+    p_cost.add_argument("--tail", type=int, default=None, help="Only consider the last N log entries")
+    p_cost.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    # metrics (M5.2) — effectiveness rollup
+    p_metrics = sp(
+        "metrics",
+        help="Effectiveness metrics: coverage, drift, conflicts, activity, staleness",
+    )
+    p_metrics.add_argument(
+        "--since", type=int, default=None,
+        help="Activity window in days (drift / conflicts / activity).",
+    )
+    p_metrics.add_argument("--json", "-j", action="store_true", help="JSON output")
+
+    # health-score (M5.3) — 0-100 single number for CI gating
+    p_health = sp(
+        "health-score",
+        help="Single 0-100 score over coverage + freshness + drift",
+    )
+    p_health.add_argument("--json", "-j", action="store_true", help="JSON output")
+
+    # task subcommand group
+    p_task = sp("task", help="Manage atomic work items (Task entity)")
+    task_subs = p_task.add_subparsers(dest="task_verb", required=True)
+
+    def tsp(name, **kwargs):
+        """task_subs.add_parser() with the project parent attached."""
+        kwargs["parents"] = list(kwargs.get("parents", [])) + [_project_parent]
+        return task_subs.add_parser(name, **kwargs)
+
+    p_ta = tsp("add", help="Create a new task")
+    p_ta.add_argument("--spec", required=True, help="Parent specification id (SPEC-xxx)")
+    p_ta.add_argument("--title", required=True, help="One-line task title")
+    p_ta.add_argument("--files", nargs="+", required=True, help="Files the task may modify")
+    p_ta.add_argument("--test", required=True, help="Grading test target (e.g., tests/test_x.py::TestY)")
+    p_ta.add_argument("--context-req", action="append", help="Requirement id to include in bundle")
+    p_ta.add_argument("--context-spec", action="append", help="Spec id to include in bundle")
+    p_ta.add_argument("--context-pattern", action="append", help="Pattern id to include in bundle")
+    p_ta.add_argument("--context-sidecar", action="append", help="Sidecar file path to inline")
+    p_ta.add_argument("--context-file", action="append", help="Source file to inline in full")
+    p_ta.add_argument("--budget-files", type=int, default=2, help="Max files the task may touch")
+    p_ta.add_argument("--budget-loc", type=int, default=80, help="Max LoC the task may change")
+    p_ta.add_argument("--depends-on", action="append", help="Task id this task depends on")
+    p_ta.add_argument("--created-by", default=None, help="Who created this task (e.g., 'opus', 'jon')")
+    p_ta.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    p_tl = tsp("list", help="List tasks")
+    p_tl.add_argument("--status", default=None, help="Filter by status")
+    p_tl.add_argument("--spec", default=None, help="Filter by parent spec id")
+    p_tl.add_argument("--claimed-by", default=None, help="Filter by claimer")
+    p_tl.add_argument("--ready", action="store_true", help="Only ready-to-execute tasks")
+    p_tl.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+
+    p_ts = tsp("show", help="Show full task details as JSON")
+    p_ts.add_argument("task_id")
+
+    p_tc = tsp("claim", help="Transition pending -> claimed")
+    p_tc.add_argument("task_id")
+    p_tc.add_argument("--as", dest="as_worker", required=True, help="Executor name")
+
+    p_tre = tsp("release", help="Transition claimed -> pending")
+    p_tre.add_argument("task_id")
+
+    p_tco = tsp("complete", help="Transition claimed -> complete")
+    p_tco.add_argument("task_id")
+    p_tco.add_argument("--impl", action="append", help="Implementation id(s) produced")
+
+    p_trj = tsp("reject", help="Transition claimed -> rejected/escalated")
+    p_trj.add_argument("task_id")
+    p_trj.add_argument("--reason", required=True)
+    p_trj.add_argument("--escalate", action="store_true", help="Mark as escalated (operator needed)")
+
+    p_tp = tsp("prompt", help="Print the assembled executor prompt for a task")
+    p_tp.add_argument("task_id")
+    p_tp.add_argument(
+        "--target-dir", default=None,
+        help="Resolve context_files / sidecars relative to this directory "
+             "(default: $LOOM_TARGET_DIR or cwd).",
+    )
+
+    # decompose (spec -> proposed tasks via LLM)
+    p_dec = sp(
+        "decompose",
+        help="Propose an atomic-task decomposition for a specification",
+    )
+    p_dec.add_argument("spec_id", help="Specification id (SPEC-xxx)")
+    p_dec.add_argument("--model", default=None,
+                       help="Override decomposer model. Format: "
+                            "'ollama:<name>' or 'anthropic:<name>'. "
+                            "Default: $LOOM_DECOMPOSER_MODEL, or "
+                            "anthropic:claude-opus-4-7 if ANTHROPIC_API_KEY set, "
+                            "else ollama:qwen2.5-coder:32b.")
+    p_dec.add_argument("--out", default=None, help="Write YAML to file instead of stdout")
+    p_dec.add_argument("--apply", action="store_true", help="Persist proposed tasks to the store")
+    p_dec.add_argument("--verbose", action="store_true", help="Show raw LLM response on error")
+    p_dec.add_argument(
+        "--target-dir", default=None,
+        help="Target repo root. When set, files_to_modify entries that "
+             "exist on disk there are auto-added to each task's context_files "
+             "so the executor sees real source. Defaults to $LOOM_TARGET_DIR "
+             "or the current working directory.",
+    )
+
+    args = parser.parse_args()
+
+    # Coalesce -p from subparser position into top-level args.project (T2.2).
+    # Precedence: subparser -p > top-level -p > LOOM_PROJECT > git detection.
+    sub_project = getattr(args, "_sub_project", None)
+    if sub_project:
+        args.project = sub_project
+    if not args.project:
+        args.project = get_project_name()
+
+    # Embedding provider resolution: --embedding-provider > LOOM_EMBEDDING_PROVIDER
+    # env > .loom-config.json > "ollama" (handled inside src/embedding.py).
+    # Promoting --embedding-provider into the env makes the choice visible
+    # to every downstream get_embedding() call without threading args
+    # through every code path.
+    if getattr(args, "embedding_provider", None):
+        os.environ["LOOM_EMBEDDING_PROVIDER"] = args.embedding_provider
+    elif "LOOM_EMBEDDING_PROVIDER" not in os.environ:
+        try:
+            from loom import config as _config
+            cfg = _config.load_config(os.getcwd())
+            if cfg.get("embedding_provider"):
+                os.environ["LOOM_EMBEDDING_PROVIDER"] = cfg["embedding_provider"]
+        except Exception:
+            pass
+    
+    commands = {
+        "extract": cmd_extract,
+        "check": cmd_check,
+        "context": cmd_context,
+        "link": cmd_link,
+        "status": cmd_status,
+        "query": cmd_query,
+        "list": cmd_list,
+        "sync": cmd_sync,
+        "conflicts": cmd_conflicts,
+        "supersede": cmd_supersede,
+        "archive": cmd_archive,
+        "stale": cmd_stale,
+        "test": cmd_test_add,
+        "verify": cmd_test_verify,
+        "tests": cmd_test_list,
+        "test-generate": cmd_test_generate,
+        "init-private": cmd_init_private,
+        "init": cmd_init,
+        "doctor": cmd_doctor,
+        "trace": cmd_trace,
+        "refine": cmd_refine,
+        "set-status": cmd_set_status,
+        "incomplete": cmd_incomplete,
+        "spec": cmd_spec_add,
+        "specs": cmd_spec_list,
+        "spec-link": cmd_spec_link,
+        "pattern": cmd_pattern_add,
+        "patterns": cmd_pattern_list,
+        "pattern-apply": cmd_pattern_apply,
+        "coverage": cmd_coverage,
+        "chain": cmd_chain,
+        "cost": cmd_cost,
+        "metrics": cmd_metrics,
+        "health-score": cmd_health_score,
+        "task": cmd_task,
+        "decompose": cmd_decompose,
+    }
+    
+    return commands[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

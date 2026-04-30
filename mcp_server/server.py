@@ -28,8 +28,8 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import store  # noqa: E402  (src/store.py)
-import services  # noqa: E402  (src/services.py)
+from loom import store  # noqa: E402  (src/store.py)
+from loom import services  # noqa: E402  (src/services.py)
 
 # ---------------------------------------------------------------------------
 # MCP imports — guarded so the file is readable without the SDK installed.
@@ -75,7 +75,7 @@ def _embed(text: str) -> list[float]:
     sessions get real cache reuse across tool calls (unlike the CLI,
     which cold-starts each invocation).
     """
-    from embedding import get_embedding  # noqa: WPS433
+    from loom.embedding import get_embedding  # noqa: WPS433
     return get_embedding(text)
 
 

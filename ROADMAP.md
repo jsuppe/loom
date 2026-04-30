@@ -1,5 +1,30 @@
 # Loom Roadmap
 
+## Milestone 9: PyPI packaging (DONE)
+
+Loom installs from PyPI as `loom-cli`. Two console scripts (`loom`,
+`loom_exec`) plus a real Python package (`import loom`,
+`from loom.store import LoomStore`).
+
+- [x] **9.1 Package layout** — `src/loom/` is the canonical package
+      (was bare `src/*.py`). Internal imports use relative form
+      (`from .store import …`); external callers (tests, scripts,
+      mcp_server, experiments) use absolute (`from loom.store import …`).
+- [x] **9.2 In-package data** — `prompts/` and `templates/` moved
+      under `src/loom/` so they ship in the wheel; lookups switched
+      to `Path(__file__).parent / "prompts"` etc.
+- [x] **9.3 CLI entry points** — `scripts/loom` and `scripts/loom_exec`
+      reduced to thin shims (`from loom.cli import main`); the real
+      argparse logic lives in `src/loom/cli.py` and
+      `src/loom/exec_cli.py`. `pyproject.toml::project.scripts`
+      registers `loom = loom.cli:main` and
+      `loom_exec = loom.exec_cli:main` so a `pip install` exposes
+      both on PATH.
+- [x] **9.4 pyproject.toml** — setuptools backend, Python 3.10+,
+      single runtime dep (`PyYAML`); optional `mcp` and `dev`
+      extras. `pip install -e .` validated end-to-end (313/313 tests
+      pass against the editable install).
+
 ## Milestone 0: Small-model execution pipeline (DONE)
 
 Capability-substitution thesis validated empirically. See

@@ -38,9 +38,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import embedding  # noqa: E402
-import services  # noqa: E402
-from store import (  # noqa: E402
+from loom import embedding  # noqa: E402
+from loom import services  # noqa: E402
+from loom.store import (  # noqa: E402
     LoomStore, Requirement, Implementation,
     generate_impl_id, generate_content_hash,
 )

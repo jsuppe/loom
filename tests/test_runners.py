@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-import runners
+from loom import runners
 
 
 class TestRegistry:
@@ -181,9 +181,9 @@ class TestSplitTarget:
     """Utility: split "path::name" into (path, name)."""
 
     def test_with_name(self):
-        from runners import _split_target
+        from loom.runners import _split_target
         assert _split_target("a/b.py::Foo") == ("a/b.py", "Foo")
 
     def test_without_name(self):
-        from runners import _split_target
+        from loom.runners import _split_target
         assert _split_target("a/b.py") == ("a/b.py", "")

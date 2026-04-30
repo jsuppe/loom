@@ -64,8 +64,8 @@ def user_templates_dir() -> Path:
 
 
 def shipped_templates_dir() -> Path:
-    # src/templates.py → <loom-repo>/templates
-    return Path(__file__).resolve().parent.parent / "templates"
+    # src/loom/templates.py → src/loom/templates/ (sibling dir, in-package)
+    return Path(__file__).resolve().parent / "templates"
 
 
 def _load_manifest(template_dir: Path) -> dict[str, Any]:

@@ -10,7 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-import templates as tpl
+from loom import templates as tpl
 
 
 def _write_template(root: Path, name: str, manifest: str, files: dict[str, str]):

@@ -43,8 +43,8 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception: pass
 
 sys.path.insert(0, str(LOOM_DIR / "src"))
-from store import LoomStore  # noqa: E402
-import services  # noqa: E402
+from loom.store import LoomStore  # noqa: E402
+from loom import services  # noqa: E402
 
 sys.path.insert(0, str(SCENARIO_DIR / "tests"))
 import verify_idiom  # noqa: E402

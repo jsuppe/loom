@@ -23,7 +23,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-import runners
+from loom import runners
 
 
 # ---------------------------------------------------------------------------
@@ -176,12 +176,12 @@ class TestPromptGenerationByRunner:
     @pytest.fixture(autouse=True)
     def fixtures_path(self):
         # Ensure services import works
-        import services  # noqa: F401
+        from loom import services  # noqa: F401
 
     def _make_task(self, store, runner_name):
         """Build a minimal task and return its id."""
-        import services
-        from store import Requirement
+        from loom import services
+        from loom.store import Requirement
         from datetime import datetime, timezone
 
         req = Requirement(
@@ -203,11 +203,11 @@ class TestPromptGenerationByRunner:
 
     def test_flutter_prompt_says_dart_replace_whole_file(self, tmp_path, monkeypatch):
         import tempfile, shutil as _shutil
-        from store import LoomStore
-        import services, runners as _r
+        from loom.store import LoomStore
+        from loom import services, runners as _r
 
         # Disable Ollama for embedding
-        import embedding
+        from loom import embedding
         embedding._embedding_cache.clear()
         import urllib.request as _u
         def boom(*a, **kw): raise ConnectionResetError("no ollama")
@@ -229,10 +229,10 @@ class TestPromptGenerationByRunner:
 
     def test_pytest_prompt_says_python_append(self, tmp_path, monkeypatch):
         import tempfile, shutil as _shutil
-        from store import LoomStore
-        import services, runners as _r
+        from loom.store import LoomStore
+        from loom import services, runners as _r
 
-        import embedding
+        from loom import embedding
         embedding._embedding_cache.clear()
         import urllib.request as _u
         def boom(*a, **kw): raise ConnectionResetError("no ollama")
@@ -252,10 +252,10 @@ class TestPromptGenerationByRunner:
 
     def test_vitest_prompt_says_typescript_replace(self, tmp_path, monkeypatch):
         import tempfile, shutil as _shutil
-        from store import LoomStore
-        import services, runners as _r
+        from loom.store import LoomStore
+        from loom import services, runners as _r
 
-        import embedding
+        from loom import embedding
         embedding._embedding_cache.clear()
         import urllib.request as _u
         def boom(*a, **kw): raise ConnectionResetError("no ollama")
