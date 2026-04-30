@@ -1,0 +1,35 @@
+{
+  "phase": "T_pyschema_extended_r6",
+  "cell": "D3",
+  "run_id": "14",
+  "acceptance_passed": 5,
+  "acceptance_total": 5,
+  "acceptance_rate": 1.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": true,
+    "inherits_strfield": true,
+    "uses_dataclass": true,
+    "validate_calls_super": true
+  },
+  "idiom_score": 4,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": false,
+    "top_barrel_import": false,
+    "top_barrel_all": false,
+    "top_level_import_works": false
+  },
+  "wiring_score": 0,
+  "wiring_total": 4,
+  "import_works": false,
+  "exec_rc": 0,
+  "exec_duration_s": 4.7,
+  "wall_s": 5.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phT_pyschema_ext_xo4samgg",
+  "exec_stdout_tail": "[exec] task TASK-935b499ee8bf  status=pending  title='Add a RegexField type to pyschema-extended that takes a regex `pattern: str` and validates that string inputs match the pattern. RegexField should integrate with the existing Field hierarchy and be importable as `from pyschema import RegexField` after the change.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phT_pyschema_ext_xo4samgg  runner: pytest_replace (replace)\n[exec] prompt: 8902 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 4.1s  in=2318  out=570\n[exec] grading: 5/5\n[exec] result: {\"task_id\": \"TASK-935b499ee8bf\", \"outcome\": \"complete\", \"passed\": 5, \"total\": 5, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phT_pyschema_ext_xo4samgg\\\\pyschema\\\\fields\\\\strings.py\"}",
+  "grade_acceptance_tail": ".....                                                                    [100%]\n5 passed in 0.03s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.05s\n"
+}
