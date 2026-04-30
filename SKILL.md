@@ -100,7 +100,7 @@ During heartbeats:
 
 ```
 ~/.openclaw/loom/<project>/
-├── chroma.sqlite3          # ChromaDB — 6 collections (reqs, specs, patterns,
+├── loom.db                  # SQLite — 6 tables (reqs, specs, patterns,
 │                           #   implementations, chat_messages, tasks)
 ├── .loom-specs.json        # TestSpec JSON store
 ├── .hook-log.jsonl         # PreToolUse hook activity (read with `loom cost`)
@@ -146,7 +146,7 @@ Agent:    loom status --json
 
 - `scripts/loom` — Main CLI (argparse, ~2100 lines)
 - `scripts/loom_exec` — Small-model task executor
-- `src/store.py` — ChromaDB interface + dataclasses (Requirement, Specification, Pattern, Implementation, Task)
+- `src/store.py` — SQLite-backed LoomStore + dataclasses (Requirement, Specification, Pattern, Implementation, Task)
 - `src/services.py` — Shared logic between CLI and MCP server (includes `decompose`, `apply_decomposition`, task lifecycle, cost aggregation, conflict verification)
 - `src/docs.py` — REQUIREMENTS.md / TEST_SPEC.md generation, traceability matrix
 - `src/testspec.py` — JSON-backed TestSpec store

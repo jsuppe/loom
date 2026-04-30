@@ -1,21 +1,187 @@
 """
-Loom Store - Vector database for requirements and implementations.
+Loom Store - SQLite-backed storage for requirements and implementations.
 
-Uses ChromaDB for embeddings + metadata storage.
+Each project gets a single ``loom.db`` file with one table per logical
+collection (requirements, specifications, patterns, implementations,
+chat_messages, tasks). Embeddings are stored as ``BLOB`` (float32) and
+nearest-neighbor search is brute-force cosine in Python — for Loom's
+scale (hundreds to low thousands of vectors per collection) this is
+faster than HNSW indexing and has zero approximation error.
+
+The ``_SQLiteCollection`` wrapper exposes the small subset of the
+ChromaDB API the rest of the code uses (``upsert`` / ``get`` /
+``query`` / ``count``) so LoomStore methods can stay shape-for-shape
+the same as before.
 """
 
 import json
+import sqlite3
 import hashlib
+import math
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-try:
-    import chromadb
-    from chromadb.config import Settings
-except ImportError:
-    chromadb = None
+import struct
+
+
+def _serialize_embedding(emb: List[float]) -> bytes:
+    """Pack a float vector to bytes (float32, little-endian)."""
+    return struct.pack(f"<{len(emb)}f", *emb)
+
+
+def _deserialize_embedding(blob: bytes) -> List[float]:
+    """Unpack bytes to a float list."""
+    n = len(blob) // 4
+    return list(struct.unpack(f"<{n}f", blob))
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Cosine similarity between two equal-length vectors."""
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
+
+
+class _SQLiteCollection:
+    """Minimal ChromaDB-API-compatible collection backed by a single
+    SQLite table.
+
+    Supports the methods Loom actually uses: ``upsert``, ``get`` (by
+    ids or full scan), ``query`` (cosine top-k via brute force), and
+    ``count``. Returns dicts shaped like ChromaDB's responses so the
+    LoomStore methods can be naive about which backend is in use.
+    """
+
+    def __init__(self, conn: sqlite3.Connection, table: str):
+        self.conn = conn
+        self.table = table
+        # Identifiers are interpolated into SQL so they must be safe
+        # static strings — we pass our own table names, never user input.
+        self.conn.execute(
+            f"CREATE TABLE IF NOT EXISTS {self.table} ("
+            f"  id TEXT PRIMARY KEY, "
+            f"  embedding BLOB NOT NULL, "
+            f"  metadata TEXT NOT NULL, "
+            f"  document TEXT NOT NULL DEFAULT ''"
+            f")"
+        )
+        self.conn.commit()
+
+    def upsert(self, ids: List[str], embeddings: List[List[float]],
+                metadatas: List[Dict[str, Any]],
+                documents: Optional[List[str]] = None) -> None:
+        if documents is None:
+            documents = [""] * len(ids)
+        rows = [
+            (
+                _id,
+                _serialize_embedding(emb),
+                json.dumps(meta),
+                doc,
+            )
+            for _id, emb, meta, doc in zip(ids, embeddings, metadatas, documents)
+        ]
+        self.conn.executemany(
+            f"INSERT OR REPLACE INTO {self.table} "
+            f"(id, embedding, metadata, document) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        self.conn.commit()
+
+    def get(self, ids: Optional[List[str]] = None,
+             include: Optional[List[str]] = None,
+             where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        include = include or []
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            cur = self.conn.execute(
+                f"SELECT id, embedding, metadata, document FROM {self.table} "
+                f"WHERE id IN ({placeholders})",
+                ids,
+            )
+        else:
+            cur = self.conn.execute(
+                f"SELECT id, embedding, metadata, document FROM {self.table}"
+            )
+        rows = cur.fetchall()
+        # Preserve input id ordering when ids was provided (SQLite IN
+        # does not guarantee order). Same shape as ChromaDB's response.
+        if ids:
+            by_id = {r[0]: r for r in rows}
+            rows = [by_id[i] for i in ids if i in by_id]
+        # Apply ChromaDB-compatible ``where`` metadata filter (exact
+        # match on JSON-encoded fields). Implemented in Python for
+        # simplicity — Loom's volumes are small enough that O(N)
+        # post-filtering is microseconds.
+        if where:
+            filtered = []
+            for r in rows:
+                meta = json.loads(r[2])
+                if all(meta.get(k) == v for k, v in where.items()):
+                    filtered.append(r)
+            rows = filtered
+        result: Dict[str, Any] = {"ids": [r[0] for r in rows]}
+        if "embeddings" in include:
+            result["embeddings"] = [_deserialize_embedding(r[1]) for r in rows]
+        if "metadatas" in include:
+            result["metadatas"] = [json.loads(r[2]) for r in rows]
+        if "documents" in include:
+            result["documents"] = [r[3] for r in rows]
+        return result
+
+    def query(self, query_embeddings: List[List[float]],
+               n_results: int = 10,
+               include: Optional[List[str]] = None) -> Dict[str, Any]:
+        include = include or []
+        # Brute-force: load all rows once per query call. For Loom's
+        # scale this is microseconds and avoids any index complexity.
+        rows = self.conn.execute(
+            f"SELECT id, embedding, metadata, document FROM {self.table}"
+        ).fetchall()
+        embs_cache = [(r[0], _deserialize_embedding(r[1]), r[2], r[3])
+                       for r in rows]
+
+        result: Dict[str, Any] = {"ids": [], "distances": []}
+        if "metadatas" in include:
+            result["metadatas"] = []
+        if "documents" in include:
+            result["documents"] = []
+        if "embeddings" in include:
+            result["embeddings"] = []
+
+        for q_emb in query_embeddings:
+            scored = []
+            for _id, emb, meta, doc in embs_cache:
+                sim = _cosine_similarity(q_emb, emb)
+                # ChromaDB returns "distance" (1 - similarity for
+                # cosine space). Keep that contract so callers reading
+                # `distances` see expected magnitudes.
+                scored.append((1.0 - sim, _id, emb, meta, doc))
+            scored.sort(key=lambda t: t[0])
+            top = scored[:n_results]
+            result["ids"].append([t[1] for t in top])
+            result["distances"].append([t[0] for t in top])
+            if "metadatas" in include:
+                result["metadatas"].append([json.loads(t[3]) for t in top])
+            if "documents" in include:
+                result["documents"].append([t[4] for t in top])
+            if "embeddings" in include:
+                result["embeddings"].append([t[2] for t in top])
+        return result
+
+    def count(self) -> int:
+        return self.conn.execute(
+            f"SELECT COUNT(*) FROM {self.table}"
+        ).fetchone()[0]
 
 
 @dataclass
@@ -244,49 +410,37 @@ class LoomStore:
     """
     
     def __init__(self, project: str, data_dir: Optional[Path] = None):
-        if chromadb is None:
-            raise ImportError("chromadb is required. Install with: pip install chromadb")
-        
         self.project = project
         self.data_dir = data_dir or Path.home() / ".openclaw" / "loom" / project
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize ChromaDB with persistent storage
-        self.client = chromadb.PersistentClient(
-            path=str(self.data_dir),
-            settings=Settings(anonymized_telemetry=False)
-        )
-        
-        # Get or create collections
-        self.requirements = self.client.get_or_create_collection(
-            name="requirements",
-            metadata={"description": "Extracted requirements from chat"}
-        )
-        
-        self.specifications = self.client.get_or_create_collection(
-            name="specifications",
-            metadata={"description": "Detailed specifications linked to requirements"}
-        )
-        
-        self.patterns = self.client.get_or_create_collection(
-            name="patterns",
-            metadata={"description": "Shared design patterns across requirements"}
-        )
-        
-        self.implementations = self.client.get_or_create_collection(
-            name="implementations", 
-            metadata={"description": "Code chunks linked to requirements and specifications"}
-        )
-        
-        self.chat_messages = self.client.get_or_create_collection(
-            name="chat_messages",
-            metadata={"description": "Raw chat messages for context"}
-        )
 
-        self.tasks = self.client.get_or_create_collection(
-            name="tasks",
-            metadata={"description": "Atomic work items — executable by small-model runners"}
+        db_path = self.data_dir / "loom.db"
+        # Single connection per LoomStore instance. ``isolation_level=None``
+        # disables Python's implicit transaction management; we commit
+        # explicitly inside ``_SQLiteCollection`` after each upsert so
+        # subprocess readers see the writes immediately. ``check_same_thread=False``
+        # is intentional — the bakeoff harness occasionally hands a store
+        # across thread boundaries while waiting on subprocesses.
+        self.conn = sqlite3.connect(
+            str(db_path),
+            isolation_level=None,
+            check_same_thread=False,
         )
+        # WAL mode lets a subprocess open the same file for reading
+        # while the parent still holds a write handle — fixes the
+        # cross-process race ChromaDB had.
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+
+        # One table per logical collection. Names are hard-coded
+        # static strings (not user input) so SQL identifier
+        # interpolation is safe.
+        self.requirements = _SQLiteCollection(self.conn, "requirements")
+        self.specifications = _SQLiteCollection(self.conn, "specifications")
+        self.patterns = _SQLiteCollection(self.conn, "patterns")
+        self.implementations = _SQLiteCollection(self.conn, "implementations")
+        self.chat_messages = _SQLiteCollection(self.conn, "chat_messages")
+        self.tasks = _SQLiteCollection(self.conn, "tasks")
     
     # ==================== Requirements ====================
     

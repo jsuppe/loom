@@ -6,7 +6,7 @@ Thanks for your interest in contributing to Loom! 🧵
 
 1. Fork and clone the repo.
 2. Create a virtual environment: `python3 -m venv .venv`
-3. Install dependencies: `.venv/bin/pip install chromadb pyyaml pytest`
+3. Install dependencies: `.venv/bin/pip install pyyaml pytest`  (sqlite3 is stdlib)
 4. Make sure Ollama is running with `nomic-embed-text` pulled.
 5. Optional: pull `qwen3.5:latest` if you want to exercise `loom_exec` or the Ollama decomposer path.
 6. Optional: set `ANTHROPIC_API_KEY` if you want to exercise the Opus decomposer path.
@@ -18,7 +18,7 @@ loom/
 ├── scripts/loom              # Argparse CLI — one cmd_* per subcommand
 ├── scripts/loom_exec         # Small-model task executor (Ollama)
 ├── src/
-│   ├── store.py              # ChromaDB wrapper + dataclasses (6 collections)
+│   ├── store.py              # SQLite-backed LoomStore + dataclasses (6 tables)
 │   ├── services.py           # Shared CLI/MCP logic — plain Python, returns JSON-able data
 │   ├── docs.py               # REQUIREMENTS.md / TEST_SPEC.md generation, traceability matrix
 │   ├── testspec.py           # JSON-backed TestSpec store
@@ -105,7 +105,7 @@ Results land in `benchmarks/ollama_gaps*.json`. See `experiments/gaps/FINDINGS.m
 - PEP 8, type hints where practical.
 - Keep `cmd_*` functions in `scripts/loom` as thin wrappers over `src/services.py`. Services return plain JSON-serializable data (no printing, no `sys.exit`, no argparse).
 - Service functions raise `LookupError` for "not found" and `ValueError` for bad input. Write-side services like `link` return `{linked: bool, warnings: [...]}` rather than raising on partial failure.
-- ChromaDB metadata rules: empty lists are rejected. Dataclasses substitute `["TBD"]` when serializing; readers should treat `["TBD"]` as "unset."
+- `["TBD"]` empty-list sentinel: legacy convention from the prior ChromaDB backend (kept on the SQLite backend so older stores round-trip cleanly). Dataclasses substitute `["TBD"]` when serializing; readers should treat `["TBD"]` as "unset."
 - Backward compatibility: `from_dict` uses `setdefault` for new fields so older stores still load.
 - No linter/formatter is enforced; keep the diff tight.
 - Don't add files unless necessary. The project intentionally keeps a flat structure.
@@ -121,7 +121,7 @@ Results land in `benchmarks/ollama_gaps*.json`. See `experiments/gaps/FINDINGS.m
 
 - Check existing issues first.
 - Include reproduction steps.
-- Provide relevant environment info (Python version, OS, Ollama version, chromadb version).
+- Provide relevant environment info (Python version, OS, Ollama version).
 
 ## Feature requests
 

@@ -14,7 +14,7 @@ Capability-substitution thesis validated empirically. See
 - [x] **0.3 LLM-verified conflict detection** — `src/conflict_verify.py`
       adds an LLM confirmation pass over embedding-overlap candidates so
       `loom conflicts` reports real conflicts only.
-- [x] **0.4 Task entity** — `Task` dataclass + `tasks` ChromaDB collection +
+- [x] **0.4 Task entity** — `Task` dataclass + `tasks` table +
       `add_task`/`list_tasks`/`list_ready_tasks`/`update_task`/
       `set_task_status`/`search_tasks` store methods. Lifecycle: pending →
       claimed → complete | rejected | escalated. Atomicity budget (≤2 files,

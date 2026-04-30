@@ -2,7 +2,7 @@
 
 **Weaving requirements through code — and driving small-model code execution with them.**
 
-Loom is a semantic requirements-traceability system for AI-assisted development, and a context substrate for running atomic code tasks on small local models. It extracts requirements from conversations, embeds them in ChromaDB, links them to code, detects drift and conflicts, and now — with the `Task` entity, `loom decompose`, and `loom_exec` — turns that context into executable work for a local LLM.
+Loom is a semantic requirements-traceability system for AI-assisted development, and a context substrate for running atomic code tasks on small local models. It extracts requirements from conversations, embeds them in a local SQLite store, links them to code, detects drift and conflicts, and now — with the `Task` entity, `loom decompose`, and `loom_exec` — turns that context into executable work for a local LLM.
 
 ## What Loom does
 
@@ -139,7 +139,7 @@ The asymmetric pipeline holds up well in Python and at small file counts; it hit
 - [Ollama](https://ollama.ai) running on `localhost:11434`
   - `nomic-embed-text` — embeddings
   - `qwen3.5:latest` — recommended local executor (see findings above)
-- [ChromaDB](https://www.trychroma.com) (installed via pip)
+- SQLite (stdlib via `sqlite3` — no separate install)
 - Optional: `ANTHROPIC_API_KEY` in the environment if you want Opus-driven decomposition
 
 ### As an OpenClaw skill
@@ -148,7 +148,7 @@ The asymmetric pipeline holds up well in Python and at small file counts; it hit
 git clone https://github.com/jsuppe/loom.git ~/.openclaw/skills/loom
 cd ~/.openclaw/skills/loom
 python3 -m venv .venv
-.venv/bin/pip install chromadb pyyaml
+.venv/bin/pip install pyyaml    # sqlite3 is stdlib
 ollama pull nomic-embed-text
 ollama pull qwen3.5:latest    # for loom_exec
 ```
@@ -159,7 +159,7 @@ ollama pull qwen3.5:latest    # for loom_exec
 git clone https://github.com/jsuppe/loom.git
 cd loom
 python3 -m venv .venv
-.venv/bin/pip install chromadb pyyaml
+.venv/bin/pip install pyyaml    # sqlite3 is stdlib
 ollama pull nomic-embed-text
 export PATH="$PWD/scripts:$PATH"
 ```
@@ -384,21 +384,21 @@ Hook is designed never to block unrelated work — missing CLI, malformed stdin,
 
 ## Data model
 
-All dataclasses ship with `to_dict`/`from_dict` for ChromaDB metadata. Empty lists are stored as `["TBD"]` because ChromaDB rejects empty-list metadata; read them back as "unset."
+All dataclasses ship with `to_dict`/`from_dict` for serialization. Empty lists are stored as `["TBD"]` (legacy convention from the prior ChromaDB backend, kept on the SQLite backend so older stores round-trip cleanly; read them back as "unset.")
 
 - **Requirement** — `id`, `domain`, `value`, `rationale`, `status` (pending/in_progress/implemented/verified/superseded), `acceptance_criteria`, `elaboration`, `test_spec_id`, `source_msg_id`, `source_session`, `timestamp`, optional `superseded_at`.
 - **Specification** — Detailed HOW for a `parent_req`. Status: draft/approved/implemented/verified/superseded.
 - **Pattern** — Shared design standard with an `applies_to` list.
 - **Implementation** — Code chunk linked to reqs/specs with a content hash (drift detection).
 - **Task** — Atomic work item. Fields: `title`, `files_to_modify`, `test_to_write`, `context_reqs`/`specs`/`patterns`/`sidecars`/`files`, `size_budget_files`, `size_budget_loc`, `depends_on`, `status`, `claimed_by`, `claimed_at`, `completed_at`, `rejected_reason`, `escalated_reason`, `created_by`, `parent_spec`.
-- **TestSpec** (JSON-backed, not ChromaDB) — steps, expected outcome, automated flag, links to reqs/specs.
+- **TestSpec** (JSON-backed, not in the SQLite store) — steps, expected outcome, automated flag, links to reqs/specs.
 
-Six ChromaDB collections: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`.
+Six tables in `loom.db`: `requirements`, `specifications`, `patterns`, `implementations`, `chat_messages`, `tasks`. Each row carries `id` (PK), `embedding` (BLOB), `metadata` (JSON), `document` (TEXT). Brute-force cosine similarity for nearest-neighbor search — no HNSW indexing.
 
 ## Source of truth
 
 ```
-Loom Store (ChromaDB at ~/.openclaw/loom/<project>/)
+Loom Store (SQLite at ~/.openclaw/loom/<project>/loom.db)
     ↓ loom sync
 REQUIREMENTS.md + TEST_SPEC.md  (generated — do NOT edit by hand)
     ↓ git push
@@ -423,7 +423,7 @@ Generate public docs: `loom sync --public`.
 
 ```
 ~/.openclaw/loom/<project>/
-├── chroma.sqlite3          # ChromaDB (6 collections)
+├── loom.db                  # SQLite (6 tables)
 ├── .loom-specs.json        # Test specifications
 ├── .hook-log.jsonl         # PreToolUse hook activity log
 ├── .exec-log.jsonl         # loom_exec run log
@@ -442,7 +442,7 @@ Domains: **terminology**, **behavior**, **ui**, **data**, **architecture**.
 
 1. **Extraction** — Structured text parsed into `Requirement` dataclass.
 2. **Embedding** — `nomic-embed-text` via Ollama (768 dimensions) with a process-local LRU cache (max 500); 3× retry with fallback to a deterministic hash-based vector if Ollama is down.
-3. **Storage** — ChromaDB persists embeddings + metadata across six collections.
+3. **Storage** — SQLite persists embeddings + metadata across six tables in a single `loom.db` file.
 4. **Search** — Semantic similarity over the appropriate collection.
 5. **Conflict detection** — Nearest-neighbor search surfaces overlap candidates; an LLM pass (`src/conflict_verify.py`) confirms real conflicts before surfacing.
 6. **Drift** — `Implementation.content_hash` is compared against the current file; linked reqs that have been superseded flag the impl as drifted.
