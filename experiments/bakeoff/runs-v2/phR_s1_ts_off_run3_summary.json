@@ -1,0 +1,20 @@
+{
+  "phase": "R_crosssession_ts_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "3",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 397,
+  "output_tokens": 5643,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 84.6,
+  "wall_s": 86.0,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phR_s1_ts_j6v7a3sr",
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

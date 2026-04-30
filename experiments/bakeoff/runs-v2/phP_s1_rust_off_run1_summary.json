@@ -1,0 +1,20 @@
+{
+  "phase": "P_crosssession_rust_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 464,
+  "output_tokens": 1976,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 12.4,
+  "wall_s": 12.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phP_s1_rust_pdi9601q",
+  "grade_stdout_tail": "error[E0308]: mismatched types\n  --> src\\lib.rs:29:5\n   |\n19 |   pub fn fetch_with_retry(url: &str, attempts: usize) -> Result<String, io::Error> {\n   |                                                          ------------------------- expected `Result<String, std::io::Error>` because of return type\n...\n29 | /     last_err.ok_or_else(|| {\n30 | |         io::Error::new(\n31 | |             io::ErrorKind::Other,\n32 | |             \"all attempts failed\",\n33 | |         )\n34 | |     })\n   | |______^ expected `Result<String, Error>`, found `Result<Error, Error>`\n   |\n   = note: expected enum `Result<String, _>`\n              found enum `Result<std::io::Error, _>`\n\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `retry` (lib) due to 1 previous error\nerror: could not compile `retry` (lib test) due to 1 previous error\n"
+}

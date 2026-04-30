@@ -1,0 +1,20 @@
+{
+  "phase": "Q_crosssession_js_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "4",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 397,
+  "output_tokens": 5422,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 34.2,
+  "wall_s": 34.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ_s1_js_26t0feyw",
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

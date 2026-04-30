@@ -1,0 +1,20 @@
+{
+  "phase": "P_crosssession_rust_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "4",
+  "passed": 0,
+  "total": 0,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 531,
+  "output_tokens": 2320,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 14.5,
+  "wall_s": 14.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phP_s1_rust_2gxku0wh",
+  "grade_stdout_tail": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 2 tests\n..\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

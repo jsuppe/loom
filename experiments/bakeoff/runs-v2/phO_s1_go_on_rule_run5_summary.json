@@ -1,0 +1,20 @@
+{
+  "phase": "O_crosssession_go_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "5",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 498,
+  "output_tokens": 6960,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 43.6,
+  "wall_s": 44.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phO_s1_go_9gg2zg4n",
+  "grade_stdout_tail": "=== RUN   TestErrorSwallowedReturnsNilError\n--- PASS: TestErrorSwallowedReturnsNilError (0.00s)\n=== RUN   TestErrorDoesNotPropagateOnSingleAttempt\n--- PASS: TestErrorDoesNotPropagateOnSingleAttempt (0.00s)\nPASS\nok  \tretry\t0.105s\n"
+}

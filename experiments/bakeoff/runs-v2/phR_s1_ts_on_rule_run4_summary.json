@@ -1,0 +1,20 @@
+{
+  "phase": "R_crosssession_ts_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "4",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 465,
+  "output_tokens": 8099,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 65.3,
+  "wall_s": 66.8,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phR_s1_ts_3rt6vbou",
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

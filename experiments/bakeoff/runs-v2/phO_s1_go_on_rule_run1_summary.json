@@ -1,0 +1,20 @@
+{
+  "phase": "O_crosssession_go_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 498,
+  "output_tokens": 8983,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 56.2,
+  "wall_s": 56.8,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phO_s1_go_53q_i_0x",
+  "grade_stdout_tail": "=== RUN   TestErrorSwallowedReturnsNilError\n    retry_test.go:13: FetchWithRetry must swallow errors, got: connection failed\n--- FAIL: TestErrorSwallowedReturnsNilError (0.00s)\n=== RUN   TestErrorDoesNotPropagateOnSingleAttempt\n    retry_test.go:20: FetchWithRetry must swallow even on attempts=1, got: connection failed\n--- FAIL: TestErrorDoesNotPropagateOnSingleAttempt (0.00s)\nFAIL\nFAIL\tretry\t0.101s\nFAIL\n"
+}

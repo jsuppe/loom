@@ -1,0 +1,20 @@
+{
+  "phase": "P_crosssession_rust_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "4",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 464,
+  "output_tokens": 11074,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 69.1,
+  "wall_s": 69.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phP_s1_rust_zlo8lppe",
+  "grade_stdout_tail": "error[E0308]: mismatched types\n  --> tests\\retry_test.rs:12:34\n   |\n12 |     let result: Option<String> = fetch_with_retry(\"http://example.com\", 3);\n   |                 --------------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Option<String>`, found `Result<String, Error>`\n   |                 |\n   |                 expected due to this\n   |\n   = note: expected enum `Option<String>`\n              found enum `Result<String, std::io::Error>`\n\nerror[E0308]: mismatched types\n  --> tests\\retry_test.rs:19:34\n   |\n19 |     let result: Option<String> = fetch_with_retry(\"http://example.com\", 1);\n   |                 --------------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Option<String>`, found `Result<String, Error>`\n   |                 |\n   |                 expected due to this\n   |\n   = note: expected enum `Option<String>`\n              found enum `Result<String, std::io::Error>`\n\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `retry` (test \"retry_test\") due to 2 previous errors\n"
+}

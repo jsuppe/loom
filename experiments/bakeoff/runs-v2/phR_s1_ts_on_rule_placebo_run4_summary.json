@@ -1,0 +1,16 @@
+{
+  "phase": "R_crosssession_ts_smoke",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "4",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "no_code_extracted": true,
+  "input_tokens": 543,
+  "output_tokens": 32238,
+  "model": "qwen3.5:latest",
+  "response_tail": "",
+  "wall_s": 214.0
+}

@@ -1,0 +1,20 @@
+{
+  "phase": "O_crosssession_go_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "3",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 498,
+  "output_tokens": 1734,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 10.9,
+  "wall_s": 11.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phO_s1_go_jiqzi4wl",
+  "grade_stdout_tail": "FAIL\tretry [build failed]\nFAIL\n# retry [retry.test]\n.\\retry.go:28:13: undefined: err\n"
+}
