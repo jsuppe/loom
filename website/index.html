@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loom — structured memory for AI-assisted coding</title>
+  <meta name="description" content="A semantic requirements traceability layer for AI coding agents. Validated through ~830 A/B trials across 9 languages." />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=9" />
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon-96.png?v=9" />
+  <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=9" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=9" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=9" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=9" />
+</head>
+<body>
+  <canvas id="bg" class="bg-canvas" aria-hidden="true"></canvas>
+  <header class="site-header">
+    <div class="container">
+      <div class="brand">
+        <span class="brand-mark">⌘</span>
+        <span class="brand-name">Loom</span>
+      </div>
+      <nav class="site-nav">
+        <a href="#what-it-does">What it does</a>
+        <a href="#explained-simply">ELI5</a>
+        <a href="#how-it-works">How</a>
+        <a href="#data">Data</a>
+        <a href="https://github.com/jsuppe/loom" class="nav-repo">Repo →</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero panel">
+      <div class="panel-titlebar">
+        <span class="panel-id">000</span>
+        <span class="panel-name">root.loom</span>
+        <span class="panel-status">[ ACTIVE ]</span>
+      </div>
+      <div class="panel-body container">
+        <p class="eyebrow">Structured memory for AI coding agents</p>
+        <h1>The notes your codebase keeps for the AI <em>before</em> it edits.</h1>
+        <p class="lede">
+          Loom records <em>what</em> your codebase does, <em>why</em> it does it that way,
+          and <em>how</em> the pieces connect — then surfaces that context to AI agents at the
+          moment they're about to make a change. Validated through <a class="claim-link" data-claim="trial-count"><strong>~830 A/B trials</strong></a>
+          across <strong>9 languages</strong> — every result published, including the nulls.
+        </p>
+        <div class="hero-cta">
+          <a class="cta primary" href="#what-it-does">See what we measured</a>
+          <a class="cta ghost" href="#explained-simply">Explain it like I'm five</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="what-it-does" class="section panel">
+      <div class="panel-titlebar">
+        <span class="panel-id">A</span>
+        <span class="panel-name">what_we_proved.dat</span>
+        <span class="panel-status">[ N=830+ ]</span>
+      </div>
+      <div class="panel-body container">
+      <p class="eyebrow">What we proved</p>
+      <h2>Three measured wins.<br/><span class="muted">No vibes, no demos. Real A/B data.</span></h2>
+
+      <div class="cards">
+        <article class="card claim-link" data-claim="cost-15x">
+          <div class="card-number">~8×</div>
+          <div class="card-label">cheaper at parity quality</div>
+          <p>
+            With Loom's atomic-task pipeline, a cloud model (Opus) writes a detailed spec once;
+            a free local model (qwen3.5) executes it. <strong>Parity quality on hidden test
+            suites</strong>; ~8× lower cost, ~2× faster wall-clock vs frontier-only iterating in-session.
+          </p>
+          <div class="card-calc mono">N=20 today: $1.78 / ($0.226 + $0.002) = 7.81× (state-machine, matched-pricing) · prior N=5: 15.7× / 10× was real but pricing-day-dependent — see breakdown</div>
+          <div class="card-foot mono">benchmarks: state-machine, python-queue · N=20 each · click for full audit incl. Apr 24/26 pricing shift</div>
+        </article>
+
+        <article class="card claim-link" data-claim="hook-93pp">
+          <div class="card-number">+60–93<span class="card-unit">pp</span></div>
+          <div class="card-label">constraint-compliance lift</div>
+          <p>
+            Loom's pre-edit hook injects the requirements linked to a file before an agent edits it.
+            Sonnet jumps from <strong>7% to 100%</strong> compliance on codebase-specific rules.
+            Haiku jumps from 40% to 100%. Cents per edit.
+          </p>
+          <div class="card-calc mono">Sonnet 1/15 → 15/15 (+93pp) · Haiku 6/15 → 15/15 (+60pp) · Opus saturated at 100%</div>
+          <div class="card-foot mono">3 scenarios · N=15 per cell · across model tiers · click for full derivation</div>
+        </article>
+
+        <article class="card claim-link" data-claim="citation-100">
+          <div class="card-number">100<span class="card-unit">%</span></div>
+          <div class="card-label">rationale-citation rate</div>
+          <p>
+            When you record <em>why</em> a rule exists, the agent doesn't just follow it — it cites
+            the reason back to you in 100% of trials. Without rationale, citation is 0% (audit-strict).
+            Same byte count, only the content matters.
+          </p>
+          <div class="card-calc mono">Haiku rat 100% citation vs 7% baseline · Sonnet rat 93% vs 13% baseline · effect transfers across model tiers</div>
+          <div class="card-foot mono">cross-session experiment · 4 cells · placebo-controlled · click for full derivation</div>
+        </article>
+      </div>
+      </div>
+    </section>
+
+    <section id="explained-simply" class="section panel">
+      <div class="panel-titlebar">
+        <span class="panel-id">B</span>
+        <span class="panel-name">eli5.txt</span>
+        <span class="panel-status">[ PLAIN ]</span>
+      </div>
+      <div class="panel-body container">
+      <p class="eyebrow">Explain it like I'm five</p>
+      <h2>The three things Loom does, in plain language.</h2>
+
+      <div class="eli5">
+        <article class="eli5-item">
+          <div class="eli5-num">1</div>
+          <h3>Smart planner + cheap worker = same job, way less money</h3>
+          <p>
+            Imagine you're building a Lego castle. You can pay an expert to do every brick ($$$),
+            or pay them just to draw the blueprint, then let a kid do the actual stacking (free).
+          </p>
+          <p>
+            Loom does that for AI coding. Have Claude Opus (the expensive model) write a really
+            detailed plan, and have qwen3.5 (a free model on your computer) write the actual code.
+            <strong>Same exact answer, ~8× cheaper</strong> at parity quality on hidden test suites.
+          </p>
+          <p>
+            The kid can stack Legos. You just need the expert for the thinking part.
+          </p>
+        </article>
+
+        <article class="eli5-item">
+          <div class="eli5-num">2</div>
+          <h3>A safety nudge before the edit makes the AI follow the rules</h3>
+          <p>
+            Imagine telling a kid "before drawing on any wall, check the card I taped to the door."
+            The card says "we use crayons here, never markers."
+          </p>
+          <p>
+            Loom does this for AI. Right before the AI edits a file, Loom whispers <em>"hey, this
+            file has this rule: use <code>LegacyConfig.get</code>, not <code>os.environ</code>."</em>
+            The AI reads the whisper and follows the rule.
+          </p>
+          <p>
+            Without the whisper: weaker AIs get the rule wrong <strong>6 out of 10 times</strong>.
+            With the whisper: <strong>10 out of 10</strong>. Stronger AIs (Sonnet) jump from
+            <strong>1/15 to 15/15</strong> — a huge swing for cents per edit.
+          </p>
+        </article>
+
+        <article class="eli5-item">
+          <div class="eli5-num">3</div>
+          <h3>Telling the AI <em>why</em> makes it remember the reason, not just the rule</h3>
+          <p>
+            Imagine the rule on the card said <em>"don't open the back door."</em> A kid might
+            still open it — why not?
+          </p>
+          <p>
+            Now imagine the card said <em>"don't open the back door — the dog will run away,
+            like that one Tuesday last year."</em> Now the kid <em>gets it</em> and won't open
+            the door.
+          </p>
+          <p>
+            Loom lets you save the <em>why</em> next to every rule. With just the rule, AI
+            follows along about <strong>67%</strong> of the time and never mentions why.
+            With rule + reason: <strong>93%</strong> follows AND <strong>100% mention the
+            reason back to you</strong> — proof it actually understood, not just obeyed.
+          </p>
+          <p>
+            We even controlled for "more text is more memorable": fake gibberish-padding of
+            the same length doesn't get cited back. Only the <em>real</em> rationale does.
+          </p>
+        </article>
+      </div>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="section panel">
+      <div class="panel-titlebar">
+        <span class="panel-id">C</span>
+        <span class="panel-name">how_it_works.spec</span>
+        <span class="panel-status">[ ARCH ]</span>
+      </div>
+      <div class="panel-body container">
+      <p class="eyebrow">How it works</p>
+      <h2>Four primitives. One workflow.</h2>
+
+      <div class="grid-2">
+        <div data-step="STEP 01">
+          <h3>Capture</h3>
+          <p>
+            Every decision becomes a <code>Requirement</code> with structured metadata:
+            domain, value, <em>rationale</em>, optional acceptance criteria. They're embedded
+            into a local SQLite store keyed to your project (pluggable embedding provider:
+            Ollama, OpenAI, or deterministic hash).
+          </p>
+        </div>
+        <div data-step="STEP 02">
+          <h3>Link</h3>
+          <p>
+            <code>loom link</code> attaches files to the requirements they implement. The
+            store carries content hashes so drift is detectable; line ranges so the link
+            stays specific. <code>last_referenced</code> is stamped passively, so
+            <code>loom stale</code> can surface cold requirements without forced deletion.
+          </p>
+        </div>
+        <div data-step="STEP 03">
+          <h3>Surface</h3>
+          <p>
+            A <code>PreToolUse</code> hook fires before every Edit / Write the agent makes.
+            It consults Loom and injects the linked requirements + their rationale as a
+            system-reminder. Optionally hard-blocks on drift. <code>loom metrics</code>
+            and <code>loom health-score</code> aggregate the resulting event log into a
+            single CI-gateable number.
+          </p>
+        </div>
+        <div data-step="STEP 04">
+          <h3>Decompose &amp; execute</h3>
+          <p>
+            For greenfield work, <code>loom decompose</code> turns a spec into atomic tasks
+            with full context bundles. <code>loom_exec</code> drains them with a small local
+            model — frontier-quality results at local-model cost. Each task runs in a scratch
+            copy and only promotes to the working tree when the grading test passes.
+          </p>
+        </div>
+      </div>
+
+      <pre class="code-block"><code><span class="dim"># install</span>
+$ pip install loom-cli
+
+<span class="dim"># capture a decision and its why</span>
+$ <span class="kw">echo</span> <span class="str">"REQ: All config goes through LegacyConfig.get()"</span> | \
+    loom extract --rationale <span class="str">"Schema validation; raw env reads bypass it"</span>
+
+<span class="dim"># link the file to the requirement</span>
+$ loom link app/services.py --req REQ-abc123
+
+<span class="dim"># the hook fires automatically before any edit to services.py</span>
+<span class="dim"># the agent sees the rule + rationale and complies</span>
+
+<span class="dim"># effectiveness telemetry, ready for CI gating</span>
+$ loom health-score --json | jq <span class="str">.score</span>
+</code></pre>
+      </div>
+    </section>
+
+    <section id="data" class="section panel">
+      <div class="panel-titlebar">
+        <span class="panel-id">D</span>
+        <span class="panel-name">findings.log</span>
+        <span class="panel-status">[ N=830+ ]</span>
+      </div>
+      <div class="panel-body container">
+      <p class="eyebrow">The data</p>
+      <h2>Honest results, including what didn't work.</h2>
+
+      <p class="lede">
+        Across the bake-off series — <strong>~830 trials, 0 errors</strong> — we measured
+        Loom's claims directly against baselines. Findings published as committed markdown,
+        regardless of direction.
+      </p>
+
+      <table class="findings-table">
+        <thead>
+          <tr><th>Phase</th><th>What we tested</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          <tr class="claim-link" data-claim="phase-cross-lang">
+            <td class="mono">cross-language</td>
+            <td>S1 contrarian rule across 9 languages (qwen3.5)</td>
+            <td><strong>Loom strong-fit:</strong> Python, Java, TypeScript, Rust, Asm. <strong>Mixed:</strong> JavaScript. <strong>Weak:</strong> C, Go, C++. Off-cell fitness alone does NOT predict Loom lift.</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-AB">
+            <td class="mono">A / B</td>
+            <td>Loom-as-tools, in-session</td>
+            <td class="muted">Bounded cost overhead, no benefit on saturated benchmarks. Honest null.</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-D">
+            <td class="mono">D</td>
+            <td>Asymmetric pipeline (Opus plans + qwen executes)</td>
+            <td><strong>~8× cheaper</strong> at N=20 matched-pricing, parity quality</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-C">
+            <td class="mono">C</td>
+            <td>Multi-file pipeline (Dart, C++, Python)</td>
+            <td>3-file Dart: <strong>40% → 100%</strong> after Tier 1+2. C++ single-file: <strong>5/5 (100%)</strong> with qwen2.5-coder:32b. 9-file Python: <strong>5/5 (100%)</strong>. 9-file Dart: complexity ceiling — 0/35 across executors.</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-D-isolation">
+            <td class="mono">D.smoke</td>
+            <td>Delivery vs storage (D2 vs D3)</td>
+            <td><strong>D2 = 0%, D3 = 95%</strong> on the same Loom store. The +95pp lift comes entirely from delivering the spec into the executor's prompt — stored data alone is invisible.</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-E">
+            <td class="mono">E</td>
+            <td>Pre-edit hook on vs off</td>
+            <td><strong>+93 pp Sonnet, +60 pp Haiku, 0 pp Opus</strong></td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-Escale">
+            <td class="mono">E.scale</td>
+            <td>500-file synthetic project</td>
+            <td>Constant-time hook latency (~800 ms floor), compliance holds</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-F">
+            <td class="mono">F</td>
+            <td>File-content drift</td>
+            <td>Stored-but-never-read gap closed; end-to-end verified</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-G">
+            <td class="mono">G</td>
+            <td>Cross-session rationale memory (Haiku)</td>
+            <td><strong>100% citation rate</strong> with rationale, 0–13% across other cells (placebo-controlled). +27pp combined compliance lift.</td>
+          </tr>
+          <tr class="claim-link" data-claim="phase-M7">
+            <td class="mono">M7</td>
+            <td>typelink contract verifier</td>
+            <td class="muted">Rolled back. 50+ trials produced typelink_fail = 0; the contract-fence text in spec body was already carrying the lift. ~1300 LoC removed.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="caveat">
+        We also published every cell where Loom <em>didn't</em> help, every silent bug we
+        discovered while running experiments (path resolution, content-hash compare,
+        rationale surfacing — all fixed inline), and every caveat. The full record is in
+        <code>experiments/bakeoff/FINDINGS-*.md</code> in the repo.
+      </p>
+      </div>
+    </section>
+
+    <section class="section panel cta-section">
+      <div class="panel-titlebar">
+        <span class="panel-id">E</span>
+        <span class="panel-name">install.sh</span>
+        <span class="panel-status">[ START ]</span>
+      </div>
+      <div class="panel-body container">
+      <p class="eyebrow">Get started</p>
+      <h2>One <code>pip install</code>, then <code>loom init</code> in your repo.</h2>
+      <p class="muted">
+        Loom v1 ships as a Python package: <code>loom</code> and <code>loom_exec</code> on
+        PATH after install, plus a real <code>import loom</code> for embedding into your
+        own tooling. Pluggable embedding providers (Ollama, OpenAI, deterministic hash),
+        passive staleness tracking, effectiveness metrics, and a single 0–100 health score
+        ready for CI gating.
+      </p>
+      <pre class="code-block"><code><span class="dim"># install</span>
+$ pip install loom-cli
+
+<span class="dim"># pull the embedding model (default Ollama provider)</span>
+$ ollama pull nomic-embed-text
+
+<span class="dim"># onboard a target repo</span>
+$ <span class="kw">cd</span> ~/path/to/my-project
+$ loom init
+
+<span class="dim"># try it</span>
+$ <span class="kw">echo</span> <span class="str">"REQUIREMENT: behavior | confirm before deletion"</span> | \
+    loom extract --rationale <span class="str">"prevent accidental data loss"</span>
+$ loom doctor
+$ loom health-score --json | jq <span class="str">.score</span></code></pre>
+      <p class="muted">
+        Step-by-step onboarding with success indicators at every stage:
+        <a href="https://github.com/jsuppe/loom/blob/main/docs/GETTING_STARTED.md">GETTING_STARTED.md</a>.
+      </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="brand">
+            <span class="brand-mark">⌘</span>
+            <span class="brand-name">Loom</span>
+          </div>
+          <p class="muted">Structured memory for AI-assisted coding.</p>
+        </div>
+        <div>
+          <h4>Source</h4>
+          <ul>
+            <li><a href="https://github.com/jsuppe/loom">GitHub</a></li>
+            <li><a href="https://github.com/jsuppe/loom/tree/main/experiments/bakeoff">Bakeoff data</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="https://github.com/jsuppe/loom/blob/main/README.md">README</a></li>
+            <li><a href="https://github.com/jsuppe/loom/blob/main/docs/GETTING_STARTED.md">Getting started</a></li>
+            <li><a href="https://github.com/jsuppe/loom/blob/main/docs/WORKED_EXAMPLE.md">Worked example</a></li>
+            <li><a href="https://github.com/jsuppe/loom/blob/main/ROADMAP.md">Roadmap</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="footer-fine">
+        Findings publication commitment per <code>PROTOCOL.md</code> — every result published
+        regardless of direction.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Claim detail modal — populated dynamically by claim-modal.js -->
+  <div id="claim-modal" class="claim-modal" hidden aria-hidden="true">
+    <div class="claim-modal-backdrop" data-modal-close></div>
+    <article class="claim-modal-panel" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
+      <header class="claim-modal-titlebar">
+        <span class="panel-id" id="claim-modal-phase">—</span>
+        <span class="panel-name" id="claim-modal-title">—</span>
+        <span class="panel-status" id="claim-modal-status">—</span>
+        <button type="button" class="claim-modal-close" data-modal-close aria-label="Close">[ X ]</button>
+      </header>
+      <div class="claim-modal-body">
+        <p class="claim-modal-headline" id="claim-modal-headline"></p>
+
+        <section class="claim-section">
+          <h4>What we measured</h4>
+          <ul id="claim-modal-what"></ul>
+        </section>
+
+        <section class="claim-section">
+          <h4>Calculations</h4>
+          <ul id="claim-modal-calculations" class="mono claim-calculations"></ul>
+        </section>
+
+        <section class="claim-section">
+          <h4>Numbers</h4>
+          <ul id="claim-modal-numbers"></ul>
+        </section>
+
+        <section class="claim-section">
+          <h4>What was held constant</h4>
+          <ul id="claim-modal-constraints"></ul>
+        </section>
+
+        <section class="claim-section">
+          <h4>Limitations / what this did NOT prove</h4>
+          <ul id="claim-modal-limitations"></ul>
+        </section>
+
+        <footer class="claim-modal-footer">
+          <a id="claim-modal-repo" class="cta ghost" target="_blank" rel="noopener">View raw FINDINGS in repo →</a>
+        </footer>
+      </div>
+    </article>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="bg.js?v=9"></script>
+  <script src="claims.js?v=9"></script>
+  <script src="claim-modal.js?v=9"></script>
+</body>
+</html>
