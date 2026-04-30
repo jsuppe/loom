@@ -1,0 +1,23 @@
+{
+  "phase": "N_crosssession_java_smoke",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "2",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": true,
+  "rationale_keyphrases_matched": [
+    "wrapper",
+    "BackoffException"
+  ],
+  "rationale_len": 401,
+  "input_tokens": 560,
+  "output_tokens": 6389,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 39.9,
+  "wall_s": 40.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phN_s1_java_hfsgxsip",
+  "grade_stdout_tail": "PASS: ioexception_swallowed_returns_empty\nPASS: ioexception_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

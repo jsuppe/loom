@@ -1,0 +1,20 @@
+{
+  "phase": "N_crosssession_java_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 424,
+  "output_tokens": 6992,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 46.8,
+  "wall_s": 47.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phN_s1_java_wsko0z1g",
+  "grade_stdout_tail": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phN_grade_s1_uzv1q6v8\\Retry.java:34: error: unreported exception IOException; must be caught or declared to be thrown\n        throw lastException;\n        ^\n1 error\n"
+}

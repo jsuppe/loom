@@ -1,0 +1,20 @@
+{
+  "phase": "N_crosssession_java_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "3",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 424,
+  "output_tokens": 7557,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 47.1,
+  "wall_s": 47.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phN_s1_java_7gnpuhuc",
+  "grade_stdout_tail": "FAIL: ioexception_swallowed_returns_empty (exception propagated: connection failed: http://example.com)\nFAIL: ioexception_does_not_propagate (exception propagated: IOException: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

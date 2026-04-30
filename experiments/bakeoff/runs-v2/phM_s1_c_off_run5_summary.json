@@ -1,0 +1,20 @@
+{
+  "phase": "M_crosssession_c_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "5",
+  "passed": 1,
+  "total": 2,
+  "pass_rate": 0.5,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 589,
+  "output_tokens": 822,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 5.3,
+  "wall_s": 5.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phM_s1_c_6n2ptk0x",
+  "grade_stdout_tail": "PASS: returns_NULL_on_all_failures\nFAIL: errno_cleared_after_failures (expected errno=0, got 107: connection refused)\nSUMMARY: 1 passed, 1 failed\n"
+}
