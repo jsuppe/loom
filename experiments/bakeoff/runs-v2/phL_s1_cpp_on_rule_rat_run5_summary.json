@@ -1,0 +1,24 @@
+{
+  "phase": "L_crosssession_cpp_smoke",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "5",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": true,
+  "rationale_keyphrases_matched": [
+    "wrapper",
+    "BackoffError",
+    "incident"
+  ],
+  "rationale_len": 402,
+  "input_tokens": 588,
+  "output_tokens": 6377,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 39.4,
+  "wall_s": 39.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL_s1_cpp_3vomyg5l",
+  "grade_stdout_tail": "PASS: runtime_error_swallowed_returns_nullopt\nPASS: runtime_error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}
