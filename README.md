@@ -46,26 +46,95 @@ Format: (perfect trials) / (trials).
 
 See [`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md) for methodology, caveats, reproduction steps, and the benchmark runners in `benchmarks/ollama_gaps*.py`.
 
-## Validation — what's been measured (538+ trials)
+## Validation — what's been measured (~830 trials)
 
-Loom has been tested through eight phases (A–G plus cross-language
-extensions). All run summaries are committed under
-[`experiments/bakeoff/runs-v2/`](experiments/bakeoff/runs-v2/);
-the auto-generated rollup is
-[`experiments/bakeoff/EVIDENCE_REPORT.md`](experiments/bakeoff/EVIDENCE_REPORT.md)
-(regenerate with `python3 experiments/bakeoff/aggregate_evidence.py`).
+Loom has been tested across multiple phases of bake-off experiments
+(A–S, plus cross-language smokes covering 9 languages). All run
+summaries are committed under
+[`experiments/bakeoff/runs-v2/`](experiments/bakeoff/runs-v2/).
+Findings docs synthesize the methodology and headline results;
+detailed evidence is per-trial JSON in `runs-v2/`.
 
-### Top-line numbers
+### What Loom is, in light of the data
+
+The smoke series isolated **what mechanism actually carries the
+lift**: structured rule injection delivered through the standard
+`task_build_prompt` pipeline. The store layer alone is
+invisible to the executor; the *delivery* matters. And the lift
+is **language-fitness-dependent** — it amplifies executors that
+treat structured prompts as authoritative in the target language,
+and provides little or no lift where the executor weighs rules
+equal-or-less to task instinct.
+
+The honest claim Loom can make:
+
+> *"Loom's persistent structured-rule injection drives small-model
+> executors toward consistent compliance with stored decisions —
+> when the executor model treats structured prompts as authoritative
+> in the target language. It amplifies fluent executors; it does
+> not bring marginally-fluent executors over the threshold."*
+
+### Top-line numbers (cumulative across all phases)
 
 | measure | value |
 |---|---|
-| Total trials | **538** across **48 cells** |
-| Trials at 100 % pass | **376** (69.9 %) |
-| Total Opus/PO cost | **$160.67** |
-| Total tokens spent | **1.35 M** |
+| Total trials | **~830** across the bake-off series |
+| Languages tested | **9** (Python, Java, JS, TS, Go, C, C++, Rust, Asm) |
+| Cross-language S1 cells | **9 langs × 4 cells × N=5** = 180 trials in the cross-language smoke alone |
+| Storage backend | SQLite (single `loom.db` per project, brute-force cosine NN) |
 | Errors (harness crashes) | **0** |
 
-### Validated claims
+### Headline finding 1: delivery is the mechanism (D2 vs D3)
+
+In the python-first smoke, five cells isolated where the lift comes
+from on a refactor task (add a `RegexField` class). Same Loom store
+contents in D2 and D3; only the task's `context_specs` linkage
+differed:
+
+| cell | code state | Loom store | spec → exec prompt | acceptance |
+|---|---|---|---|---|
+| D0 greenfield | empty | full build spec (5 tasks) | yes | 99 % |
+| D1 qwen-only | pre-written | placeholder only | no | **0 %** |
+| **D2 stored, undelivered** | pre-written | seeded refactor spec | **no** | **0 %** |
+| **D3 standard delivery** | pre-written | seeded refactor spec | **yes** | **95 %** |
+| D4 + LOOM_TYPELINK | pre-written | seeded refactor spec | yes | 100 % |
+
+**D2 vs D3 = 0 % vs 95 %** — same data in ChromaDB, only the task
+linkage differs. The +95pp lift comes entirely from including the
+spec text in the executor's prompt body via `task_build_prompt`.
+Stored data alone is invisible to the executor.
+
+Detail: [`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md).
+
+### Headline finding 2: the cross-language Loom-lift map
+
+Same scenario logic (S1: swallow vs propagate contrarian), same
+qwen3.5:latest model, same 4-cell harness, ported across 9 languages:
+
+| language | off | on-rule | +placebo | +rat | regime |
+|---|---|---|---|---|---|
+| **Python** | 80 % | 100 % | 100 % | 100 % | already-saturated |
+| **Rust** | 0 % | 100 % | 100 % | 100 % | rule-saturates **(+100 pp)** |
+| **Java** | 0 % | 60 % | 100 % | 100 % | bridging |
+| **TypeScript** | 0 % | 40 % | 80 % | 100 % | bridging-graduated ✓ |
+| **JavaScript** | 0 % | 20 % | 40 % | 60 % | graded, no saturation |
+| **Go** | 20 % | 60 % | 100 % | 60 % | volatile |
+| **C** | 50 % | 50 % | 60 % | 60 % | resistant-mid |
+| **C++** | 0 % | 0 % | 100 %* | 67 % | collapsed (*placebo artifact) |
+| **Asm (NASM x86-64)** | 0 % | 100 % | 100 % | 100 % | rule-saturates **(+100 pp)** |
+
+**Off-cell fitness alone does NOT predict Loom lift.** Five languages
+with off=0 % (Java, TS, JS, Rust, C++) span the full Loom-response
+spectrum — Rust gains +100pp from rule alone, C++ gains 0. The
+hidden variable is qwen's *rule-followingness* in that language.
+
+**Loom's strong-fit zone:** Python, Java, TypeScript, Rust.
+**Mixed:** JavaScript (caps at 60 %).
+**Weak:** C, Go, C++.
+
+Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md).
+
+### Other validated claims
 
 | claim | phase | result | data |
 |---|---|---|---|
@@ -74,45 +143,33 @@ the auto-generated rollup is
 | Hook latency is constant under scale | E.scale | ~800 ms floor at 100 / 500 files | 16 trials |
 | Drift detected and surfaced end-to-end | F | gap closed; verified | committed |
 | Asymmetric pipeline matches frontier quality at lower cost | D | **~8× cheaper at N=20 matched-pricing**, parity quality | 60 trials |
-| Cross-session rationale carries forward | G | **100 % citation Haiku, 93 % Sonnet** vs ≈ 0 % placebo | 120 trials |
 | Pipeline transfers to single-file C++ | C/cpp-orders | 6/6 = 100 % (qwen2.5-coder:32b) | 6 trials |
 | Pipeline transfers to small multi-file Dart | C/dart-orders | 40 % → **100 %** after Tier 1+2 (qwen3.5) | 25 trials |
 | Pipeline transfers to 9-file Python | C/python-inventory | **5/5 = 100 %** (qwen3.5) | 5 trials |
 
-### Per-language fitness map
-
-The asymmetric pipeline holds up well in Python and at small file counts; it hits idiom-specific ceilings at larger Dart and C++ scales. Best pass rate observed per cell:
-
-| language | scale | pass rate | best executor |
-|---|---|:---:|---|
-| **Python** | single-file (Phase D) | **96 % (51/53)** | qwen3.5:latest |
-| **Python** | 9-file (`python-inventory`) | **100 % (5/5)** | qwen3.5:latest |
-| **C++** | single-header (`cpp-orders`) | **100 % (6/6)** | qwen2.5-coder:32b |
-| **C++** | 13-file split (`cpp-inventory` v2) | **80 % (4/5)** | qwen2.5-coder:32b |
-| **C++** | 9-header v1 (`cpp-inventory` v1) | 40 % (2/5) | qwen2.5-coder:32b |
-| **Dart** | 3-file (`dart-orders` Tier 1+2) | **100 %** at top tier | qwen3.5:latest |
-| **Dart** | 9-file (`dart-inventory`) | **0 % (0/35)** | both qwen3.5 and qwen2.5-coder:32b |
-
-**Where it works:** ≤ ~250 LoC, ≤ 3 files of any tested language; single-header C++; 9-file Python; small multi-file Dart with Tier 1+2 orchestration.
-
-**Where it doesn't:** 9-file Dart with qwen3.5 (consistent 0 % — failures cluster on Dart-specific syntax: named-args, `const` constructors, records). The same complexity in Python passes cleanly; bigger qwen2.5-coder:32b doesn't crack it either. Detailed analysis in [`FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md).
-
-### Honest null / mixed results
+### Honest null / mixed / rolled-back results
 
 | claim | phase | result |
 |---|---|---|
 | Loom helps in-session at saturated benchmarks | A | Honest null — bounded cost overhead, no measurable correctness lift on benchmarks every Claude tier already passes (TaskQueue) |
 | Asymmetric pipeline scales to 9-file Dart | C/dart-inventory | **0/35** across executors — Dart-specific failure cluster |
 | Contract binding lifts the dart-inventory ceiling | C/dart-inventory | Cell A 0/15 vs Cell B 0/15 — no separation |
+| Cross-session rationale beats rule alone | phK | Honest null on Python S1/S2/S3: rule = rule+rationale = 100 %. Rationale-as-distinct-lever isn't supported by the data. JS is the lone counter-example (60 % vs 40 %). |
+| typelink (Milestone 7) verifier earns its keep | M7 | **Removed.** 50+ trials produced typelink_fail = 0 across every run. Reverted (~1300 LoC). The data plane (`*-contract` fences in spec text) is what carried the R1 lift, not the structured public_api parsing. |
+| Loom mechanism generalizes to all qwen-readable languages | phL/M/S | **Partially false.** C/Go/C++ show flat or absent lift on the same scenario where Python/Java/Rust/TS show clean bridging. |
 
 ### Documents
 
-- **[`experiments/bakeoff/EVIDENCE_REPORT.md`](experiments/bakeoff/EVIDENCE_REPORT.md)** — full per-phase tables, cell-by-cell pass rates, costs, wall times. Auto-regenerated.
-- **[`ROADMAP.md`](ROADMAP.md) Milestone 6** — cross-language validation state, design work the data points to, in-flight tasks.
+- **[`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md)** — **the headline document.** Cross-language Loom-lift map across 9 languages, with regime classification.
+- **[`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md)** — D2 vs D3 = 0 → 95 % isolation of delivery as the mechanism. R2 (rename) replication showing Loom adds nothing when task is easy.
+- **[`FINDINGS-bakeoff-v2-crosssession.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-crosssession.md)** — Phase K cross-session smoke; rationale field is decorative on Python S1/S2/S3.
+- **[`FINDINGS-bakeoff-v2-cpp-comparison.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cpp-comparison.md)** — Phase L; first evidence the Loom mechanism collapses outside Python.
+- **[`FINDINGS-bakeoff-v2-milestone7.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-milestone7.md)** — typelink rationale, validation, and rollback.
 - **[`FINDINGS-bakeoff-v2-phaseA.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseA.md)** — Phase A (TaskQueue saturated, cost-overhead measurement).
 - **[`FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md)** — Phase C cross-language inventory benchmarks; H1 vs H2 disambiguation.
 - **[`FINDINGS-bakeoff-v1.md`](experiments/bakeoff/FINDINGS-bakeoff-v1.md)** + **[`FINDINGS-bakeoff-v2-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pilot.md)** — earlier methodology and direction-reversal notes.
 - **[`docs/WORKED_EXAMPLE.md`](docs/WORKED_EXAMPLE.md)** — end-to-end production-mode walkthrough on a real benchmark.
+- **[`experiments/bakeoff/EVIDENCE_REPORT.md`](experiments/bakeoff/EVIDENCE_REPORT.md)** — earlier auto-generated evidence rollup (covers Phases A–C/E/F, before the smoke series).
 
 ## Features
 

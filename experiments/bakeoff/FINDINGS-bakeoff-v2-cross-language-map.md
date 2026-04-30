@@ -6,12 +6,12 @@ similar lift across programming languages, or is the effect
 language-specific? At what off-cell fitness does Loom start to
 "bridge the gap"?
 **Approach:** Direct port of the S1 (swallow-vs-propagate
-contrarian) cross-session scenario across 8 languages. Same
+contrarian) cross-session scenario across 9 languages. Same
 4-cell harness (off / on-rule / on-rule+placebo / on-rule+rat),
 same qwen3.5:latest model, same N=5 per cell. Direct Ollama call
 with prompts mirroring `task_build_prompt`'s format (no `loom_exec`
 needed for the per-language harnesses).
-**N:** 8 languages × 4 cells × N=5 = 160 trials. 0 harness errors.
+**N:** 9 languages × 4 cells × N=5 = 180 trials. 0 harness errors.
 3 trials hung in C++ (counted as failures).
 
 ---
@@ -44,12 +44,21 @@ needed for the per-language harnesses).
 |---|---|---|---|---|---|---|---|
 | **Python** | 80% | 100% | 100% | 100% | +20 | +0 | already-saturated |
 | **Rust** | 0% | 100% | 100% | 100% | **+100** | +0 | rule-saturates |
+| **Asm (NASM x86-64)** | 0% | 100% | 100% | 100% | **+100** | +0 | rule-saturates |
 | **Java** | 0% | 60% | 100% | 100% | +60 | +40 | bridging |
 | **TypeScript** | 0% | 40% | 80% | 100% | +40 | +60 | bridging-graduated |
 | **JavaScript** | 0% | 20% | 40% | 60% | +20 | +40 | graded-no-saturation |
 | **Go** | 20% | 60% | 100% | 60% | +40 | +0 | volatile |
 | **C** | 50% | 50% | 60% | 60% | +0 | +10 | resistant-mid |
 | **C++** | 0% | 0% | 100%* | 67% | +0 | +67 | collapsed (*placebo artifact) |
+
+The Asm result is striking: NASM x86-64 is the *lowest-level* language
+in the matrix yet shows the *cleanest* rule-saturation behavior.
+20/20 trials produced compiling, valid asm; off cell shows true
+contrarian behavior (qwen replaces `xor rax, rax` with `mov rax, -1`),
+and any rule context flips qwen to perfect compliance. qwen3.5's
+NASM training data appears to be heavily comment-driven and rule-
+oriented, so structured prompts are weighted as authoritative.
 
 `rule lift` = on-rule − off. `rat lift` = on-rule+rat − on-rule.
 

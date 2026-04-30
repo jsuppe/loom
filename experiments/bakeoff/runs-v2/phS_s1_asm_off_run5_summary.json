@@ -1,0 +1,21 @@
+{
+  "phase": "S_crosssession_asm_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "5",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "compile_stage": "",
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 738,
+  "output_tokens": 2442,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 15.7,
+  "wall_s": 15.8,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phS_s1_asm_enhehbyg",
+  "grade_stdout_tail": "FAIL: returns_zero_on_all_failures (expected 0, got -1)\nFAIL: returns_zero_on_single_attempt (expected 0, got -1)\nSUMMARY: 0 passed, 2 failed\n"
+}

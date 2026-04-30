@@ -266,14 +266,16 @@ Milestone 5 (Metrics)
 
 Milestones 2 and 3 are independent and can run in parallel. Milestone 5 depends on Milestone 1 (JSON output) and benefits from 2 (staleness data feeds metrics).
 
-## Milestone 6: Cross-language validation (in progress)
+## Milestone 6: Cross-language validation (DONE)
 
-**Last updated:** 2026-04-28
+**Last updated:** 2026-04-30
 
 This milestone tracks empirical evidence for *where* the asymmetric
 pipeline works (Opus plans, qwen executes), broken down by language
-and project size. Companion writeup:
-[`experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md).
+and project size. Original Phase C companion:
+[`FINDINGS-bakeoff-v2-phaseC-inventory.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md).
+Headline expansion (9 languages × S1 cross-session smoke):
+[`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md).
 
 ### 6.0 Original objectives (recap)
 
@@ -318,7 +320,21 @@ and project size. Companion writeup:
 | **Dart (pure)** | (skipped) | ✅ 100% after Tier 2 | ❌ 0/35 (qwen3.5 + qwen2.5-coder:32b) | use for ≤ 3 files; ceiling robust to executor at 9 |
 | **C++** | ✅ 100% (cpp-orders) | (skipped) | v1 header-only: 2/5 = 40% · **v2 split:** **4/5 = 80%** (qwen2.5-coder:32b) | use split `.h/.cpp` convention; matching qwen's native idiom doubled the pass rate |
 | **Flutter Dart** | ❓ untested | ❓ untested | ❓ untested | benchmark + driver authored, not run |
-| **JS/TS/Go/Rust** | ❓ untested | ❓ untested | ❓ untested | unknown |
+
+**Cross-language S1 smoke (Milestone 8)** added 7 more languages on
+a focused contrarian-rule scenario (single file, qwen3.5):
+
+| language | regime | rule lift | rationale lift |
+|---|---|---|---|
+| Java | bridging | +60 pp | +40 pp |
+| TypeScript | bridging-graduated | +40 pp | +60 pp |
+| JavaScript | graded (caps at 60%) | +20 pp | +40 pp |
+| Go | volatile | +40 pp | +0 pp |
+| C | resistant-mid | +0 pp | +10 pp |
+| Rust | rule-saturates | **+100 pp** | +0 pp |
+| Asm (NASM x86-64) | rule-saturates | **+100 pp** | +0 pp |
+
+See [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md) for the full classification + per-trial behavior.
 
 ### 6.4 Project-size fit (qwen3.5:latest as default executor)
 
@@ -367,22 +383,153 @@ and project size. Companion writeup:
 6. **Flutter / TS / real-world coverage.** Sales-relevant gaps —
    Flutter especially, given the audience.
 
-### 6.6 In-flight tasks
+### 6.6 Tasks (DONE)
 
-- [x] **6.6.1 Python N=5 at 9 files** — **5/5 = 100%** (every trial 28/28). Median wall 224s, Opus $0.50. H1 confirmed at N=5.
-- [x] **6.6.2 C++ N=5 at 9 files (header-only v1 + split v2)** — v1 header-only: **2/5 = 40%** with qwen2.5-coder:32b (header-only linker errors dominate). v2 split-convention restructure: **4/5 = 80%** — doubling the pass rate by matching qwen's native `.h/.cpp` style. v2 wall ~1100s, Opus $0.74 median.
-- [x] **6.6.3 qwen2.5-coder:32b on dart-inventory N=5** — **0/5 = 0%**. The ceiling holds across local executors; bigger code-specialized model does not cross it. All 5 chains break on `lib/errors.dart` or `lib/types/customers.dart`.
-- [x] **6.6.4 Wire `dart analyze` between body and grading** — `LOOM_EXEC_STATIC_CHECK=1` opt-in; runs `dart analyze --fatal-warnings` (Dart), `ast.parse` (Python), `g++ -fsyntax-only` (C++) before grading.
-- [x] **6.6.5 Worked-example demo** — `docs/WORKED_EXAMPLE.md` walks through extract → spec → decompose → loom_exec → grade on python-inventory.
-- [x] **6.6.6 Flutter multi-widget benchmark** — `flutter-counter` benchmark + 17/17 reference tests + driver. Driver authored as `phC_flutter_counter_oneshot_auto.py`; not yet executed.
-
-Status updated as items land.
+- [x] **6.6.1 Python N=5 at 9 files** — **5/5 = 100%**.
+- [x] **6.6.2 C++ N=5 at 9 files** — v1: 2/5 = 40%, v2 split: 4/5 = 80%.
+- [x] **6.6.3 qwen2.5-coder:32b on dart-inventory N=5** — 0/5 = 0%, ceiling holds.
+- [x] **6.6.4 Per-language static check between body and grading** — `LOOM_EXEC_STATIC_CHECK=1`.
+- [x] **6.6.5 Worked-example demo** — `docs/WORKED_EXAMPLE.md`.
+- [x] **6.6.6 Flutter multi-widget benchmark** — authored.
 
 ### 6.7 Pointers to data and code
 
 - **Bake-off run summaries:** `experiments/bakeoff/runs-v2/`
 - **Benchmarks:** `experiments/bakeoff/benchmarks/<lang>-<scope>/ground_truth/`
-- **Drivers:** `experiments/bakeoff/v2_driver/phC_*_oneshot_auto.py`
+- **Drivers:** `experiments/bakeoff/v2_driver/`
 - **Findings docs:** `experiments/bakeoff/FINDINGS-bakeoff-v2-*.md`
-- **Phase C inventory writeup:** `experiments/bakeoff/FINDINGS-bakeoff-v2-phaseC-inventory.md`
-- **Older feature work and contract data plane:** `claude/bakeoff-v1` branch
+
+---
+
+## Milestone 7: typelink (ROLLED BACK)
+
+**Status:** Removed in commit `2599f15` after empirical validation
+showed the verifier never intervened.
+
+The hypothesis: a per-file public-API contract (extracted from
+`*-contract` fenced blocks in the spec) would let `loom_exec`
+catch surface drift between body-pass output and the spec's
+declared shape, before grading. ~1300 LoC delivered: extractors
+(Python ast, Dart regex), `Specification.public_api_json` field,
+`Symbol`/`TypeContract` dataclasses, `type_contracts` ChromaDB
+collection, post-task hook in `loom_exec`, CLI subcommands.
+
+The rollout: 50+ trials with `LOOM_TYPELINK=1` produced
+`typelink_fail = 0` across every run. The R1 lift in the python-
+first smoke came entirely from Opus authoring contract-rich spec
+text that gets injected into the executor's prompt via
+`task_build_prompt` — *the contract reaches qwen whether or not
+typelink parses it into structured form.*
+
+The verifier hadn't earned its keep. ~1300 LoC removed in
+`2599f15`. The data-plane lessons (contract-fence authoring is
+the load-bearing part) are preserved in
+[`FINDINGS-bakeoff-v2-milestone7.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-milestone7.md).
+
+---
+
+## Milestone 8: Python-first smoke series + cross-language map (DONE)
+
+**Last updated:** 2026-04-30
+
+After the Phase C cross-language ceiling work, a focused smoke
+series isolated *what mechanism actually carries the lift* and
+*how it generalizes across languages*. Headline result reframes
+the Loom value claim.
+
+### 8.1 D-smoke (R1 add a class) — delivery is the mechanism
+
+5-cell A/B/C/D/E refactor smoke on `pyschema` library
+(R1: add `RegexField`). 25 trials. Findings doc:
+[`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md).
+
+| cell | acceptance | what's in Loom | spec → exec prompt |
+|---|---|---|---|
+| D0 greenfield | 99 % | full build spec | yes |
+| D1 qwen-only | 0 % | placeholder | no |
+| D2 stored, undelivered | **0 %** | seeded refactor spec | **no** |
+| D3 standard delivery | **95 %** | seeded refactor spec | **yes** |
+| D4 + LOOM_TYPELINK=1 | 100 % | seeded refactor spec | yes |
+
+**D2 vs D3 = 0 % vs 95 %** — same data in store; only `task.context_specs`
+differs. The +95pp lift comes entirely from the standard
+`task_build_prompt` injection. The Loom value-add is in delivery, not
+storage.
+
+### 8.2 R2-smoke (rename) — Loom adds nothing when task is easy
+
+Same 5-cell shape on `pubsub` library, R2 rename refactor. 25 trials.
+
+D1 = D3 = 100 %. qwen3.5 alone handles a pure rename perfectly given
+the file context + clear task title. Loom's pipeline cannot lift a
+100 % baseline. **The R1 result is real but task-specific.**
+
+### 8.3 Cross-session smoke (3 contrarian scenarios on Python)
+
+Tests Loom's longitudinal claim: agent B reads agent A's stored
+rationale via Loom and respects a constraint it would otherwise
+contradict. 3 scenarios × 4 cells × N=5 = 60 trials. Findings:
+[`FINDINGS-bakeoff-v2-crosssession.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-crosssession.md).
+
+Result: **rule-alone saturates compliance at 100 % across all 3
+scenarios** in Python. Adding `Requirement.rationale` field provides
+zero measurable lift over the rule. Pre-registered hypothesis (rationale
+> rule by ≥10pp) is not supported in Python.
+
+### 8.4 Cross-language map (9 languages, S1 contrarian)
+
+Direct port of S1 to 7 more languages (C++, C, Java, Go, Rust, JS,
+TS) plus Asm (NASM x86-64). 180 trials. **The headline finding.**
+[`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md).
+
+| language | off | on-rule | +placebo | +rat | regime |
+|---|---|---|---|---|---|
+| Python | 80 % | 100 % | 100 % | 100 % | already-saturated |
+| Rust | 0 % | 100 % | 100 % | 100 % | rule-saturates **(+100 pp)** |
+| Java | 0 % | 60 % | 100 % | 100 % | bridging |
+| TypeScript | 0 % | 40 % | 80 % | 100 % | bridging-graduated ✓ |
+| JavaScript | 0 % | 20 % | 40 % | 60 % | graded, no saturation |
+| Go | 20 % | 60 % | 100 % | 60 % | volatile |
+| C | 50 % | 50 % | 60 % | 60 % | resistant-mid |
+| C++ | 0 % | 0 % | 100 %* | 67 % | collapsed |
+| Asm | 0 % | 100 % | 100 % | 100 % | rule-saturates (+100 pp) |
+
+**Off-cell fitness alone does NOT predict Loom lift.** Five languages
+at off=0 % span the full Loom-response spectrum. The hidden variable
+is qwen's "rule-followingness" in the language — a property of training
+data + language characteristics, not raw fluency.
+
+**Loom strong-fit zone:** Python, Java, TypeScript, Rust.
+**Mixed:** JavaScript.
+**Weak:** C, Go, C++.
+
+### 8.5 Storage backend — SQLite swap
+
+ChromaDB had intermittent cross-process flakiness ("hnsw segment
+reader: Nothing found on disk") that bit the bakeoff harness.
+Replaced with single-file SQLite + Python-side cosine NN
+(commit `b8376d8`). 200/200 tests pass post-swap. 53KB single
+file per project, inspectable with `sqlite3` CLI, zero new
+dependencies (sqlite3 is stdlib). For Loom's actual scale (≤2k
+vectors per collection in real projects), brute-force cosine is
+faster than HNSW indexing — no approximation error, simpler code.
+
+### 8.6 Recommended next experiments
+
+1. **Rerun cross-language matrix with `qwen2.5-coder:32b`.** Most
+   likely to shift C/Go/C++ from resistant to bridging at a higher
+   model tier. Tests whether the regime pattern is qwen3.5-tier-
+   specific.
+2. **Re-run Go at higher N.** The +rat dropping below +placebo's
+   100 % to 60 % is suspicious — N=10/20 would clarify.
+3. **JS rule+rat at higher N.** The 60 % plateau is the most
+   informative "graduated" result; tightening its CI would either
+   confirm a real ceiling or reveal noise.
+4. **S2 + S3 ports across languages.** Test whether per-language
+   regime classification is stable across scenario types.
+
+---
+
+## Older feature work and contract data plane
+
+`claude/bakeoff-v1` branch.

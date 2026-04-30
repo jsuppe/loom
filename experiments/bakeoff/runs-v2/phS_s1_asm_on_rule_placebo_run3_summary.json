@@ -1,0 +1,21 @@
+{
+  "phase": "S_crosssession_asm_smoke",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "3",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "compile_stage": "",
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 388,
+  "input_tokens": 903,
+  "output_tokens": 6233,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 39.7,
+  "wall_s": 39.8,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phS_s1_asm_dd8gev65",
+  "grade_stdout_tail": "PASS: returns_zero_on_all_failures\nPASS: returns_zero_on_single_attempt\nSUMMARY: 2 passed, 0 failed\n"
+}
