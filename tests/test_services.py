@@ -1849,3 +1849,176 @@ class TestDefaultModelSelection:
         monkeypatch.delenv("LOOM_DECOMPOSER_MODEL", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         assert services._default_decomposer_model() == "ollama:qwen2.5-coder:32b"
+
+
+# ---------------------------------------------------------------------------
+# M2 — Hygiene (last_referenced + archive + stale)
+# ---------------------------------------------------------------------------
+
+class TestLastReferencedTouch:
+    """M2.1 — read/link operations stamp last_referenced so the
+    requirement records when an agent last engaged with it."""
+
+    def test_query_stamps_last_referenced(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "rate-limit logins", fake_embedding)
+        before = store.get_requirement("REQ-1").last_referenced
+        assert before is None
+
+        services.query(store, "rate-limit", limit=5)
+
+        after = store.get_requirement("REQ-1").last_referenced
+        assert after is not None
+
+    def test_check_stamps_for_linked_reqs(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-1", "behavior", "rule", fake_embedding)
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        services.check(store, str(f))
+
+        assert store.get_requirement("REQ-1").last_referenced is not None
+
+    def test_trace_by_req_id_stamps(self, store, fake_embedding):
+        _mk_req(store, "REQ-2", "behavior", "x", fake_embedding)
+        services.trace(store, "REQ-2")
+        assert store.get_requirement("REQ-2").last_referenced is not None
+
+    def test_chain_stamps(self, store, fake_embedding):
+        _mk_req(store, "REQ-3", "behavior", "x", fake_embedding)
+        services.chain(store, "REQ-3")
+        assert store.get_requirement("REQ-3").last_referenced is not None
+
+    def test_link_stamps_each_req(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-4", "behavior", "x", fake_embedding)
+        f = tmp_path / "g.py"
+        f.write_text("pass\n")
+        services.link(store, str(f), req_ids=["REQ-4"])
+        assert store.get_requirement("REQ-4").last_referenced is not None
+
+
+class TestArchive:
+    """M2.3 — archive sets status, recoverable via set_status."""
+
+    def test_archive_sets_status(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        result = services.archive(store, "REQ-1")
+        assert result["status"] == "archived"
+        assert store.get_requirement("REQ-1").status == "archived"
+
+    def test_archive_unknown_raises(self, store):
+        with pytest.raises(LookupError):
+            services.archive(store, "REQ-ghost")
+
+    def test_archived_excluded_from_list_by_default(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "active", fake_embedding)
+        _mk_req(store, "REQ-2", "behavior", "deprecated", fake_embedding)
+        services.archive(store, "REQ-2")
+
+        ids = {r["id"] for r in services.list_requirements(store)}
+        assert ids == {"REQ-1"}
+
+        ids_all = {r["id"] for r in services.list_requirements(
+            store, include_archived=True)}
+        assert ids_all == {"REQ-1", "REQ-2"}
+
+    def test_archived_excluded_from_query_by_default(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "rate limit", fake_embedding)
+        _mk_req(store, "REQ-2", "behavior", "old design", fake_embedding)
+        services.archive(store, "REQ-2")
+
+        ids = {r["id"] for r in services.query(store, "limit", limit=5)}
+        assert "REQ-2" not in ids
+
+    def test_archived_recoverable_via_set_status(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        services.archive(store, "REQ-1")
+        services.set_status(store, "REQ-1", "pending")
+        assert store.get_requirement("REQ-1").status == "pending"
+
+
+class TestStale:
+    """M2.2 — surface cold/unlinked requirements."""
+
+    def test_never_referenced_ranks_first(self, store, fake_embedding):
+        # Both untouched; sort key falls back to creation timestamp.
+        # Insert "older" first so it ranks ahead.
+        old = Requirement(
+            id="REQ-OLD", domain="behavior", value="old",
+            source_msg_id="m", source_session="s",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+        new = Requirement(
+            id="REQ-NEW", domain="behavior", value="new",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-04-30T00:00:00Z",
+        )
+        store.add_requirement(old, fake_embedding)
+        store.add_requirement(new, fake_embedding)
+
+        rows = services.stale(store)
+        assert [r["id"] for r in rows] == ["REQ-OLD", "REQ-NEW"]
+        assert all(r["last_referenced"] is None for r in rows)
+
+    def test_older_than_filter(self, store, fake_embedding):
+        # 2024 → very old; 2026-04-30 → today; older_than=180 keeps only old.
+        old = Requirement(
+            id="REQ-OLD", domain="behavior", value="old",
+            source_msg_id="m", source_session="s",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+        new = Requirement(
+            id="REQ-NEW", domain="behavior", value="new",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-04-29T00:00:00Z",
+        )
+        store.add_requirement(old, fake_embedding)
+        store.add_requirement(new, fake_embedding)
+
+        rows = services.stale(store, older_than_days=180)
+        assert [r["id"] for r in rows] == ["REQ-OLD"]
+
+    def test_unlinked_only_filter(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-LINKED", "behavior", "x", fake_embedding)
+        _mk_req(store, "REQ-ORPHAN", "behavior", "y", fake_embedding)
+
+        f = tmp_path / "g.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-LINKED"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        rows = services.stale(store, unlinked_only=True)
+        ids = [r["id"] for r in rows]
+        assert "REQ-ORPHAN" in ids
+        assert "REQ-LINKED" not in ids
+
+    def test_archived_excluded_by_default(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        _mk_req(store, "REQ-2", "behavior", "y", fake_embedding)
+        services.archive(store, "REQ-2")
+
+        ids = {r["id"] for r in services.stale(store)}
+        assert ids == {"REQ-1"}
+
+    def test_superseded_always_excluded(self, store, fake_embedding):
+        _mk_req(store, "REQ-A", "behavior", "rate limit", fake_embedding)
+        _mk_req(store, "REQ-B", "behavior", "rate limit v2", fake_embedding)
+        store.supersede_requirement("REQ-A")
+
+        ids = [r["id"] for r in services.stale(store)]
+        assert "REQ-A" not in ids

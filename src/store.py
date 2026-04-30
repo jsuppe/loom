@@ -213,18 +213,22 @@ class Requirement:
     # Enhanced fields for actionable requirements
     elaboration: Optional[str] = None  # Agent-generated expansion of how to satisfy this
     rationale: Optional[str] = None  # Why this requirement exists (decision context)
-    status: str = "pending"  # pending, in_progress, implemented, verified, superseded
+    status: str = "pending"  # pending, in_progress, implemented, verified, superseded, archived
     acceptance_criteria: Optional[List[str]] = None  # Definition of done
     test_spec_id: Optional[str] = None  # Link to test specification
     conversation_context: Optional[str] = None  # Key conversation excerpts
-    
+    # M2.1: ISO-8601 timestamp updated whenever a read/link operation
+    # touches this requirement (query, check, link, trace, chain).
+    # `loom stale` ranks requirements by how cold this timestamp is.
+    last_referenced: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         # Handle None/empty lists - ChromaDB rejects empty lists in metadata
         if not d.get('acceptance_criteria'):
             d['acceptance_criteria'] = ["TBD"]
         return d
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Requirement":
         # Handle missing fields for backwards compatibility
@@ -234,6 +238,7 @@ class Requirement:
         d.setdefault('acceptance_criteria', None)
         d.setdefault('test_spec_id', None)
         d.setdefault('conversation_context', None)
+        d.setdefault('last_referenced', None)
         return cls(**d)
     
     def is_complete(self) -> bool:
@@ -573,6 +578,41 @@ class LoomStore:
             result = self.requirements.get(ids=[req_id], include=["embeddings"])
             if result["embeddings"] is not None and len(result["embeddings"]) > 0:
                 self.add_requirement(req, result["embeddings"][0])
+
+    def touch_requirement(self, req_id: str) -> None:
+        """Stamp `last_referenced` on a requirement (M2.1).
+
+        Called by read/link operations (query, check, link, trace, chain)
+        so `loom stale` can rank requirements by how cold their last
+        access is. Silent no-op when the requirement doesn't exist —
+        callers shouldn't have to guard against that for a passive
+        write.
+        """
+        result = self.requirements.get(ids=[req_id], include=["metadatas", "embeddings"])
+        if not result["ids"]:
+            return
+        req = Requirement.from_dict(result["metadatas"][0])
+        req.last_referenced = datetime.now(timezone.utc).isoformat()
+        embedding = result["embeddings"][0]
+        self.add_requirement(req, embedding)
+
+    def archive_requirement(self, req_id: str) -> bool:
+        """Mark a requirement as archived (M2.3).
+
+        Distinct from `superseded`: archived means "no longer
+        relevant" (deprecated feature, abandoned plan); superseded
+        means "replaced by a newer version of the same decision."
+        Recoverable via `set_status(REQ-x, "pending")`. Returns False
+        if the id is unknown.
+        """
+        result = self.requirements.get(ids=[req_id], include=["metadatas", "embeddings"])
+        if not result["ids"]:
+            return False
+        req = Requirement.from_dict(result["metadatas"][0])
+        req.status = "archived"
+        embedding = result["embeddings"][0]
+        self.add_requirement(req, embedding)
+        return True
     
     def search_requirements(self, query_embedding: List[float], n: int = 5) -> List[Dict]:
         """Search requirements by semantic similarity."""

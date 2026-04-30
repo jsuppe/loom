@@ -126,14 +126,32 @@ Make Loom reliable for tool use by AI agents.
 - [x] **1.4 `rationale` field** — `--rationale` on `extract`, included in docs and JSON
 - [x] **1.5 Implementation links in docs** — REQUIREMENTS.md shows linked files, drift warnings, traceability matrix; TEST_SPEC.md shows covered/uncovered code
 
-## Milestone 2: Requirement Hygiene
+## Milestone 2: Requirement Hygiene (DONE — minus optional 2.4)
 
-Surface staleness without automatic deletion. Requirements are decisions — Loom should help users review and decide, never silently delete.
+Surfaces staleness without automatic deletion. Requirements are decisions
+— Loom helps users review and decide, never silently deletes.
 
-- [ ] **2.1 `last_referenced` timestamp** — Track when a requirement was last touched by `query`, `check`, `link`, `trace`, or `chain`. `setdefault` to `None` for backward compat.
-- [ ] **2.2 `loom stale` command** — List requirements sorted by staleness. Flags: `--older-than 90d`, `--unlinked`. Read-only, `--json` from day one.
-- [ ] **2.3 `loom archive` command** — New `archived` status (distinct from `superseded`). Excluded from `list`, `query`, `conflicts` by default. Recoverable via `loom set-status REQ-xxx pending`.
-- [ ] **2.4 `loom review` (optional)** — Interactive walkthrough of stale requirements: keep / archive / supersede / skip. Non-interactive equivalent: `loom stale --json` + explicit commands.
+- [x] **2.1 `last_referenced` timestamp** — `Requirement.last_referenced`
+      is stamped by every read/link operation: `services.query`, `check`,
+      `link`, `trace`, and `chain` all call `store.touch_requirement(req_id)`
+      on each requirement they surface. Backward-compatible via
+      `setdefault(None)` in `Requirement.from_dict`.
+- [x] **2.2 `loom stale` command** — `services.stale()` ranks
+      requirements by `last_referenced` ascending (never-referenced
+      coldest, sorted by creation timestamp). Filters: `--older-than N`
+      (days), `--unlinked` (no Implementation rows), `--include-archived`.
+      `--json` for agent consumption. Superseded requirements are always
+      excluded.
+- [x] **2.3 `loom archive` command** — `archived` is a fifth state in
+      `VALID_STATUSES`, distinct from `superseded`. `services.archive()`
+      sets it; recoverable via `set_status(req_id, "pending")`. Filtered
+      from `list`, `query`, and `stale` by default; opt in via
+      `--include-archived` (or `--all` on `list`).
+- [ ] **2.4 `loom review` (optional)** — Interactive walkthrough of
+      stale requirements. Skipped for v1: the non-interactive flow
+      (`loom stale --json` + `loom archive`/`set-status`) is sufficient
+      for agent + scripted use cases. Revisit if interactive UX
+      becomes a real demand.
 
 Design principle: **surface, don't delete.**
 1. `last_referenced` tracks activity passively (zero effort)

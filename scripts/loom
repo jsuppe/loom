@@ -392,7 +392,11 @@ def cmd_query(args):
 def cmd_list(args):
     """List all requirements."""
     store = LoomStore(args.project)
-    reqs = services.list_requirements(store, include_superseded=args.all)
+    reqs = services.list_requirements(
+        store,
+        include_superseded=args.all,
+        include_archived=getattr(args, "include_archived", False) or args.all,
+    )
 
     if args.json:
         print(json.dumps(reqs, indent=2))
@@ -543,6 +547,50 @@ def cmd_supersede(args):
         print()
         print("Run `loom sync` to update TEST_SPEC.md")
 
+    return 0
+
+
+def cmd_archive(args):
+    """Archive a requirement (M2.3) — distinct from supersede."""
+    store = LoomStore(args.project)
+    try:
+        result = services.archive(store, args.req_id)
+    except LookupError as e:
+        print(str(e))
+        return 1
+    print(f"✓ Archived {result['req_id']}")
+    print("  (excluded from list/query/conflicts; recover via "
+          "`loom set-status REQ-xxx pending`)")
+    return 0
+
+
+def cmd_stale(args):
+    """List requirements ranked by staleness (M2.2)."""
+    store = LoomStore(args.project)
+    rows = services.stale(
+        store,
+        older_than_days=args.older_than,
+        unlinked_only=args.unlinked,
+        include_archived=args.include_archived,
+    )
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(rows, indent=2))
+        return 0
+
+    if not rows:
+        print("No stale requirements.")
+        return 0
+
+    print(f"🧵 Stale requirements ({len(rows)}):")
+    print()
+    for r in rows:
+        last = r["last_referenced"] or "(never referenced)"
+        kind = "🔗 unlinked" if r["linked_files"] == 0 else f"📎 {r['linked_files']} linked"
+        print(f"  {r['id']}  [{r['domain']}]  {kind}")
+        print(f"    {r['value'][:70]}{'...' if len(r['value']) > 70 else ''}")
+        print(f"    last_referenced: {last}  ({r['days_since_referenced']}d ago)")
     return 0
 
 
@@ -1794,7 +1842,9 @@ def main():
     
     # list
     p_list = sp("list", help="List requirements")
-    p_list.add_argument("--all", "-a", action="store_true", help="Include superseded")
+    p_list.add_argument("--all", "-a", action="store_true", help="Include superseded + archived")
+    p_list.add_argument("--include-archived", action="store_true",
+                        help="Include archived (default: hidden)")
     p_list.add_argument("--json", "-j", action="store_true", help="Output as JSON (for API)")
     
     # sync
@@ -1818,6 +1868,22 @@ def main():
     # supersede
     p_supersede = sp("supersede", help="Supersede a requirement")
     p_supersede.add_argument("req_id", help="Requirement ID to supersede")
+
+    # archive (M2.3) — distinct from supersede
+    p_archive = sp("archive", help="Archive a requirement (recoverable; "
+                                    "excluded from list/query by default)")
+    p_archive.add_argument("req_id", help="Requirement ID to archive")
+
+    # stale (M2.2) — surface cold requirements
+    p_stale = sp("stale", help="List requirements ranked by staleness")
+    p_stale.add_argument("--older-than", type=int, default=None,
+                         help="Only requirements older than N days")
+    p_stale.add_argument("--unlinked", action="store_true",
+                         help="Only requirements with no linked files")
+    p_stale.add_argument("--include-archived", action="store_true",
+                         help="Include archived requirements (excluded by default)")
+    p_stale.add_argument("--json", "-j", action="store_true",
+                         help="JSON output")
     
     # test add
     p_test_add = sp("test", help="Add/update test specification")
@@ -2093,6 +2159,8 @@ def main():
         "sync": cmd_sync,
         "conflicts": cmd_conflicts,
         "supersede": cmd_supersede,
+        "archive": cmd_archive,
+        "stale": cmd_stale,
         "test": cmd_test_add,
         "verify": cmd_test_verify,
         "tests": cmd_test_list,

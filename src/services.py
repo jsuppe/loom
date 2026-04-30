@@ -78,11 +78,19 @@ def status(store: LoomStore) -> dict[str, Any]:
     }
 
 
-def query(store: LoomStore, text: str, limit: int = 5) -> list[dict[str, Any]]:
+def query(
+    store: LoomStore,
+    text: str,
+    limit: int = 5,
+    include_archived: bool = False,
+) -> list[dict[str, Any]]:
     """Semantic search over requirements.
 
     Result shape:
         {id, domain, value, status, superseded, source, timestamp, distance}
+
+    Archived requirements (M2.3) are filtered out by default. Pass
+    `include_archived=True` to include them.
 
     The embedding is computed here rather than passed in because every
     real caller embeds the same text. Tests that want deterministic
@@ -91,7 +99,19 @@ def query(store: LoomStore, text: str, limit: int = 5) -> list[dict[str, Any]]:
     """
     from embedding import get_embedding
     vec = get_embedding(text)
-    results = store.search_requirements(vec, n=limit)
+    # Over-fetch when we plan to filter so a small `limit` doesn't return
+    # fewer results than expected when all top-k hits are archived.
+    n_fetch = limit if include_archived else max(limit * 3, 15)
+    results = store.search_requirements(vec, n=n_fetch)
+    if not include_archived:
+        results = [r for r in results if r["requirement"].status != "archived"]
+    results = results[:limit]
+    # M2.1: a successful semantic hit counts as "the agent looked at this
+    # requirement," so stamp last_referenced. Touching only the returned
+    # set (not the whole store) keeps `loom stale` honest — un-hit reqs
+    # stay cold, which is the signal we want.
+    for r in results:
+        store.touch_requirement(r["requirement"].id)
     return [
         {
             "id": r["requirement"].id,
@@ -108,12 +128,18 @@ def query(store: LoomStore, text: str, limit: int = 5) -> list[dict[str, Any]]:
 
 
 def list_requirements(
-    store: LoomStore, include_superseded: bool = False
+    store: LoomStore,
+    include_superseded: bool = False,
+    include_archived: bool = False,
 ) -> list[dict[str, Any]]:
     """List requirements with their spec/test-spec state.
 
     Result shape matches what `loom list --json` emits today. Includes
     `has_test` (bool) derived from the JSON test-spec store.
+
+    Archived requirements (M2.3) are excluded by default — pass
+    `include_archived=True` to surface them. Superseded requirements
+    follow the same opt-in pattern via `include_superseded`.
     """
     from testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
@@ -121,6 +147,8 @@ def list_requirements(
     reqs = store.list_requirements(include_superseded=include_superseded)
     out: list[dict[str, Any]] = []
     for req in reqs:
+        if not include_archived and req.status == "archived":
+            continue
         spec = spec_store.get_spec(req.id)
         out.append({
             "id": req.id,
@@ -132,6 +160,7 @@ def list_requirements(
             "acceptance_criteria": req.acceptance_criteria or [],
             "test_spec_id": req.test_spec_id,
             "conversation_context": req.conversation_context,
+            "last_referenced": req.last_referenced,
             "is_complete": req.is_complete(),
             "has_test": spec is not None,
             "superseded": req.superseded_at is not None,
@@ -167,6 +196,7 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
         impls = store.get_implementations_for_requirement(target)
         spec_store = TestSpecStore(store.data_dir)
         spec = spec_store.get_spec(target)
+        store.touch_requirement(target)  # M2.1
 
         return {
             "type": "requirement",
@@ -219,6 +249,7 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
     for rid in sorted(all_reqs):
         r = store.get_requirement(rid)
         if r:
+            store.touch_requirement(rid)  # M2.1
             req_list.append({
                 "id": rid,
                 "domain": r.domain,
@@ -255,6 +286,7 @@ def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
     req = store.get_requirement(req_id)
     if req is None:
         raise LookupError(f"Requirement {req_id} not found")
+    store.touch_requirement(req_id)  # M2.1
 
     patterns = store.get_patterns_for_requirement(req_id)
     specs = store.get_specifications_for_requirement(req_id)
@@ -1057,6 +1089,7 @@ def check(
     for sat in impl.satisfies:
         req = store.get_requirement(sat["req_id"])
         if req:
+            store.touch_requirement(sat["req_id"])  # M2.1
             drifted = req.superseded_at is not None
             if drifted:
                 drift_found = True
@@ -1450,6 +1483,10 @@ def link(
     embedding = get_embedding(content)
     store.add_implementation(impl, embedding)
 
+    # M2.1: linking the file is a meaningful "use" of every linked req.
+    for s in satisfies:
+        store.touch_requirement(s["req_id"])
+
     return {
         "linked": True,
         "impl_id": impl_id,
@@ -1461,7 +1498,10 @@ def link(
     }
 
 
-VALID_STATUSES = ("pending", "in_progress", "implemented", "verified", "superseded")
+VALID_STATUSES = (
+    "pending", "in_progress", "implemented", "verified",
+    "superseded", "archived",
+)
 
 
 def sync(
@@ -1550,6 +1590,94 @@ def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
     if not store.set_requirement_status(req_id, status):
         raise LookupError(f"Requirement {req_id} not found")
     return {"req_id": req_id, "status": status}
+
+
+def archive(store: LoomStore, req_id: str) -> dict[str, Any]:
+    """Mark a requirement as archived (M2.3).
+
+    Distinct from supersede: archived means "no longer relevant"
+    (deprecated feature, abandoned plan). Excluded from `list`,
+    `query`, and `conflicts` by default. Recoverable via
+    `set_status(req_id, 'pending')`.
+
+    Returns: {req_id, status: 'archived'}.
+
+    Raises:
+        LookupError: req_id not found.
+    """
+    if not store.archive_requirement(req_id):
+        raise LookupError(f"Requirement {req_id} not found")
+    return {"req_id": req_id, "status": "archived"}
+
+
+def stale(
+    store: LoomStore,
+    *,
+    older_than_days: int | None = None,
+    unlinked_only: bool = False,
+    include_archived: bool = False,
+) -> list[dict[str, Any]]:
+    """List requirements ranked by staleness (M2.2).
+
+    Sort key: `last_referenced` ascending (oldest first; never-touched
+    requirements rank coldest, sorted by their original `timestamp`).
+    Superseded requirements are always excluded — they're already a
+    closed decision. Archived requirements are excluded by default
+    (`include_archived=True` to surface them).
+
+    Filters:
+        older_than_days — only requirements whose last_referenced is
+                          older than this many days, OR which were
+                          never referenced and whose creation is older
+                          than this. None disables the filter.
+        unlinked_only — only requirements with zero linked
+                        Implementation rows.
+
+    Result shape (per requirement):
+        {id, domain, value, status, last_referenced, timestamp,
+         days_since_referenced, linked_files: int}
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff: datetime | None = None
+    if older_than_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+
+    out: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
+    for req in store.list_requirements(include_superseded=False):
+        if not include_archived and req.status == "archived":
+            continue
+
+        # Compute the "age" used for both sorting and the filter. Prefer
+        # last_referenced; fall back to creation timestamp for never-touched
+        # requirements (they're the coldest of all by definition).
+        ts_str = req.last_referenced or req.timestamp
+        try:
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        if cutoff is not None and ts > cutoff:
+            continue
+
+        impls = store.get_implementations_for_requirement(req.id)
+        if unlinked_only and impls:
+            continue
+
+        delta = now - ts
+        out.append({
+            "id": req.id,
+            "domain": req.domain,
+            "value": req.value,
+            "status": req.status,
+            "last_referenced": req.last_referenced,
+            "timestamp": req.timestamp,
+            "days_since_referenced": delta.days,
+            "linked_files": len(impls),
+        })
+
+    out.sort(key=lambda r: r["last_referenced"] or r["timestamp"])
+    return out
 
 
 def refine(
