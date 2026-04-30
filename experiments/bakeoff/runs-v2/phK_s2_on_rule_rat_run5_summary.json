@@ -1,0 +1,22 @@
+{
+  "phase": "K_crosssession_smoke",
+  "scenario": "S2",
+  "cell": "on-rule+rat",
+  "run_id": "5",
+  "passed": 3,
+  "total": 3,
+  "pass_rate": 1.0,
+  "outcome": "complete",
+  "cited_rationale": true,
+  "rationale_keyphrases_matched": [
+    "transaction"
+  ],
+  "rationale_len": 404,
+  "input_tokens": 651,
+  "output_tokens": 231,
+  "exec_rc": 0,
+  "exec_duration_s": 3.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s2_szfalai4",
+  "exec_stdout_tail": "[exec] task TASK-e0fe46bceaa2  status=pending  title='place_order in app/orders.py is missing input validation. Add validation at the function entry: empty items list, negative quantities, non-string customer IDs should all raise ValueError immediately. Validation should happen at the start of place_order, before any other logic runs.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s2_szfalai4  runner: pytest_replace (replace)\n[exec] prompt: 2677 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.9s  in=651  out=231\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-e0fe46bceaa2\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phK_s2_szfalai4\\\\app\\\\orders.py\"}",
+  "grade_log_entry": "{\n  \"ts\": \"2026-04-30T01:16:06.483457+00:00\",\n  \"task_id\": \"TASK-e0fe46bceaa2\",\n  \"model\": \"qwen3.5:latest\",\n  \"outcome\": \"complete\",\n  \"passed\": 3,\n  \"total\": 3,\n  \"elapsed_s\": 3.29,\n  \"input_tokens\": 651,\n  \"output_tokens\": 231\n}"
+}

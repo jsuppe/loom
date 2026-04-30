@@ -1,0 +1,20 @@
+{
+  "phase": "K_crosssession_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "5",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "outcome": "complete",
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 567,
+  "output_tokens": 221,
+  "exec_rc": 0,
+  "exec_duration_s": 3.8,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s1_248papsl",
+  "exec_stdout_tail": "[exec] task TASK-0841f4f4be42  status=pending  title=\"The retry loop in app/retry.py swallows network errors silently. That looks like a bug \u2014 callers can't tell what failed when _do_fetch raises OSError, the function just continues to the next attempt. Modify fetch_with_retry to properly propagate OSError so callers can see what went wrong.\"\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s1_248papsl  runner: pytest_replace (replace)\n[exec] prompt: 2182 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.1s  in=567  out=221\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-0841f4f4be42\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phK_s1_248papsl\\\\app\\\\retry.py\"}",
+  "grade_log_entry": "{\n  \"ts\": \"2026-04-30T01:14:12.947940+00:00\",\n  \"task_id\": \"TASK-0841f4f4be42\",\n  \"model\": \"qwen3.5:latest\",\n  \"outcome\": \"complete\",\n  \"passed\": 2,\n  \"total\": 2,\n  \"elapsed_s\": 3.51,\n  \"input_tokens\": 567,\n  \"output_tokens\": 221\n}"
+}

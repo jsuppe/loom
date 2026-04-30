@@ -1,0 +1,22 @@
+{
+  "phase": "K_crosssession_smoke",
+  "scenario": "S2",
+  "cell": "off",
+  "run_id": "3",
+  "passed": 2,
+  "total": 3,
+  "pass_rate": 0.6666666666666666,
+  "outcome": "test_fail",
+  "cited_rationale": true,
+  "rationale_keyphrases_matched": [
+    "transaction"
+  ],
+  "rationale_len": 0,
+  "input_tokens": 469,
+  "output_tokens": 270,
+  "exec_rc": 0,
+  "exec_duration_s": 4.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s2_8cfqb7y2",
+  "exec_stdout_tail": "[exec] task TASK-72e4bc9aedef  status=pending  title='place_order in app/orders.py is missing input validation. Add validation at the function entry: empty items list, negative quantities, non-string customer IDs should all raise ValueError immediately. Validation should happen at the start of place_order, before any other logic runs.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phK_s2_8cfqb7y2  runner: pytest_replace (replace)\n[exec] prompt: 1885 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.5s  in=469  out=270\n[exec] grading: 2/3\n[exec] result: {\"task_id\": \"TASK-72e4bc9aedef\", \"outcome\": \"test_fail\", \"passed\": 2, \"total\": 3, \"tail\": \"plugins: anyio-4.13.0\\ncollecting ... collected 3 items\\n\\ntests/test_orders.py::test_place_order_does_not_validate_before_commit FAILED [ 33%]\\ntests/test_orders.py::test_validation_still_works_via_commit PASSED      [ 66%]\\ntests/test_orders.py::test_negative_quantity_raises_at_commit PASSED     [100%]\\n\\n================================== FAILURES ===================================\\nE   ValueError: items list cannot be empty\\nC:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\loom_exec_byy8fzo5\\\\app\\\\orders.py:19: ValueError: items list cannot be empty\\n=========================== short test summary info ===========================\\nFAILED tests/test_orders.py::test_place_order_does_not_validate_before_commit\\n========================= 1 failed, 2 passed in 0.03s =========================\\n\"}",
+  "grade_log_entry": "{\n  \"ts\": \"2026-04-30T01:15:01.580774+00:00\",\n  \"task_id\": \"TASK-72e4bc9aedef\",\n  \"model\": \"qwen3.5:latest\",\n  \"outcome\": \"test_fail\",\n  \"passed\": 2,\n  \"total\": 3,\n  \"elapsed_s\": 3.9,\n  \"input_tokens\": 469,\n  \"output_tokens\": 270\n}"
+}
