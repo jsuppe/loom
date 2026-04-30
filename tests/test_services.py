@@ -1129,6 +1129,39 @@ class TestContext:
         assert "DRIFT" in data["summary"]
         assert "REQ-stale" in data["summary"]
 
+    def test_rationale_surfaced_in_context_briefing(self, store, fake_embedding, tmp_path):
+        """`context()` must propagate Requirement.rationale to the briefing dict
+        so the PreToolUse hook can render it. Without this, agents see only
+        the *what* of a requirement, never the *why* — defeating the
+        cross-session memory claim."""
+        from store import generate_impl_id
+        services.extract(
+            store, domain="behavior", value="swallow OSError in fetch_with_retry",
+            rationale="The retry wrapper in app/backoff_loop.py re-issues on BackoffError; "
+                      "raising OSError directly breaks the wrapper contract.",
+        )
+        # The deterministic ID for this domain+value:
+        rid = next(iter(store.list_requirements())).id
+
+        f = tmp_path / "retry.py"
+        f.write_text("def fetch_with_retry():\n    pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="def fetch_with_retry():\n    pass\n", content_hash="h",
+            satisfies=[{"req_id": rid}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        data = services.context(store, str(f))
+        assert data["linked"] is True
+        assert len(data["requirements"]) == 1
+        entry = data["requirements"][0]
+        assert "rationale" in entry, "rationale must be in the briefing dict"
+        assert entry["rationale"] is not None
+        assert "wrapper contract" in entry["rationale"]
+
     def test_aggregates_across_multiple_impls(self, store, fake_embedding, tmp_path):
         """`check()` wants an exact (file, lines) match; `context()` must not."""
         from store import generate_impl_id

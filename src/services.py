@@ -1067,6 +1067,7 @@ def check(
                 "status": req.status,
                 "drifted": drifted,
                 "superseded_at": req.superseded_at,
+                "rationale": req.rationale,
             })
 
     return {
@@ -1090,7 +1091,7 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     Result shape:
         {file, linked, drift_detected,
          requirements: [{id, domain, value, status, superseded,
-                         superseded_at, lines}],
+                         superseded_at, rationale, lines}],
          specifications: [{id, description, status, parent_req, lines}],
          summary: str}
 
@@ -1142,6 +1143,7 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
                 "status": req.status,
                 "superseded": req.superseded_at is not None,
                 "superseded_at": req.superseded_at,
+                "rationale": req.rationale,
                 "lines": lines,
             }
 

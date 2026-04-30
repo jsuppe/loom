@@ -195,6 +195,8 @@ def main() -> int:
     for r in reqs:
         flag = " [SUPERSEDED]" if r.get("superseded") else ""
         lines.append(f"  - {r['id']} [{r['domain']}]{flag}: {r['value']}")
+        if r.get("rationale"):
+            lines.append(f"    Rationale: {r['rationale']}")
     for s in specs:
         lines.append(f"  - {s['id']} -> {s['parent_req']}: {s['description']}")
 
