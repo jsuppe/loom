@@ -140,12 +140,29 @@ Design principle: **surface, don't delete.**
 2. `loom stale` shows what's cold (read-only, safe)
 3. User/agent decides: keep, archive, or supersede (explicit action)
 
-## Milestone 3: Pluggable Embeddings
+## Milestone 3: Pluggable Embeddings (DONE)
 
-Remove hard dependency on local Ollama.
+Removes hard dependency on local Ollama. Three providers ship; the
+SQLite store pins its embedding dimension on first write so a
+provider switch can't silently corrupt search.
 
-- [ ] **3.1 Provider interface** — Abstract `get_embedding()` to support `ollama` (default), `openai` (via `OPENAI_API_KEY`), and `hash` (deterministic fallback). Selection via `LOOM_EMBEDDING_PROVIDER` env var or `--embedding-provider` flag. Config stored in `.loom-config.json` per project.
-- [ ] **3.2 Dimension validation** — Record embedding dimensions on first use. Reject mismatched dimensions with a clear error on subsequent calls.
+- [x] **3.1 Provider interface** — `src/embedding.py` dispatches to
+      `ollama` (default; `nomic-embed-text` @ 768d), `openai`
+      (`text-embedding-3-small` @ 1536d via `OPENAI_API_KEY`, urllib
+      no-SDK), and `hash` (explicit deterministic, dim configurable
+      via `model="hash:N"`). Selection precedence: `--embedding-provider`
+      → `LOOM_EMBEDDING_PROVIDER` → `.loom-config.json::embedding_provider`
+      → `ollama`. Cache key includes (provider, model) so switching
+      providers can't return a stale vector. The Ollama-outage hash
+      fallback is preserved (back-compat); other providers raise
+      explicitly so misconfiguration surfaces.
+- [x] **3.2 Dimension validation** — `LoomStore` adds a `_loom_meta`
+      table that pins `embedding_dim` on the first vector write. All
+      six collections route their writes through one `_check_embedding_dim`
+      callback; mismatched writes raise `EmbeddingDimensionMismatch`
+      with actionable advice ("provider likely changed; revert,
+      use a fresh -p, or re-embed"). Legacy stores back-fill the
+      dim from existing data on next open.
 
 ## Milestone 4: Claude Code Integration (PARTIAL)
 

@@ -37,6 +37,14 @@ def _deserialize_embedding(blob: bytes) -> List[float]:
     return list(struct.unpack(f"<{n}f", blob))
 
 
+class EmbeddingDimensionMismatch(ValueError):
+    """Raised when a write to LoomStore would use an embedding whose
+    dimension differs from the store's pinned dimension. Usually means
+    the embedding provider was changed (e.g. ollama → openai) without
+    re-embedding the existing vectors.
+    """
+
+
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
     """Cosine similarity between two equal-length vectors."""
     dot = 0.0
@@ -61,9 +69,14 @@ class _SQLiteCollection:
     LoomStore methods can be naive about which backend is in use.
     """
 
-    def __init__(self, conn: sqlite3.Connection, table: str):
+    def __init__(self, conn: sqlite3.Connection, table: str,
+                 dim_check: Optional[Any] = None):
         self.conn = conn
         self.table = table
+        # Optional callable that receives an embedding's dimension and
+        # raises if the store has been pinned to a different one. Set by
+        # LoomStore so every collection routes through the same check.
+        self._dim_check = dim_check
         # Identifiers are interpolated into SQL so they must be safe
         # static strings — we pass our own table names, never user input.
         self.conn.execute(
@@ -79,6 +92,8 @@ class _SQLiteCollection:
     def upsert(self, ids: List[str], embeddings: List[List[float]],
                 metadatas: List[Dict[str, Any]],
                 documents: Optional[List[str]] = None) -> None:
+        if self._dim_check is not None and embeddings:
+            self._dim_check(len(embeddings[0]))
         if documents is None:
             documents = [""] * len(ids)
         rows = [
@@ -432,15 +447,90 @@ class LoomStore:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
 
+        # _loom_meta is a small key/value table for store-wide invariants.
+        # The first entry it carries is `embedding_dim` — pinned on the
+        # first vector write so subsequent writes can't silently drift
+        # under a provider switch.
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS _loom_meta ("
+            "  key TEXT PRIMARY KEY, "
+            "  value TEXT NOT NULL"
+            ")"
+        )
+        self.conn.commit()
+        # Back-fill embedding_dim from existing data when the store was
+        # created before this field existed (legacy compat).
+        if self._get_meta("embedding_dim") is None:
+            existing = self._peek_existing_embedding_dim()
+            if existing is not None:
+                self._set_meta("embedding_dim", str(existing))
+
         # One table per logical collection. Names are hard-coded
         # static strings (not user input) so SQL identifier
-        # interpolation is safe.
-        self.requirements = _SQLiteCollection(self.conn, "requirements")
-        self.specifications = _SQLiteCollection(self.conn, "specifications")
-        self.patterns = _SQLiteCollection(self.conn, "patterns")
-        self.implementations = _SQLiteCollection(self.conn, "implementations")
-        self.chat_messages = _SQLiteCollection(self.conn, "chat_messages")
-        self.tasks = _SQLiteCollection(self.conn, "tasks")
+        # interpolation is safe. Each collection routes through the
+        # same dim check so a misconfigured provider can't sneak a
+        # mismatched vector into any table.
+        check = self._check_embedding_dim
+        self.requirements = _SQLiteCollection(self.conn, "requirements", dim_check=check)
+        self.specifications = _SQLiteCollection(self.conn, "specifications", dim_check=check)
+        self.patterns = _SQLiteCollection(self.conn, "patterns", dim_check=check)
+        self.implementations = _SQLiteCollection(self.conn, "implementations", dim_check=check)
+        self.chat_messages = _SQLiteCollection(self.conn, "chat_messages", dim_check=check)
+        self.tasks = _SQLiteCollection(self.conn, "tasks", dim_check=check)
+
+    # ==================== Metadata + dim validation ====================
+
+    def _get_meta(self, key: str) -> Optional[str]:
+        row = self.conn.execute(
+            "SELECT value FROM _loom_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def _set_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO _loom_meta (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        self.conn.commit()
+
+    def _peek_existing_embedding_dim(self) -> Optional[int]:
+        """Inspect any existing vector to recover the dim a legacy store
+        was created with. Returns None if the store is empty."""
+        for table in ("requirements", "specifications", "patterns",
+                      "implementations", "chat_messages", "tasks"):
+            try:
+                row = self.conn.execute(
+                    f"SELECT embedding FROM {table} LIMIT 1"
+                ).fetchone()
+            except sqlite3.OperationalError:
+                # Table not yet created on a brand-new store.
+                continue
+            if row and row[0]:
+                return len(row[0]) // 4   # bytes → float32 count
+        return None
+
+    def _check_embedding_dim(self, dim: int) -> None:
+        """Pin the store's embedding dimension on first write; raise
+        EmbeddingDimensionMismatch on subsequent mismatched writes.
+
+        Usually triggered by changing LOOM_EMBEDDING_PROVIDER on a store
+        that was already populated under a different provider. The fix
+        is to either revert the provider, re-embed (via a future
+        `loom resync`), or use a fresh -p project name.
+        """
+        recorded = self._get_meta("embedding_dim")
+        if recorded is None:
+            self._set_meta("embedding_dim", str(dim))
+            return
+        if int(recorded) != dim:
+            raise EmbeddingDimensionMismatch(
+                f"Store {self.project!r} has embedding_dim={recorded} but "
+                f"the current write is {dim}-dimensional. The embedding "
+                f"provider likely changed (e.g. LOOM_EMBEDDING_PROVIDER "
+                f"flipped from ollama to openai). Either revert the "
+                f"provider, use a fresh project name via -p, or re-embed "
+                f"the existing vectors."
+            )
     
     # ==================== Requirements ====================
     

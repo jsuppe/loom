@@ -1723,6 +1723,14 @@ def cmd_decompose(args):
 def main():
     parser = argparse.ArgumentParser(description="Loom - Requirements traceability")
     parser.add_argument("--project", "-p", default=None, help="Project name")
+    parser.add_argument(
+        "--embedding-provider",
+        choices=["ollama", "openai", "hash"],
+        default=None,
+        help="Embedding backend. Overrides LOOM_EMBEDDING_PROVIDER and "
+             ".loom-config.json::embedding_provider. Default resolves "
+             "to ollama.",
+    )
 
     # Parent parser so subcommands also accept -p/--project (FINDINGS-wild F1).
     # Without this, `loom doctor -p foo` fails because argparse only looks at
@@ -2057,6 +2065,22 @@ def main():
         args.project = sub_project
     if not args.project:
         args.project = get_project_name()
+
+    # Embedding provider resolution: --embedding-provider > LOOM_EMBEDDING_PROVIDER
+    # env > .loom-config.json > "ollama" (handled inside src/embedding.py).
+    # Promoting --embedding-provider into the env makes the choice visible
+    # to every downstream get_embedding() call without threading args
+    # through every code path.
+    if getattr(args, "embedding_provider", None):
+        os.environ["LOOM_EMBEDDING_PROVIDER"] = args.embedding_provider
+    elif "LOOM_EMBEDDING_PROVIDER" not in os.environ:
+        try:
+            import config as _config
+            cfg = _config.load_config(os.getcwd())
+            if cfg.get("embedding_provider"):
+                os.environ["LOOM_EMBEDDING_PROVIDER"] = cfg["embedding_provider"]
+        except Exception:
+            pass
     
     commands = {
         "extract": cmd_extract,

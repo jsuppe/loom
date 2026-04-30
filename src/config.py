@@ -41,6 +41,12 @@ DEFAULTS: dict[str, Any] = {
     "target_dir": ".",
     "decomposer_model": None,      # None → services._default_decomposer_model()
     "executor_model": "qwen3.5:latest",
+    # Embedding stack. `embedding_provider` ∈ {ollama, openai, hash}; when
+    # absent, falls back to "ollama" via src/embedding.py::resolve_provider.
+    # `embedding_model` is the per-provider model name; None lets the
+    # provider pick its default (nomic-embed-text / text-embedding-3-small /
+    # hash:768 respectively).
+    "embedding_provider": None,
     "embedding_model": "nomic-embed-text",
     # Which test runner drives grading + prompt contract (see src/runners.py).
     # Implemented: pytest | flutter_test | dart_test | vitest. Unknown values

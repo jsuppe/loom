@@ -643,3 +643,95 @@ class TestTaskStoreMethods:
                  files_to_modify=["src/a.py"], test_to_write="t::T")
         temp_store.add_task(t, sample_embedding)
         assert temp_store.stats()["tasks"] == 1
+
+
+class TestEmbeddingDimensionPin:
+    """M3.2 — store pins its embedding_dim on first write and rejects
+    mismatched vectors thereafter (e.g. provider switched ollama→openai
+    without re-embedding)."""
+
+    def test_dim_pinned_on_first_write(self, temp_store, sample_embedding):
+        # Empty store; meta key absent until first write.
+        assert temp_store._get_meta("embedding_dim") is None
+        req = Requirement(
+            id="REQ-1", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+        assert temp_store._get_meta("embedding_dim") == "768"
+
+    def test_mismatched_dim_raises(self, temp_store, sample_embedding):
+        from store import EmbeddingDimensionMismatch
+        req = Requirement(
+            id="REQ-1", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+        # Now try to write a 1536-dim vector (e.g. switched to openai).
+        big = [0.1] * 1536
+        req2 = Requirement(
+            id="REQ-2", domain="behavior", value="y",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        with pytest.raises(EmbeddingDimensionMismatch, match="1536"):
+            temp_store.add_requirement(req2, big)
+
+    def test_legacy_store_backfills_dim_on_open(self, sample_embedding):
+        """A store created before _loom_meta existed must learn its dim
+        from existing data on the next open."""
+        from store import LoomStore
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            store = LoomStore(project="legacy", data_dir=temp_dir)
+            req = Requirement(
+                id="REQ-1", domain="behavior", value="x",
+                source_msg_id="m", source_session="s",
+                timestamp="2026-01-01T00:00:00Z",
+            )
+            store.add_requirement(req, sample_embedding)
+            # Simulate a legacy store: drop the meta entry, close, reopen.
+            store.conn.execute("DELETE FROM _loom_meta")
+            store.conn.commit()
+            store.conn.close()
+
+            reopened = LoomStore(project="legacy", data_dir=temp_dir)
+            # Back-filled from the existing 768-dim row.
+            assert reopened._get_meta("embedding_dim") == "768"
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_each_collection_routes_through_check(self, temp_store, sample_embedding):
+        """All six collections share the same dim check — flipping any
+        of them with a wrong-sized vector must raise."""
+        from store import EmbeddingDimensionMismatch, Specification, Pattern, Implementation
+        req = Requirement(
+            id="REQ-1", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        temp_store.add_requirement(req, sample_embedding)  # pins to 768
+        bad = [0.1] * 100
+
+        spec = Specification(id="SPEC-1", parent_req="REQ-1", description="d",
+                              timestamp="2026-01-01T00:00:00Z")
+        with pytest.raises(EmbeddingDimensionMismatch):
+            temp_store.add_specification(spec, bad)
+
+        pat = Pattern(id="PAT-1", name="p", description="d",
+                       applies_to=["REQ-1"],
+                       timestamp="2026-01-01T00:00:00Z")
+        with pytest.raises(EmbeddingDimensionMismatch):
+            temp_store.add_pattern(pat, bad)
+
+        impl = Implementation(
+            id=generate_impl_id("a.py", "all"),
+            file="a.py", lines="all",
+            content="x", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        with pytest.raises(EmbeddingDimensionMismatch):
+            temp_store.add_implementation(impl, bad)
