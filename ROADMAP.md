@@ -229,56 +229,66 @@ First-class tool integration with Claude Code sessions.
 - Don't reimplement the CLI. The MCP server and CLI must call the same `LoomStore` methods.
 - Don't replace hooks. Hooks fire on deterministic events (Edit/Write, SessionStart); MCP tools are model-initiated. They're complementary.
 
-## Milestone 5: Metrics & Effectiveness Measurement
+## Milestone 5: Metrics & Effectiveness Measurement (DONE)
 
-Track whether Loom is actually helping. Without measurement, you can't tell if the token cost is justified.
+Tracks whether Loom is actually helping. Without measurement, you can't
+tell if the token cost is justified.
 
-### 5.1 Event log
+### 5.1 Event log (DONE)
 
-Append-only JSON log at `~/.openclaw/loom/<project>/.loom-events.json`. Each entry:
+Append-only JSONL log at `<store.data_dir>/.loom-events.jsonl`. One
+JSON object per line, written by `services._record_event` from the
+five canonical touchpoints:
 
-```json
-{"event": "drift_detected", "file": "src/auth.py", "req_id": "REQ-042", "timestamp": "..."}
-{"event": "conflict_found", "new_text": "...", "existing_id": "REQ-015", "timestamp": "..."}
-{"event": "requirement_extracted", "req_id": "REQ-043", "domain": "behavior", "timestamp": "..."}
-{"event": "implementation_linked", "file": "src/auth.py", "req_id": "REQ-043", "timestamp": "..."}
-{"event": "check_clean", "file": "src/auth.py", "timestamp": "..."}
+| event | written by |
+|---|---|
+| `requirement_extracted` | `services.extract` |
+| `conflict_found` | `services.extract` (per conflict it surfaces) |
+| `implementation_linked` | `services.link` (per linked req) |
+| `drift_detected` | `services.check` (when drift seen) |
+| `check_clean` | `services.check` (when no drift) |
+
+The `cost` log (`.hook-log.jsonl`) and `exec` log (`.exec-log.jsonl`)
+remain separate — they capture different layers (PreToolUse hook
+firings, executor task runs). The events log is for *user-meaningful*
+operations.
+
+### 5.2 `loom metrics` command (DONE)
+
+Reads the event log and store state, returns a structured snapshot:
+
+```
+loom metrics -p proj                # human-readable
+loom metrics -p proj --json         # for agents / CI
+loom metrics -p proj --since 30d    # clip activity window to N days
 ```
 
-Events logged by existing commands — `check`, `conflicts`, `extract`, `link` — with a one-line append per action. No new dependencies.
+Output shape:
+- **requirements:** total / active / archived / superseded
+- **coverage:** with_impls (count + %), with_test_specs (count + %)
+- **drift:** events / files_affected / clean_checks / drift_ratio_pct
+- **conflicts:** caught (count of conflict_found events)
+- **activity:** extracted / linked (windowed by `--since`)
+- **staleness:** never / over_30d / over_60d / over_90d buckets
+                  (driven by `last_referenced` from M2.1)
 
-### 5.2 `loom metrics` command
+### 5.3 `loom health-score` (DONE)
 
-Reads the event log and reports effectiveness:
+Single 0-100 score, equal-weighted average of four components:
 
-```
-loom metrics -p myproject
-loom metrics -p myproject --json
-loom metrics -p myproject --since 30d
-```
-
-Output:
-- **Requirements:** total extracted, active, archived, superseded
-- **Coverage:** requirements with implementations / total, requirements with test specs / total
-- **Drift:** times drift was detected, files affected, avg time from supersede to detection
-- **Conflicts:** conflicts caught before implementation
-- **Activity:** requirements extracted per week, links created per week
-- **Staleness:** requirements with no references in 30/60/90 days
-
-### 5.3 `loom health-score`
-
-Single 0-100 score combining:
-- Implementation coverage (% of reqs with linked code)
-- Test spec coverage (% of reqs with test specs)
-- Freshness (% of reqs referenced in last 90 days)
-- Drift ratio (% of implementations not drifted)
-
-Useful for CI gates or status dashboards:
+| component | meaning |
+|---|---|
+| `impl_coverage` | % of active reqs with at least one linked Implementation |
+| `test_coverage` | % of active reqs with a TestSpec |
+| `freshness`     | % of active reqs referenced in the last 90 days |
+| `non_drift`     | % of recent (90-day) checks that found no drift; 100 when no checks recorded yet (no signal ≠ degradation) |
 
 ```bash
-SCORE=$(loom health-score -p myproject --json | jq '.score')
+SCORE=$(loom health-score -p proj --json | jq '.score')
 [ "$SCORE" -lt 50 ] && echo "Requirements health is degrading"
 ```
+
+Empty stores return `score=0`, never crash. Useful for CI gates.
 
 ## Dependency Graph
 

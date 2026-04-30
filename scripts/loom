@@ -273,6 +273,61 @@ def cmd_cost(args):
     return 0
 
 
+def cmd_metrics(args):
+    """Effectiveness metrics: coverage, drift, conflicts, activity, staleness (M5.2)."""
+    store = LoomStore(args.project)
+    data = services.metrics(store, since_days=getattr(args, "since", None))
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Metrics — {args.project}")
+    if data["since_days"]:
+        print(f"   (activity window: last {data['since_days']}d)")
+    print()
+    r = data["requirements"]
+    print(f"Requirements:  {r['total']} total — "
+          f"{r['active']} active, {r['archived']} archived, {r['superseded']} superseded")
+    c = data["coverage"]
+    print(f"Coverage:      {c['with_impls']}/{r['active']} have linked code "
+          f"({c['with_impls_pct']}%); "
+          f"{c['with_test_specs']}/{r['active']} have test specs ({c['with_test_specs_pct']}%)")
+    d = data["drift"]
+    if d["events"] or d["clean_checks"]:
+        print(f"Drift:         {d['events']} events on {d['files_affected']} file(s) "
+              f"({d['drift_ratio_pct']}% of {d['events'] + d['clean_checks']} checks)")
+    if data["conflicts"]["caught"]:
+        print(f"Conflicts:     {data['conflicts']['caught']} caught at extract time")
+    a = data["activity"]
+    print(f"Activity:      {a['extracted']} extracted, {a['linked']} linked")
+    s = data["staleness"]
+    print(f"Staleness:     never={s['never']}  >30d={s['over_30d']}  "
+          f">60d={s['over_60d']}  >90d={s['over_90d']}")
+    return 0
+
+
+def cmd_health_score(args):
+    """Single 0-100 health score combining coverage, freshness, drift (M5.3)."""
+    store = LoomStore(args.project)
+    data = services.health_score(store)
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Health — {args.project}")
+    print()
+    print(f"Score: {data['score']}/100  ({data['active_requirements']} active reqs)")
+    print()
+    cs = data["components"]
+    print(f"  impl_coverage:  {cs['impl_coverage']}%")
+    print(f"  test_coverage:  {cs['test_coverage']}%")
+    print(f"  freshness:      {cs['freshness']}%  (referenced ≤90d)")
+    print(f"  non_drift:      {cs['non_drift']}%  (clean checks ratio, 90d window)")
+    return 0
+
+
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
@@ -2040,6 +2095,24 @@ def main():
     p_cost.add_argument("--tail", type=int, default=None, help="Only consider the last N log entries")
     p_cost.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
+    # metrics (M5.2) — effectiveness rollup
+    p_metrics = sp(
+        "metrics",
+        help="Effectiveness metrics: coverage, drift, conflicts, activity, staleness",
+    )
+    p_metrics.add_argument(
+        "--since", type=int, default=None,
+        help="Activity window in days (drift / conflicts / activity).",
+    )
+    p_metrics.add_argument("--json", "-j", action="store_true", help="JSON output")
+
+    # health-score (M5.3) — 0-100 single number for CI gating
+    p_health = sp(
+        "health-score",
+        help="Single 0-100 score over coverage + freshness + drift",
+    )
+    p_health.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # task subcommand group
     p_task = sp("task", help="Manage atomic work items (Task entity)")
     task_subs = p_task.add_subparsers(dest="task_verb", required=True)
@@ -2181,6 +2254,8 @@ def main():
         "coverage": cmd_coverage,
         "chain": cmd_chain,
         "cost": cmd_cost,
+        "metrics": cmd_metrics,
+        "health-score": cmd_health_score,
         "task": cmd_task,
         "decompose": cmd_decompose,
     }

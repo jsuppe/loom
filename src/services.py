@@ -30,6 +30,33 @@ from typing import Any
 
 from store import LoomStore
 
+EVENTS_FILENAME = ".loom-events.jsonl"
+
+
+def _record_event(store: LoomStore, event_type: str, **fields: Any) -> None:
+    """Append a typed event to the per-project event log (M5.1).
+
+    The log lives at ``<store.data_dir>/.loom-events.jsonl`` (one JSON
+    object per line, append-only). ``services.metrics`` and
+    ``services.health_score`` consume it. Failures are swallowed —
+    instrumentation must never break a real operation.
+    """
+    from datetime import datetime, timezone
+    import json as _json
+
+    entry: dict[str, Any] = {
+        "event": event_type,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    entry.update(fields)
+    try:
+        path = store.data_dir / EVENTS_FILENAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
 
 def status(store: LoomStore) -> dict[str, Any]:
     """Project status: counts, drift items.
@@ -1030,6 +1057,20 @@ def extract(
     embedding = get_embedding(value)
     store.add_requirement(req, embedding)
 
+    # M5.1: log the extraction + any conflicts caught at extract time
+    # so `loom metrics` can report "conflicts caught before commit".
+    _record_event(
+        store, "requirement_extracted",
+        req_id=req_id, domain=domain,
+        has_rationale=bool(rationale),
+    )
+    for c in conflicts_out:
+        _record_event(
+            store, "conflict_found",
+            req_id=req_id, existing_id=c["existing_id"],
+            reason=c.get("reason"),
+        )
+
     return {
         "req_id": req_id,
         "domain": domain,
@@ -1102,6 +1143,21 @@ def check(
                 "superseded_at": req.superseded_at,
                 "rationale": req.rationale,
             })
+
+    # M5.1: every linked check is a drift signal — emit either a
+    # drift_detected event (with the offending req_ids) or a clean
+    # signal so metrics can compute the drift ratio over a window.
+    if drift_found:
+        _record_event(
+            store, "drift_detected",
+            file=file_path, lines=lines,
+            req_ids=[r["req_id"] for r in results if r["drifted"]],
+        )
+    else:
+        _record_event(
+            store, "check_clean",
+            file=file_path, lines=lines,
+        )
 
     return {
         "file": file_path,
@@ -1354,6 +1410,245 @@ def cost(
     }
 
 
+def _read_events(store: LoomStore, *, since_days: int | None = None) -> list[dict[str, Any]]:
+    """Read the project's append-only event log, optionally clipped to a
+    trailing N-day window. Used by metrics() and health_score()."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+
+    path = store.data_dir / EVENTS_FILENAME
+    if not path.exists():
+        return []
+    cutoff: datetime | None = None
+    if since_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+
+    out: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+            if cutoff is not None:
+                ts_str = e.get("ts", "")
+                try:
+                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if ts < cutoff:
+                    continue
+            out.append(e)
+    return out
+
+
+def metrics(
+    store: LoomStore,
+    *,
+    since_days: int | None = None,
+) -> dict[str, Any]:
+    """Aggregate effectiveness metrics for the project (M5.2).
+
+    Reads the event log (extract / link / check / conflict events) and
+    cross-references against the live store to surface coverage,
+    activity, and freshness in one snapshot. Use ``since_days`` to clip
+    the activity / drift / conflict windows to a trailing slice
+    (typical: 30, 60, or 90).
+
+    Returned shape (all integer counts unless noted):
+
+        {
+          "since_days": int | None,
+          "requirements": {total, active, archived, superseded},
+          "coverage": {
+              "with_impls": int, "with_impls_pct": float,
+              "with_test_specs": int, "with_test_specs_pct": float,
+          },
+          "drift": {"events": int, "files_affected": int, "clean_checks": int,
+                    "drift_ratio_pct": float},
+          "conflicts": {"caught": int},
+          "activity": {"extracted": int, "linked": int},
+          "staleness": {"never": int, "over_30d": int, "over_60d": int,
+                        "over_90d": int},
+        }
+    """
+    from datetime import datetime, timezone
+    from testspec import TestSpecStore
+
+    events = _read_events(store, since_days=since_days)
+
+    # ----- requirements + coverage from store state (not windowed) -----
+    all_reqs = store.list_requirements(include_superseded=True)
+    superseded = [r for r in all_reqs if r.superseded_at]
+    archived = [r for r in all_reqs if r.status == "archived"
+                and r.superseded_at is None]
+    active = [r for r in all_reqs
+              if r.superseded_at is None and r.status != "archived"]
+
+    spec_store = TestSpecStore(store.data_dir)
+    with_impls = 0
+    with_test_specs = 0
+    for req in active:
+        if store.get_implementations_for_requirement(req.id):
+            with_impls += 1
+        if spec_store.get_spec(req.id):
+            with_test_specs += 1
+    n_active = len(active)
+
+    def _pct(num: int, den: int) -> float:
+        return round(100.0 * num / den, 1) if den else 0.0
+
+    # ----- drift / conflicts / activity from events (windowed) -----
+    drift_events = [e for e in events if e.get("event") == "drift_detected"]
+    files_affected: set[str] = set()
+    for e in drift_events:
+        if f := e.get("file"):
+            files_affected.add(f)
+    clean_checks = sum(1 for e in events if e.get("event") == "check_clean")
+    total_checks = len(drift_events) + clean_checks
+
+    conflicts_caught = sum(1 for e in events if e.get("event") == "conflict_found")
+    extracted = sum(1 for e in events if e.get("event") == "requirement_extracted")
+    linked = sum(1 for e in events if e.get("event") == "implementation_linked")
+
+    # ----- staleness from last_referenced (not windowed; current state) -----
+    now = datetime.now(timezone.utc)
+    never = over30 = over60 = over90 = 0
+    for req in active:
+        if req.last_referenced is None:
+            never += 1
+            continue
+        try:
+            ts = datetime.fromisoformat(req.last_referenced.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            never += 1
+            continue
+        days = (now - ts).days
+        if days > 90:
+            over90 += 1
+        elif days > 60:
+            over60 += 1
+        elif days > 30:
+            over30 += 1
+
+    return {
+        "since_days": since_days,
+        "requirements": {
+            "total": len(all_reqs),
+            "active": n_active,
+            "archived": len(archived),
+            "superseded": len(superseded),
+        },
+        "coverage": {
+            "with_impls": with_impls,
+            "with_impls_pct": _pct(with_impls, n_active),
+            "with_test_specs": with_test_specs,
+            "with_test_specs_pct": _pct(with_test_specs, n_active),
+        },
+        "drift": {
+            "events": len(drift_events),
+            "files_affected": len(files_affected),
+            "clean_checks": clean_checks,
+            # Drift ratio is over actual checks, not over total events.
+            "drift_ratio_pct": _pct(len(drift_events), total_checks),
+        },
+        "conflicts": {"caught": conflicts_caught},
+        "activity": {"extracted": extracted, "linked": linked},
+        "staleness": {
+            "never": never,
+            "over_30d": over30,
+            "over_60d": over60,
+            "over_90d": over90,
+        },
+    }
+
+
+def health_score(store: LoomStore) -> dict[str, Any]:
+    """Compute a single 0-100 health score plus its components (M5.3).
+
+    Equal-weighted average of four signals over the active requirement
+    set:
+        impl_coverage     — fraction of active reqs with linked code
+        test_coverage     — fraction of active reqs with a test spec
+        freshness         — fraction of active reqs referenced in the
+                            last 90 days (never-referenced counts as
+                            cold)
+        non_drift         — fraction of recent (90-day window) checks
+                            that found no drift; 100 if no checks
+                            recorded yet (no signal = no degradation)
+
+    Empty store: returns score=0 with all components zero. Useful for
+    CI gates: ``loom health-score --json | jq .score`` returns an int.
+    """
+    from datetime import datetime, timezone
+
+    all_reqs = store.list_requirements(include_superseded=True)
+    active = [r for r in all_reqs
+              if r.superseded_at is None and r.status != "archived"]
+    n_active = len(active)
+    if n_active == 0:
+        return {
+            "score": 0,
+            "components": {
+                "impl_coverage": 0.0,
+                "test_coverage": 0.0,
+                "freshness": 0.0,
+                "non_drift": 100.0,
+            },
+            "active_requirements": 0,
+        }
+
+    from testspec import TestSpecStore
+    spec_store = TestSpecStore(store.data_dir)
+
+    with_impls = sum(
+        1 for r in active if store.get_implementations_for_requirement(r.id)
+    )
+    with_tests = sum(1 for r in active if spec_store.get_spec(r.id))
+
+    now = datetime.now(timezone.utc)
+    fresh = 0
+    for r in active:
+        if not r.last_referenced:
+            continue
+        try:
+            ts = datetime.fromisoformat(r.last_referenced.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        if (now - ts).days <= 90:
+            fresh += 1
+
+    events = _read_events(store, since_days=90)
+    drift = sum(1 for e in events if e.get("event") == "drift_detected")
+    clean = sum(1 for e in events if e.get("event") == "check_clean")
+    total_checks = drift + clean
+    # No checks in window = no signal; treat as 100 so a fresh project
+    # isn't penalized for not having run `loom check` yet.
+    non_drift_pct = 100.0 if total_checks == 0 else (
+        100.0 * clean / total_checks
+    )
+
+    impl_pct = 100.0 * with_impls / n_active
+    test_pct = 100.0 * with_tests / n_active
+    fresh_pct = 100.0 * fresh / n_active
+
+    score = round((impl_pct + test_pct + fresh_pct + non_drift_pct) / 4.0)
+
+    return {
+        "score": int(score),
+        "components": {
+            "impl_coverage": round(impl_pct, 1),
+            "test_coverage": round(test_pct, 1),
+            "freshness": round(fresh_pct, 1),
+            "non_drift": round(non_drift_pct, 1),
+        },
+        "active_requirements": n_active,
+    }
+
+
 def detect_requirements(
     store: LoomStore, file_path: str, lines: str | None = None, n: int = 3
 ) -> list[dict[str, Any]]:
@@ -1486,6 +1781,16 @@ def link(
     # M2.1: linking the file is a meaningful "use" of every linked req.
     for s in satisfies:
         store.touch_requirement(s["req_id"])
+
+    # M5.1: log per-link so `loom metrics` can report linking activity
+    # over time. One event per (file, req) pair so the rate matches
+    # what the user did.
+    for s in satisfies:
+        _record_event(
+            store, "implementation_linked",
+            file=file_path, lines=lines or "all",
+            req_id=s["req_id"], impl_id=impl_id,
+        )
 
     return {
         "linked": True,

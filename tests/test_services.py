@@ -2022,3 +2022,240 @@ class TestStale:
 
         ids = [r["id"] for r in services.stale(store)]
         assert "REQ-A" not in ids
+
+
+# ---------------------------------------------------------------------------
+# M5 — Metrics & Effectiveness
+# ---------------------------------------------------------------------------
+
+class TestEventRecording:
+    """M5.1 — extract / link / check / conflicts append typed events."""
+
+    def _read_events(self, store):
+        import json as _json
+        path = store.data_dir / services.EVENTS_FILENAME
+        if not path.exists():
+            return []
+        return [_json.loads(line) for line in path.read_text().splitlines() if line]
+
+    def test_extract_logs_requirement_extracted(self, store):
+        services.extract(store, domain="behavior", value="rate limit")
+        events = self._read_events(store)
+        types = [e["event"] for e in events]
+        assert "requirement_extracted" in types
+
+    def test_extract_logs_rationale_flag(self, store):
+        services.extract(
+            store, domain="behavior", value="x",
+            rationale="prevent abuse",
+        )
+        events = self._read_events(store)
+        ext = [e for e in events if e["event"] == "requirement_extracted"][0]
+        assert ext["has_rationale"] is True
+
+    def test_link_logs_implementation_linked_per_req(self, store, fake_embedding, tmp_path):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        _mk_req(store, "REQ-2", "behavior", "y", fake_embedding)
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        services.link(store, str(f), req_ids=["REQ-1", "REQ-2"])
+
+        events = self._read_events(store)
+        linked = [e for e in events if e["event"] == "implementation_linked"]
+        assert {e["req_id"] for e in linked} == {"REQ-1", "REQ-2"}
+
+    def test_check_logs_drift_detected_when_drifted(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        store.supersede_requirement("REQ-1")
+
+        services.check(store, str(f))
+        events = self._read_events(store)
+        types = [e["event"] for e in events]
+        assert "drift_detected" in types
+        assert "check_clean" not in types
+
+    def test_check_logs_check_clean_when_no_drift(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        services.check(store, str(f))
+        events = self._read_events(store)
+        types = [e["event"] for e in events]
+        assert "check_clean" in types
+        assert "drift_detected" not in types
+
+
+class TestMetrics:
+    """M5.2 — services.metrics aggregates events + store state."""
+
+    def test_empty_store_returns_zeros(self, store):
+        m = services.metrics(store)
+        assert m["requirements"]["total"] == 0
+        assert m["coverage"]["with_impls_pct"] == 0.0
+        assert m["activity"]["extracted"] == 0
+        assert m["staleness"]["never"] == 0
+
+    def test_requirements_buckets(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "active", fake_embedding)
+        _mk_req(store, "REQ-2", "behavior", "old", fake_embedding)
+        _mk_req(store, "REQ-3", "behavior", "deprecated", fake_embedding)
+        store.supersede_requirement("REQ-2")
+        services.archive(store, "REQ-3")
+
+        m = services.metrics(store)
+        r = m["requirements"]
+        assert r["total"] == 3
+        assert r["active"] == 1
+        assert r["superseded"] == 1
+        assert r["archived"] == 1
+
+    def test_coverage_with_impls(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-A", "behavior", "linked", fake_embedding)
+        _mk_req(store, "REQ-B", "behavior", "orphan", fake_embedding)
+
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-A"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        m = services.metrics(store)
+        assert m["coverage"]["with_impls"] == 1
+        assert m["coverage"]["with_impls_pct"] == 50.0
+
+    def test_drift_ratio_from_check_events(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        # 1 clean check
+        services.check(store, str(f))
+        # supersede → drift
+        store.supersede_requirement("REQ-1")
+        services.check(store, str(f))
+
+        m = services.metrics(store)
+        assert m["drift"]["events"] == 1
+        assert m["drift"]["clean_checks"] == 1
+        assert m["drift"]["drift_ratio_pct"] == 50.0
+
+    def test_activity_counts_extract_and_link(self, store, fake_embedding, tmp_path):
+        services.extract(store, domain="behavior", value="x")
+        services.extract(store, domain="behavior", value="y")
+        # link the first req
+        rid = next(iter(store.list_requirements())).id
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        services.link(store, str(f), req_ids=[rid])
+
+        m = services.metrics(store)
+        assert m["activity"]["extracted"] == 2
+        assert m["activity"]["linked"] == 1
+
+    def test_since_days_clips_window(self, store, fake_embedding):
+        # Hand-write a 2-event log with one historical and one fresh
+        # entry; that lets us test the clip without sleeping.
+        import json as _json
+        from datetime import datetime, timezone
+        path = store.data_dir / services.EVENTS_FILENAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        old = {"event": "requirement_extracted",
+               "ts": "2024-01-01T00:00:00+00:00"}
+        recent = {"event": "requirement_extracted",
+                  "ts": datetime.now(timezone.utc).isoformat()}
+        path.write_text(_json.dumps(old) + "\n" + _json.dumps(recent) + "\n",
+                        encoding="utf-8")
+
+        m_all = services.metrics(store)
+        m_recent = services.metrics(store, since_days=30)
+        assert m_all["activity"]["extracted"] == 2
+        assert m_recent["activity"]["extracted"] == 1
+
+
+class TestHealthScore:
+    """M5.3 — single 0-100 score over coverage + freshness + drift."""
+
+    def test_empty_store_returns_zero(self, store):
+        h = services.health_score(store)
+        assert h["score"] == 0
+        assert h["active_requirements"] == 0
+
+    def test_perfect_score_with_full_coverage(self, store, fake_embedding, tmp_path):
+        from store import generate_impl_id
+        from datetime import datetime, timezone
+        from testspec import TestSpecStore, TestSpec
+
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        # Touch to mark as fresh.
+        store.touch_requirement("REQ-1")
+
+        # Linked impl.
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        # Test spec.
+        ts = TestSpecStore(store.data_dir)
+        ts.add_spec(TestSpec(
+            req_id="REQ-1", description="d", steps=["s"],
+            expected="ok", automated=False,
+        ))
+
+        h = services.health_score(store)
+        assert h["score"] == 100
+        assert h["components"]["impl_coverage"] == 100.0
+        assert h["components"]["test_coverage"] == 100.0
+        assert h["components"]["freshness"] == 100.0
+        # No checks recorded → non_drift defaults to 100.
+        assert h["components"]["non_drift"] == 100.0
+
+    def test_no_coverage_no_freshness_drops_score(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        # Never touched, no impl, no test.
+        h = services.health_score(store)
+        # impl=0, test=0, freshness=0, non_drift=100 → avg = 25.
+        assert h["score"] == 25
