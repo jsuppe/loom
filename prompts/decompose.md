@@ -164,9 +164,16 @@ tasks:
     size_budget_loc: 30
 ```
 
-For larger specs, you might produce 3–5 tasks with dependencies — e.g.,
-one task for a new dataclass, one for the service function, one for CLI
-wiring, each depending on the previous.
+For larger specs that span multiple files — barrel re-exports,
+schema-then-service-then-CLI flows — produce one task per file
+and chain them through `depends_on`. Each `depends_on` entry
+echoes the `title` of an earlier task in the same list. Empty
+`depends_on: []` is correct for the first task; later tasks in a
+multi-file chain MUST cite their predecessors. Without these
+dependencies, the executor runs tasks in parallel and dependent
+tasks fail (e.g. a re-export task imports a class the prior task
+hasn't added yet). The matcher tolerates whitespace differences,
+but the title text itself must be a faithful copy.
 
 ## Non-negotiable output contract
 

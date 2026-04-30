@@ -3231,14 +3231,66 @@ def _validate_task_proposals(
             "depends_on_titles": list(raw.get("depends_on") or []),
         })
 
+    def _coerce(d: Any) -> str:
+        # qwen occasionally emits depends_on entries as dicts ({title: "..."})
+        # or other shapes instead of plain strings. Coerce to a comparable
+        # string before normalization.
+        if isinstance(d, str):
+            return d
+        if isinstance(d, dict):
+            for k in ("title", "name", "ref"):
+                if k in d and isinstance(d[k], str):
+                    return d[k]
+            return ""
+        return str(d)
+
+    def _norm(s: Any) -> str:
+        # Collapse all whitespace and lowercase, so YAML pipe-style line
+        # breaks and trailing spaces don't break equality. Lowercased
+        # because qwen sometimes reflows capitalization across line
+        # joins ("File path" vs "file path").
+        return " ".join(_coerce(s).split()).lower()
+
+    # Match each depends_on ref against earlier titles in three escalating
+    # tiers — generators routinely truncate the dep string to the first
+    # line of a multi-line title or summarize it, so strict equality
+    # would silently lose chain edges (the symptom phV2 hit at 0% across
+    # cells). Tiers stop on first hit:
+    #   1. exact (whitespace-normalized)
+    #   2. dep is a prefix of a unique earlier title
+    #   3. dep is a substring of a unique earlier title
+    # If multiple earlier titles match at a tier, we fall through —
+    # ambiguity is worse than a missing edge. The tier's chosen
+    # canonical title is what we record, so apply_decomposition can
+    # resolve to the right earlier task ID.
     for i, t in enumerate(normalized):
-        earlier_titles = {n["title"] for n in normalized[:i]}
-        bad = [d for d in t["depends_on_titles"] if d not in earlier_titles]
+        earlier = normalized[:i]
+        earlier_norm = [(_norm(n["title"]), n["title"]) for n in earlier]
+        resolved: list[str] = []
+        bad: list[str] = []
+        for d in t["depends_on_titles"]:
+            dn = _norm(d)
+            # Tier 1: exact match
+            exact = [c for n, c in earlier_norm if n == dn]
+            if len(exact) == 1:
+                resolved.append(exact[0])
+                continue
+            # Tier 2: prefix (LLM truncated to opening sentence)
+            prefix = [c for n, c in earlier_norm if n.startswith(dn) or dn.startswith(n)]
+            if len(prefix) == 1:
+                resolved.append(prefix[0])
+                continue
+            # Tier 3: substring (LLM picked a distinctive middle phrase)
+            sub = [c for n, c in earlier_norm if dn in n or n in dn]
+            if len(sub) == 1:
+                resolved.append(sub[0])
+                continue
+            bad.append(d)
         if bad:
             warnings.append(
                 f"task {t['title']!r}: depends_on refs {bad} not found earlier"
             )
-            t["depends_on_titles"] = [d for d in t["depends_on_titles"] if d in earlier_titles]
+        t["depends_on_titles"] = resolved
 
     return normalized, warnings
 
