@@ -1,0 +1,37 @@
+{
+  "phase": "U_pyschema_extended_r6m",
+  "cell": "D2m",
+  "run_id": "3",
+  "tasks_complete": 3,
+  "tasks_test_fail": 0,
+  "acceptance_passed": 5,
+  "acceptance_total": 5,
+  "acceptance_rate": 1.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": true,
+    "inherits_strfield": true,
+    "uses_dataclass": true,
+    "validate_calls_super": true
+  },
+  "idiom_score": 4,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": true,
+    "top_barrel_import": true,
+    "top_barrel_all": true,
+    "top_level_import_works": true
+  },
+  "wiring_score": 4,
+  "wiring_total": 4,
+  "import_works": true,
+  "exec_rc": 0,
+  "exec_duration_s": 13.4,
+  "wall_s": 14.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_xhu0x5py",
+  "exec_stdout_tail": "[exec] task TASK-972134c3aff4  status=pending  title=\"Step 1 of 3: Add the RegexField class to pyschema/fields/strings.py. Inherits StrField; takes `pattern: str` (default ''); overrides validate() to call super().validate() then re.match(self.pattern, result). Use @dataclass decorator. Place after the existing UUIDField class.\"\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_xhu0x5py  runner: pytest_replace (replace)\n[exec] prompt: 6149 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 6.2s  in=1549  out=564\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-972134c3aff4\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phU_r6m_xhu0x5py\\\\pyschema\\\\fields\\\\strings.py\"}\n[exec] task TASK-44dd0489ae1c  status=pending  title=\"Step 2 of 3: Re-export RegexField from pyschema/fields/__init__.py. Add `RegexField` to the import line `from .strings import EmailField, URLField, UUIDField` (make it `EmailField, RegexField, URLField, UUIDField`) and add `'RegexField'` to the `__all__` list (alphabetically).\"\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_xhu0x5py  runner: pytest_replace (replace)\n[exec] prompt: 3593 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.8s  in=987  out=149\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-44dd0489ae1c\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phU_r6m_xhu0x5py\\\\pyschema\\\\fields\\\\__init__.py\"}\n[exec] task TASK-f4fdfa704f4d  status=pending  title=\"Step 3 of 3: Re-export RegexField from the top-level pyschema/__init__.py. Add `RegexField` to the multi-line import from .fields (alphabetically between `IntField` and `StrField`) and add `'RegexField'` to the `__all__` list (alphabetically after 'Pattern').\"\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_xhu0x5py  runner: pytest_replace (replace)\n[exec] prompt: 2571 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 3.9s  in=759  out=359\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-f4fdfa704f4d\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phU_r6m_xhu0x5py\\\\pyschema\\\\__init__.py\"}\n[exec] no ready tasks",
+  "grade_acceptance_tail": ".....                                                                    [100%]\n5 passed in 0.03s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.06s\n"
+}

@@ -1,0 +1,37 @@
+{
+  "phase": "U_pyschema_extended_r6m",
+  "cell": "D1m",
+  "run_id": "1",
+  "tasks_complete": 0,
+  "tasks_test_fail": 0,
+  "acceptance_passed": 0,
+  "acceptance_total": 1,
+  "acceptance_rate": 0.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": false,
+    "inherits_strfield": false,
+    "uses_dataclass": false,
+    "validate_calls_super": false
+  },
+  "idiom_score": 0,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": false,
+    "top_barrel_import": false,
+    "top_barrel_all": false,
+    "top_level_import_works": false
+  },
+  "wiring_score": 0,
+  "wiring_total": 4,
+  "import_works": false,
+  "exec_rc": 0,
+  "exec_duration_s": 602.1,
+  "wall_s": 603.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_rk8bqjis",
+  "exec_stdout_tail": "[exec] task TASK-cdbec7e3e117  status=pending  title=\"Step 1 of 3: Add the RegexField class to pyschema/fields/strings.py. Inherits StrField; takes `pattern: str` (default ''); overrides validate() to call super().validate() then re.match(self.pattern, result). Use @dataclass decorator. Place after the existing UUIDField class.\"\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_r6m_rk8bqjis  runner: pytest_replace (replace)\n[exec] prompt: 6149 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] result: {\"task_id\": \"TASK-cdbec7e3e117\", \"outcome\": \"llm_error\", \"reason\": \"ollama call failed: timed out\"}",
+  "grade_acceptance_tail": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_regexfield.py __________________\nImportError while importing test module 'C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_grade_test_regexfield_d4lqm7ap\\tests\\test_regexfield.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_regexfield.py:11: in <module>\n    from pyschema.fields.strings import RegexField\nE   ImportError: cannot import name 'RegexField' from 'pyschema.fields.strings' (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phU_grade_test_regexfield_d4lqm7ap\\pyschema\\fields\\strings.py)\n=========================== short test summary info ===========================\nERROR tests/test_regexfield.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.15s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.07s\n"
+}
