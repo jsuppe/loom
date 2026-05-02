@@ -337,7 +337,9 @@ def run_one(cell: str, run_id: str) -> dict:
     try:
         llm = call_ollama(model, prompt)
     except Exception as e:
-        return {
+        # M10.3 lesson: persist on error so a 32b runner crash doesn't
+        # silently drop the trial.
+        err_summary = {
             "phase": "L2_crosssession_cpp_stub_indexer",
             "scenario": "S1",
             "cell": cell,
@@ -346,6 +348,12 @@ def run_one(cell: str, run_id: str) -> dict:
             "error": f"ollama call failed: {e}",
             "wall_s": round(time.time() - t0, 1),
         }
+        cell_slug = cell.replace("+", "_").replace("-", "_")
+        out_path = OUT_DIR / f"phL2_s1_cpp_{cell_slug}_run{run_id}_summary.json"
+        out_path.write_text(json.dumps(err_summary, indent=2),
+                             encoding="utf-8")
+        print(f"SUMMARY: {cell} ERROR: {e}")
+        return err_summary
     print(f"[llm] {llm['elapsed_s']:.1f}s in={llm['input_tokens']} "
           f"out={llm['output_tokens']}")
 

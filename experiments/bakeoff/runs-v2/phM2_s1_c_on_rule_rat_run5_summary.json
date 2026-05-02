@@ -1,0 +1,24 @@
+{
+  "phase": "M2_crosssession_c_stub_indexer",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "5",
+  "passed": 1,
+  "total": 2,
+  "pass_rate": 0.5,
+  "compile_failed": false,
+  "cited_rationale": true,
+  "rationale_keyphrases_matched": [
+    "wrapper"
+  ],
+  "rationale_len": 449,
+  "input_tokens": 1516,
+  "output_tokens": 242,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-c",
+  "semantic_context_chars": 3024,
+  "llm_elapsed_s": 15.5,
+  "wall_s": 15.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phM2_s1_c_btrv5ntq",
+  "grade_stdout_tail": "PASS: returns_NULL_on_all_failures\nFAIL: errno_cleared_after_failures (expected errno=0, got 107: connection refused)\nSUMMARY: 1 passed, 1 failed\n"
+}

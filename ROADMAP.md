@@ -150,6 +150,33 @@ pipeline complexity.
       `loom_exec` proper is now blocked only on a real indexer
       backend; the prompt-assembly seam is validated. Findings doc:
       `FINDINGS-bakeoff-v2-cpp-stub-indexer.md`.
+
+- [x] **10.3 Multi-language stub-indexer extension** — extended the
+      M10.2 falsification to two more languages from the cross-
+      language map: C (resistant-mid) via phM2 + `StubCIndexer`,
+      and JavaScript (graded-no-saturation) via phQ2 + `StubJsIndexer`.
+      Same architecture, same `qwen2.5-coder:32b` executor, ~30
+      trials (some cells N<5 due to runner crashes). Three different
+      responses to the same intervention:
+
+      | language | regime | rat baseline | with stub | takeaway |
+      |---|---|---|---|---|
+      | **C++** | collapsed | 0% (32b-no-stub) | **40%** | partial bridge |
+      | **C** | resistant-mid | 60% | 50% | no measurable lift |
+      | **JS** | graded-no-sat | 60% | **100%** | saturating lift |
+
+      JS additionally jumped from 0% → 60% in the *off* cell —
+      meaning the JSDoc-style stub was encoding an implicit rule.
+      Conclusion: **the M10 architecture (pluggable per-language
+      indexers) is right, but per-language plug-ins do different
+      things.** The "one-indexer-fixes-all-resistant-languages"
+      framing is wrong; C needs different signal than C++ and JS.
+      Findings doc:
+      `FINDINGS-bakeoff-v2-stub-indexer-multilang.md`.
+
+      Side fix: phL2/phM2/phQ2 harnesses patched to write summary
+      files even on Ollama-call failure, so future 32b crashes don't
+      silently drop trials.
 - [ ] **10.3 First real indexer: `KytheIndexer` (C++) OR
       `PyrightIndexer` (Python).** Pick whichever gets us a falsifying
       run faster.

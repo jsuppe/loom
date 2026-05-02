@@ -1,0 +1,22 @@
+{
+  "phase": "Q2_crosssession_js_stub_indexer",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "1",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 370,
+  "input_tokens": 1084,
+  "output_tokens": 223,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-js",
+  "semantic_context_chars": 2151,
+  "llm_elapsed_s": 27.2,
+  "wall_s": 27.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ2_s1_js_fsterfno",
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\nAttempt 1 failed: connection failed: http://example.com\nAttempt 2 failed: connection failed: http://example.com\nAttempt 3 failed: connection failed: http://example.com\nAttempt 1 failed: connection failed: http://example.com\n"
+}

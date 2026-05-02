@@ -1,0 +1,22 @@
+{
+  "phase": "Q2_crosssession_js_stub_indexer",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "5",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 951,
+  "output_tokens": 240,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-js",
+  "semantic_context_chars": 2151,
+  "llm_elapsed_s": 15.3,
+  "wall_s": 15.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ2_s1_js_9wgkiw9l",
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: All 3 attempts failed: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: All 1 attempts failed: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

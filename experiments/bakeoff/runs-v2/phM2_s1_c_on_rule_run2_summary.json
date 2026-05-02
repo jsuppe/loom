@@ -1,0 +1,10 @@
+{
+  "phase": "M2_crosssession_c_stub_indexer",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "2",
+  "passed": 0,
+  "total": 2,
+  "error": "ollama call failed: HTTP Error 500: Internal Server Error",
+  "wall_s": 9.8
+}

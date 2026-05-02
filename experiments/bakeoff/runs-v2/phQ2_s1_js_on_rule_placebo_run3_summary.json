@@ -1,0 +1,10 @@
+{
+  "phase": "Q2_crosssession_js_stub_indexer",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "3",
+  "passed": 0,
+  "total": 2,
+  "error": "ollama call failed: HTTP Error 500: Internal Server Error",
+  "wall_s": 6.7
+}
