@@ -1,0 +1,271 @@
+{
+  "_meta": {
+    "purpose": "Hand-labeled utterances for the M11.5 P0 classifier pilot. Splits between 'is_requirement: true' (statements about how the system MUST/SHOULD behave) and 'is_requirement: false' (questions, code edits, style preferences, commentary, operational instructions).",
+    "label_authority": "design author, 2026-05-02",
+    "total": 40,
+    "positives": 20,
+    "negatives": 20
+  },
+  "utterances": [
+    {
+      "id": "P01",
+      "text": "We should rate-limit the refund endpoint at 10 req/min — that incident on 9/12 made me paranoid about retry storms.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "classic stated rule with embedded rationale (incident reference)"
+    },
+    {
+      "id": "P02",
+      "text": "Users must confirm before deleting an account. Accidental deletions are killing us in support.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "MUST + rationale (support volume)"
+    },
+    {
+      "id": "P03",
+      "text": "The retry loop in retry.js needs to swallow errors silently, never propagate. The wrapper above us depends on null-on-failure.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "explicit constraint + rationale"
+    },
+    {
+      "id": "P04",
+      "text": "All public APIs must require auth tokens. No exceptions.",
+      "is_requirement": true,
+      "expected_domain": "architecture",
+      "notes": "blanket architectural rule"
+    },
+    {
+      "id": "P05",
+      "text": "Don't let the agent edit config files. Too risky.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "negative stated rule"
+    },
+    {
+      "id": "P06",
+      "text": "The cache TTL should be 60 seconds for read endpoints.",
+      "is_requirement": true,
+      "expected_domain": "data",
+      "notes": "concrete tunable"
+    },
+    {
+      "id": "P07",
+      "text": "Every payment-path endpoint needs a circuit breaker. Production hit a cascading failure last quarter.",
+      "is_requirement": true,
+      "expected_domain": "architecture",
+      "notes": "stated + incident rationale"
+    },
+    {
+      "id": "P08",
+      "text": "The login form must show specific error messages, not generic 'failed.' Users complain they can't tell what's wrong.",
+      "is_requirement": true,
+      "expected_domain": "ui",
+      "notes": "UI behavior rule"
+    },
+    {
+      "id": "P09",
+      "text": "We need to log every state transition with the user_id, timestamp, and previous-state.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "structured logging requirement"
+    },
+    {
+      "id": "P10",
+      "text": "The export feature should support CSV and JSON, with JSON as the default.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "feature-shape rule"
+    },
+    {
+      "id": "P11",
+      "text": "Always validate user-provided URLs before fetching. SSRF is a real concern.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "security-flavored stated rule"
+    },
+    {
+      "id": "P12",
+      "text": "The dashboard must update at most once per second to avoid jank on lower-end devices.",
+      "is_requirement": true,
+      "expected_domain": "ui",
+      "notes": "performance constraint"
+    },
+    {
+      "id": "P13",
+      "text": "We should never store plaintext passwords, even in dev. Hashing is mandatory everywhere.",
+      "is_requirement": true,
+      "expected_domain": "data",
+      "notes": "data-handling rule"
+    },
+    {
+      "id": "P14",
+      "text": "Add structured logging with trace IDs to every request handler.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "stated implementation rule"
+    },
+    {
+      "id": "P15",
+      "text": "The settings page needs a 'reset to defaults' button. Users keep getting stuck and asking support to reset for them.",
+      "is_requirement": true,
+      "expected_domain": "ui",
+      "notes": "feature requirement"
+    },
+    {
+      "id": "P16",
+      "text": "The CLI must exit non-zero when validation fails. Shell scripts that depend on us are silently passing right now.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "exit-code contract"
+    },
+    {
+      "id": "P17",
+      "text": "Background jobs should retry with exponential backoff up to 5 times before failing permanently.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "retry policy"
+    },
+    {
+      "id": "P18",
+      "text": "Every database migration must be reversible. Forward-only migrations are too risky for our scale.",
+      "is_requirement": true,
+      "expected_domain": "data",
+      "notes": "DB engineering rule"
+    },
+    {
+      "id": "P19",
+      "text": "Use the term 'order' consistently across the codebase, never 'transaction' or 'purchase'.",
+      "is_requirement": true,
+      "expected_domain": "terminology",
+      "notes": "terminology rule (rare domain)"
+    },
+    {
+      "id": "P20",
+      "text": "We need to prevent SQL injection on all user-facing forms. Auditor flagged this in February.",
+      "is_requirement": true,
+      "expected_domain": "behavior",
+      "notes": "security with rationale"
+    },
+    {
+      "id": "N01",
+      "text": "Can you fix the bug in retry.js?",
+      "is_requirement": false,
+      "notes": "code-edit instruction, not a rule"
+    },
+    {
+      "id": "N02",
+      "text": "What does this function do?",
+      "is_requirement": false,
+      "notes": "question"
+    },
+    {
+      "id": "N03",
+      "text": "Can you refactor this to use async/await?",
+      "is_requirement": false,
+      "notes": "code-edit request"
+    },
+    {
+      "id": "N04",
+      "text": "This is broken, can you fix it?",
+      "is_requirement": false,
+      "notes": "vague code-fix instruction"
+    },
+    {
+      "id": "N05",
+      "text": "Looks good, ship it.",
+      "is_requirement": false,
+      "notes": "approval / commentary"
+    },
+    {
+      "id": "N06",
+      "text": "Try again with the test enabled.",
+      "is_requirement": false,
+      "notes": "operational instruction"
+    },
+    {
+      "id": "N07",
+      "text": "How do I run the test suite?",
+      "is_requirement": false,
+      "notes": "question about tooling"
+    },
+    {
+      "id": "N08",
+      "text": "I prefer 4-space indentation.",
+      "is_requirement": false,
+      "notes": "style preference without behavior implications (per spec)"
+    },
+    {
+      "id": "N09",
+      "text": "Use double quotes please.",
+      "is_requirement": false,
+      "notes": "code-style preference"
+    },
+    {
+      "id": "N10",
+      "text": "What's the status of the migration?",
+      "is_requirement": false,
+      "notes": "status question"
+    },
+    {
+      "id": "N11",
+      "text": "Can you summarize what we did in this session?",
+      "is_requirement": false,
+      "notes": "summarization request"
+    },
+    {
+      "id": "N12",
+      "text": "That commit message could be clearer.",
+      "is_requirement": false,
+      "notes": "commentary on agent's work"
+    },
+    {
+      "id": "N13",
+      "text": "Why did you choose async over sync here?",
+      "is_requirement": false,
+      "notes": "design question, not a rule"
+    },
+    {
+      "id": "N14",
+      "text": "Show me the test output.",
+      "is_requirement": false,
+      "notes": "operational instruction"
+    },
+    {
+      "id": "N15",
+      "text": "The build is failing, look at the logs.",
+      "is_requirement": false,
+      "notes": "diagnosis instruction"
+    },
+    {
+      "id": "N16",
+      "text": "I think there's a typo in the readme.",
+      "is_requirement": false,
+      "notes": "casual report, not a rule"
+    },
+    {
+      "id": "N17",
+      "text": "Make this faster if possible.",
+      "is_requirement": false,
+      "notes": "vague optimization request, not a measurable requirement"
+    },
+    {
+      "id": "N18",
+      "text": "Run the tests and report back.",
+      "is_requirement": false,
+      "notes": "operational instruction"
+    },
+    {
+      "id": "N19",
+      "text": "Pull the latest from origin.",
+      "is_requirement": false,
+      "notes": "git operation"
+    },
+    {
+      "id": "N20",
+      "text": "Let me think about that.",
+      "is_requirement": false,
+      "notes": "user reflecting / no instruction"
+    }
+  ]
+}

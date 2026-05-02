@@ -69,9 +69,28 @@ Design + threshold-calibration pilot in
 - [ ] **11.5 Intake hook.** UserPromptSubmit hook that classifies
       incoming user messages, runs `find_related_requirements`,
       proposes top-2 candidates as system-reminder, and surfaces
-      `rationale_needed` debt back into the agent's context. The
-      bigger commitment — depends on the mechanic being trusted in
-      manual workflows first.
+      `rationale_needed` debt back into the agent's context.
+      Detailed spec in
+      [`docs/DESIGN-rationale-linkage.md`](docs/DESIGN-rationale-linkage.md)
+      Part 2. Five implementation phases:
+    - [x] **P0 classifier pilot (gate).** 40 labeled chat
+          utterances run through the spec prompt with
+          qwen3.5:latest. **Precision 95.2%** (1 FP, ambiguous
+          hedge-language case), recall 100%, F1 0.976, p50 latency
+          454ms. Cleared the ≥90% precision gate. Findings:
+          [`experiments/pilot/FINDINGS-intake-classifier-pilot.md`](experiments/pilot/FINDINGS-intake-classifier-pilot.md).
+          One spec addition called out: softener-detection
+          guardrail (lexical match on "if possible" / "try to" /
+          "would be nice" → downgrade auto-capture to propose).
+    - [ ] **P1 hook scaffold.** `hooks/loom_intake.py` per spec.
+          Manually invocable for testing before registration as
+          a Claude Code hook in P2.
+    - [ ] **P2 Claude Code integration.** Register as
+          UserPromptSubmit in `.claude/settings.json`. Document
+          install steps. Run on real chat session.
+    - [ ] **P3 stats + observability.** `loom intake-stats`
+          command, doctor integration.
+    - [ ] **P4 documentation + agents.d snippet.**
 
 ## Milestone 10: Semantic indexer integration (PLANNED — v1.x)
 
