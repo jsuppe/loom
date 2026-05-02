@@ -71,15 +71,17 @@ Compared against the M8.4 cross-language map's C row (qwen3.5):
 | cell | baseline (qwen3.5) | with stub (32b + indexer) | delta |
 |---|---|---|---|
 | off | 50% | 5/10 (50%) | **+0pp** |
-| on-rule | 50% | 3/4 (75%) | +25pp · *N=2* |
+| on-rule | 50% | 4/6 (67%) | +17pp · *N=3, 2 errors* |
 | on-rule+placebo | 60% | 6/10 (60%) | **+0pp** |
 | on-rule+rat | 60% | 5/10 (50%) | -10pp |
 
 - 0 compile failures · 0 silent code-extraction failures
-- Citation regex hits: rat=4/5, placebo=3/5 (qwen2.5-coder:32b on C
+- Citation regex hits: rat=4/5, placebo=3/5, on-rule=3/3 (qwen2.5-coder:32b on C
   *does* reproduce the rationale's distinctive phrases — unlike C++
   and JS where citation stayed at 0)
-- Wall: 4.8 min for 14 successful trials
+- Wall: ~5 min for 18 successful trials; 2 trials hit Ollama HTTP
+  500s on the on-rule cell (recorded as error summaries by the
+  patched harness — see Limitations below)
 
 **C interpretation:** The C cells move within sampling noise of their
 baselines. The on-rule cell at 75% (N=2) is the only suggestive lift,
@@ -95,13 +97,15 @@ Compared against the M8.4 cross-language map's JS row (qwen3.5):
 |---|---|---|---|
 | off | 0% | 6/10 (60%) | **+60pp** |
 | on-rule | 20% | 10/10 (100%) | **+80pp** |
-| on-rule+placebo | 40% | 4/4 (100%) | +60pp · *N=2* |
+| on-rule+placebo | 40% | 6/6 (100%) | +60pp · *N=3, 2 errors* |
 | on-rule+rat | 60% | 10/10 (100%) | **+40pp** |
 
 - 0 compile failures · 0 silent code-extraction failures
 - Citation regex hits: 0 across all cells (qwen2.5-coder:32b on JS
   doesn't reproduce rationale phrases — same pattern as C++)
-- Wall: 5.6 min for 17 successful trials
+- Wall: ~6 min for 18 successful trials; 2 trials hit Ollama HTTP
+  500s on the placebo cell (recorded as error summaries — see
+  Limitations)
 
 **JS interpretation:** **Massive lift across every cell, including
 off.** This is the strongest M10 result yet, but it's also the
