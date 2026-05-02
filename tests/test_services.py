@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from loom import embedding  # noqa: E402
 from loom import services  # noqa: E402
-from loom.store import LoomStore, Requirement, Implementation  # noqa: E402
+from loom.store import LoomStore, Requirement, Implementation, generate_content_hash  # noqa: E402
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ class TestStatus:
         _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
         impl = Implementation(
             id="IMPL-1", file="src/x.py", lines="1-10",
-            content="pass", content_hash="h",
+            content="pass", content_hash=generate_content_hash("pass"),
             satisfies=[{"req_id": "REQ-old"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -162,7 +162,7 @@ class TestTrace:
         _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
         impl = Implementation(
             id="IMPL-1", file="src/x.py", lines="1-10",
-            content="x = 1", content_hash="h",
+            content="x = 1", content_hash=generate_content_hash("x = 1"),
             satisfies=[{"req_id": "REQ-x"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -493,7 +493,7 @@ class TestDoctor:
         # Impl that points at a req that doesn't exist → orphan
         impl = Implementation(
             id="IMPL-orphan", file="src/x.py", lines="1-1",
-            content="x", content_hash="h",
+            content="x", content_hash=generate_content_hash("x"),
             satisfies=[{"req_id": "REQ-ghost"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -534,7 +534,7 @@ class TestDoctor:
         _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
         impl = Implementation(
             id="IMPL-1", file="src/x.py", lines="1-1",
-            content="x", content_hash="h",
+            content="x", content_hash=generate_content_hash("x"),
             satisfies=[{"req_id": "REQ-old"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -592,15 +592,16 @@ class TestCheck:
         assert data["requirements"] == []
 
     def test_drift_detected_when_req_superseded(self, store, fake_embedding, tmp_path):
-        from loom.store import generate_impl_id
+        from loom.store import generate_impl_id, generate_content_hash
         _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
         f = tmp_path / "x.py"
-        f.write_text("# impl\n")
+        body = "# impl\n"
+        f.write_text(body)
 
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="# impl\n", content_hash="h",
+            content=body, content_hash=generate_content_hash(body),
             satisfies=[{"req_id": "REQ-x"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -611,6 +612,138 @@ class TestCheck:
         assert data["linked"] is True
         assert data["drift_detected"] is True
         assert data["requirements"][0]["drifted"] is True
+        # M10.4: superseded signal channel reports what kind of drift
+        assert data["drift_signals"]["superseded"] is True
+        assert data["drift_signals"]["content"] is False
+
+    def test_drift_signals_returns_zeros_when_unlinked(self, store, tmp_path):
+        # M10.4: even unlinked files should expose the signals dict
+        # so callers don't have to special-case its absence.
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        data = services.check(store, str(f))
+        assert data["drift_signals"] == {
+            "content": False, "structural": False, "superseded": False,
+        }
+
+    def test_content_drift_detected_when_file_changes(self, store, fake_embedding, tmp_path):
+        # M10.4: re-reading the file and re-hashing should catch
+        # changes that the existing superseded-only check missed.
+        from loom.store import generate_impl_id, generate_content_hash
+        _mk_req(store, "REQ-y", "behavior", "y", fake_embedding)
+        f = tmp_path / "y.py"
+        original = "def foo(): return 1\n"
+        f.write_text(original)
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content=original, content_hash=generate_content_hash(original),
+            satisfies=[{"req_id": "REQ-y"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        # Edit the file underneath the link.
+        f.write_text("def foo(): return 2\n")
+        data = services.check(store, str(f))
+        assert data["drift_signals"]["content"] is True
+        assert data["drift_signals"]["superseded"] is False
+        assert data["drift_detected"] is True
+
+    def test_no_content_drift_when_file_unchanged(self, store, fake_embedding, tmp_path):
+        from loom.store import generate_impl_id, generate_content_hash
+        _mk_req(store, "REQ-z", "behavior", "z", fake_embedding)
+        f = tmp_path / "z.py"
+        body = "def bar(): return 'b'\n"
+        f.write_text(body)
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content=body, content_hash=generate_content_hash(body),
+            satisfies=[{"req_id": "REQ-z"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        data = services.check(store, str(f))
+        assert data["drift_signals"]["content"] is False
+        assert data["drift_signals"]["structural"] is False
+        assert data["drift_signals"]["superseded"] is False
+        assert data["drift_detected"] is False
+
+    def test_structural_drift_via_indexer(self, store, fake_embedding, tmp_path, monkeypatch):
+        # M10.4: when an impl carries a symbol_ticket, the registered
+        # indexer's signature_of() is consulted for structural drift.
+        # We monkey-patch a fake indexer into the registry to drive
+        # the path without standing up a real LSP.
+        from loom.store import generate_impl_id, generate_content_hash
+        from loom import indexers
+
+        class FakeIndexer(indexers.SemanticIndexer):
+            name = "fake"
+            languages = ("python",)
+            sig: str = "after"
+            def signature_of(self, ticket):
+                return self.sig
+
+        _mk_req(store, "REQ-s", "behavior", "s", fake_embedding)
+        f = tmp_path / "s.py"
+        body = "def fn(): pass\n"
+        f.write_text(body)
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content=body, content_hash=generate_content_hash(body),
+            satisfies=[{"req_id": "REQ-s"}],
+            timestamp="2026-01-01T00:00:00Z",
+            symbol_ticket="loom://py/fn",
+            symbol_signature_hash="before",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        idx = FakeIndexer()
+        indexers.register(idx)
+        try:
+            data = services.check(store, str(f))
+        finally:
+            indexers.unregister(idx)
+
+        assert data["drift_signals"]["structural"] is True
+        assert data["drift_signals"]["content"] is False
+        assert data["drift_detected"] is True
+
+    def test_no_structural_drift_when_signature_matches(self, store, fake_embedding, tmp_path):
+        from loom.store import generate_impl_id, generate_content_hash
+        from loom import indexers
+
+        class StableIndexer(indexers.SemanticIndexer):
+            name = "stable"
+            languages = ("python",)
+            def signature_of(self, ticket):
+                return "stable-sig"
+
+        _mk_req(store, "REQ-q", "behavior", "q", fake_embedding)
+        f = tmp_path / "q.py"
+        body = "def quux(): pass\n"
+        f.write_text(body)
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content=body, content_hash=generate_content_hash(body),
+            satisfies=[{"req_id": "REQ-q"}],
+            timestamp="2026-01-01T00:00:00Z",
+            symbol_ticket="t",
+            symbol_signature_hash="stable-sig",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        idx = StableIndexer()
+        indexers.register(idx)
+        try:
+            data = services.check(store, str(f))
+        finally:
+            indexers.unregister(idx)
+        assert data["drift_signals"]["structural"] is False
+        assert data["drift_signals"]["content"] is False
 
 
 class TestLink:
@@ -1091,7 +1224,7 @@ class TestContext:
         impl = Implementation(
             id=generate_impl_id(str(f), "1-5"),
             file=str(f), lines="1-5",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-a"}, {"req_id": "REQ-b"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -1116,7 +1249,7 @@ class TestContext:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-stale"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -1148,7 +1281,7 @@ class TestContext:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="def fetch_with_retry():\n    pass\n", content_hash="h",
+            content="def fetch_with_retry():\n    pass\n", content_hash=generate_content_hash("def fetch_with_retry():\n    pass\n"),
             satisfies=[{"req_id": rid}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -1318,7 +1451,7 @@ class TestGaps:
             file=impl_id_file,
             lines=impl_id_lines,
             content="pass\n",
-            content_hash="h",
+            content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": r} for r in satisfies_req_ids],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -1877,7 +2010,7 @@ class TestLastReferencedTouch:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -1996,7 +2129,7 @@ class TestStale:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-LINKED"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -2149,7 +2282,7 @@ class TestEventRecording:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -2170,7 +2303,7 @@ class TestEventRecording:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -2217,7 +2350,7 @@ class TestMetrics:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-A"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -2236,7 +2369,7 @@ class TestMetrics:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -2309,7 +2442,7 @@ class TestHealthScore:
         impl = Implementation(
             id=generate_impl_id(str(f), "all"),
             file=str(f), lines="all",
-            content="pass\n", content_hash="h",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )

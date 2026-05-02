@@ -154,6 +154,13 @@ def cmd_check(args):
 
     print(f"🧵 Loom Check — {args.file}")
     print()
+    signals = data.get("drift_signals", {})
+    if signals.get("content"):
+        print("⚠️  CONTENT DRIFT: file bytes differ from the linked snapshot.")
+    if signals.get("structural"):
+        print("⚠️  STRUCTURAL DRIFT: symbol signature changed since link time.")
+    if signals.get("content") or signals.get("structural"):
+        print()
     for r in data["requirements"]:
         if r["drifted"]:
             print(f"⚠️  DRIFT: {r['req_id']} was superseded at {r['superseded_at']}")
@@ -162,7 +169,7 @@ def cmd_check(args):
             print(f"✓ {r['req_id']}: {r['value']}")
     if data["drift_detected"]:
         print()
-        print("Some linked requirements have changed. Review before modifying.")
+        print("Drift detected. Review before modifying.")
 
     return 2 if data["drift_detected"] else 0
 

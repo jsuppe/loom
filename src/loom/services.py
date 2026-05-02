@@ -1099,10 +1099,24 @@ def check(
 
     Returns:
         {file, lines, linked: bool, drift_detected: bool,
+         drift_signals: {content, structural, superseded},
          requirements: [{req_id, value, domain, status, drifted, superseded_at}]}
 
     `linked` is False if no Implementation exists for this file/range; in
     that case `requirements` is `[]` and `drift_detected` is False.
+
+    Drift signals (M10.4):
+      * ``content`` — file's current content_hash differs from the impl's
+        stored content_hash at link time. Whitespace-sensitive.
+      * ``structural`` — when a registered indexer's ``signature_of()``
+        returns a different hash than the impl's stored
+        ``symbol_signature_hash``. Catches API-shape changes that a
+        content-hash diff would miss (and, conversely, ignores
+        whitespace-only edits). Always False for impls without a
+        ``symbol_ticket`` (i.e. impls linked without ``loom link --symbol``).
+      * ``superseded`` — at least one linked requirement has been
+        superseded since the link was made.
+    ``drift_detected`` is the OR of all three.
 
     Raises:
         LookupError: file not found.
@@ -1122,10 +1136,16 @@ def check(
             "lines": lines,
             "linked": False,
             "drift_detected": False,
+            "drift_signals": {
+                "content": False, "structural": False, "superseded": False,
+            },
             "requirements": [],
         }
 
-    drift_found = False
+    # M10.4: content + structural drift signals (both default False)
+    drift_signals = _compute_code_drift_signals(impl, file_path)
+
+    superseded_drift = False
     results: list[dict[str, Any]] = []
     for sat in impl.satisfies:
         req = store.get_requirement(sat["req_id"])
@@ -1133,7 +1153,7 @@ def check(
             store.touch_requirement(sat["req_id"])  # M2.1
             drifted = req.superseded_at is not None
             if drifted:
-                drift_found = True
+                superseded_drift = True
             results.append({
                 "req_id": sat["req_id"],
                 "value": req.value,
@@ -1143,15 +1163,20 @@ def check(
                 "superseded_at": req.superseded_at,
                 "rationale": req.rationale,
             })
+    drift_signals["superseded"] = superseded_drift
+
+    drift_found = any(drift_signals.values())
 
     # M5.1: every linked check is a drift signal — emit either a
-    # drift_detected event (with the offending req_ids) or a clean
-    # signal so metrics can compute the drift ratio over a window.
+    # drift_detected event (with the offending req_ids + which signals
+    # fired) or a clean signal so metrics can compute the drift ratio
+    # over a window.
     if drift_found:
         _record_event(
             store, "drift_detected",
             file=file_path, lines=lines,
             req_ids=[r["req_id"] for r in results if r["drifted"]],
+            signals=[k for k, v in drift_signals.items() if v],
         )
     else:
         _record_event(
@@ -1164,8 +1189,70 @@ def check(
         "lines": lines,
         "linked": True,
         "drift_detected": drift_found,
+        "drift_signals": drift_signals,
         "requirements": results,
     }
+
+
+def _compute_code_drift_signals(impl, file_path: str) -> dict[str, bool]:
+    """Compute the content + structural drift signals for an
+    implementation. The ``superseded`` signal is computed by ``check()``
+    itself because it depends on requirement state, not file state.
+
+    Both signals default ``False`` and never raise — drift detection
+    must not be the thing that breaks the agent's edit loop.
+    """
+    from .store import generate_content_hash
+    signals = {"content": False, "structural": False}
+
+    # Content drift: re-read whatever range the impl covers, hash it,
+    # compare to the stored hash. impl.lines == "all" means the impl
+    # covers the whole file (which serializes as "all" in the store).
+    try:
+        line_arg = None if impl.lines == "all" else impl.lines
+        current = _read_file_content(file_path, line_arg)
+        if generate_content_hash(current) != impl.content_hash:
+            signals["content"] = True
+    except (LookupError, ValueError, OSError):
+        pass
+
+    # Structural drift: only when the impl carries an indexer-resolved
+    # symbol identity (set by `loom link --symbol`). A registered
+    # indexer for this file's language is queried for the current
+    # signature; mismatch = drifted.
+    if impl.symbol_ticket and impl.symbol_signature_hash:
+        try:
+            from . import indexers as _indexers
+            language = _indexer_language_from_path(file_path)
+            if language:
+                indexer = _indexers.for_language(language)
+                current_sig = indexer.signature_of(impl.symbol_ticket)
+                if (current_sig is not None
+                        and current_sig != impl.symbol_signature_hash):
+                    signals["structural"] = True
+        except Exception:
+            pass
+
+    return signals
+
+
+def _indexer_language_from_path(file_path: str) -> str:
+    """Map a file extension to an indexer-registry language tag.
+    Returns ``""`` when the extension isn't one we know how to
+    delegate to an indexer."""
+    from pathlib import Path
+    return {
+        ".js": "javascript", ".jsx": "javascript",
+        ".mjs": "javascript", ".cjs": "javascript",
+        ".ts": "typescript", ".tsx": "typescript",
+        ".py": "python",
+        ".go": "go",
+        ".rs": "rust",
+        ".java": "java",
+        ".cpp": "cpp", ".cc": "cpp", ".cxx": "cpp", ".hpp": "cpp",
+        ".c": "c", ".h": "c",
+        ".dart": "dart",
+    }.get(Path(file_path).suffix.lower(), "")
 
 
 def context(store: LoomStore, file_path: str) -> dict[str, Any]:

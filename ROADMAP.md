@@ -258,9 +258,38 @@ pipeline complexity.
       guidance: instantiate `JsIndexer(root=...)` with the project
       root, not a subset that excludes tests. Findings:
       [`FINDINGS-bakeoff-v2-js-test-refs.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-test-refs.md).
-- [ ] **10.4 Structural drift detection in `services.check`** — add
-      the structural-signal channel to `drift_detected`. Blocked on
-      real indexer.
+- [x] **10.4 Multi-channel drift detection in `services.check`.**
+      The original task was structural drift; investigation showed
+      content-hash drift wasn't actually wired in either, so this
+      milestone delivers both. `services.check` now returns a
+      `drift_signals` dict alongside the existing `drift_detected`
+      boolean, with three channels:
+      - **content**: file's current content_hash differs from the
+        impl's stored content_hash at link time (whitespace-sensitive,
+        always available). The plain "the code changed since you
+        linked it" signal that was missing.
+      - **structural**: when an indexer's `signature_of()` returns
+        a different hash than the impl's stored
+        `symbol_signature_hash`. Catches API-shape changes that
+        whitespace-sensitive content drift would either miss
+        (renamed function with same bytes) or false-flag (whitespace
+        edit to function body). Always False for impls without a
+        `symbol_ticket` (i.e. impls linked without `loom link
+        --symbol`); architecture is in place for users with
+        registered indexers + symbol-resolved links.
+      - **superseded**: existing signal — at least one linked
+        requirement has been superseded since link time.
+      `drift_detected` is the OR of all three (backwards-compatible
+      with existing callers). `drift_detected` events in the M5.1
+      log now also record which `signals` fired, so future metrics
+      can break drift down by channel. CLI's `loom check` surfaces
+      content + structural drift in the human-readable output.
+      Tests: 5 new (8 total in TestCheck), full suite passes.
+      Implementation note: JsIndexer's `signature_of()` MVP is a
+      separate follow-up — until that lands, the structural channel
+      is wired but reports False for JS impls. Other indexers
+      (Pyright, Kythe, …) can light it up immediately by
+      implementing `signature_of()` and registering.
 - [ ] **10.5 `loom indexer doctor`** — health check for the user's
       indexer pipeline.
 
