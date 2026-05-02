@@ -35,6 +35,18 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PROJECT_DIR}/hooks/loom_intake.py",
+            "timeout": 30,
+            "statusMessage": "Loom intake (M11.5)..."
+          }
+        ]
+      }
     ]
   }
 }

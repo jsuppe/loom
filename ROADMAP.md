@@ -100,9 +100,19 @@ Design + threshold-calibration pilot in
           auto-link path tried to link the req to itself. The
           duplicate branch correctly catches "we already have this"
           and returns a refine-suggesting reminder instead.
-    - [ ] **P2 Claude Code integration.** Register as
-          UserPromptSubmit in `.claude/settings.json`. Document
-          install steps. Run on real chat session.
+    - [x] **P2 Claude Code integration.** Three pieces shipped:
+          (a) `hooks/settings.sample.json` extended with the
+          `UserPromptSubmit` block so users have a canonical install
+          template; (b) `hooks/README.md` gains a full `loom_intake.py`
+          section covering install, manual testing via `loom intake`,
+          env vars, six branches, three guardrails, logging, sample
+          system-reminders, and failure modes; (c) the active
+          `.claude/settings.json` for the loom repo itself registers
+          the hook so it fires on real Claude Code sessions in this
+          repo. Backed by the loom dev store (currently empty), so
+          most messages will route through `rationale_needed` until
+          dogfooding builds the corpus — which is exactly what the
+          spec wants the hook to drive.
     - [ ] **P3 stats + observability.** `loom intake-stats`
           command, doctor integration.
     - [ ] **P4 documentation + agents.d snippet.**

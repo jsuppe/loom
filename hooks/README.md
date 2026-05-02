@@ -124,3 +124,150 @@ The hook is designed to never block unrelated work:
 - No linked requirements → exit 0 silently.
 
 Set `LOOM_HOOK_DEBUG=1` to trace why the hook stayed quiet.
+
+---
+
+## loom_intake.py (M11.5)
+
+A `UserPromptSubmit` hook that intercepts the user's chat message
+*before* the agent sees it, classifies whether the message contains
+a requirement-shape statement, runs `services.find_related_requirements`
+to find prior decisions it might cite, and routes through six
+branches: auto-link to existing decisions, propose candidates,
+capture with prose rationale, flag as `rationale_needed`, recognize
+duplicates, or no-op.
+
+**Empirical motivation:** the M10.3 series (phQ3-phQ7) established
+that **rationale is the load-bearing signal** for compliance on
+contrarian specs — bare rule alone never works, rule + rationale
+saturates. The M10 indexer amplifies rationale, doesn't manufacture
+it. So rationale capture is the discipline that matters most, and
+the discipline users skip most often. This hook shifts capture
+from "user remembers to type `loom extract --rationale`" to "harness
+intercepts and either captures or surfaces the gap."
+
+The classifier was validated in M11.5 P0
+(`experiments/pilot/FINDINGS-intake-classifier-pilot.md`):
+**precision 95.2%, recall 100%, p50 latency 454 ms** on 40
+hand-labeled chat utterances with `qwen3.5:latest`.
+
+### Install (project-local)
+
+Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PROJECT_DIR}/hooks/loom_intake.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Manual testing (no registration)
+
+Before enabling the hook on every chat session, you can drive the
+exact same logic from the CLI:
+
+```
+$ loom intake --text "We should rate-limit refunds at 10/min — incident on 9/12."
+$ loom intake --text "Can you fix the bug?"
+$ loom intake --json --text "..." | jq .
+```
+
+This calls `loom.intake.process_message` directly, with the same
+classifier + branch logic the hook uses. Useful for evaluating
+behavior before wiring up the hook.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOOM_PROJECT` | auto-detected from git | Override project name |
+| `LOOM_INTAKE_MODEL` | `anthropic:claude-haiku-4-5-20251001` if `ANTHROPIC_API_KEY` set, else `ollama:qwen3.5:latest` | Classifier model |
+| `LOOM_INTAKE_DAILY_BUDGET` | `30` | Cap on auto-link captures per day; downgrades to propose when exceeded |
+| `LOOM_INTAKE_DEBUG` | `0` | Set to `1` to log hook activity to stderr |
+
+### Six branches
+
+| Branch | When | What it does |
+|---|---|---|
+| `noop` | Not requirement-shape, parse failure, or classifier error | Nothing — message passes through |
+| `duplicate` | Predicted req_id collides with top candidate | Reminder: "this is a duplicate of REQ-X, use `loom refine` to update" |
+| `auto_link` | Top-1 score ≥ 0.80 and no guardrails tripped | Persists with `rationale_links=[REQ-X]` (top-2 if both ≥ 0.78); reminder confirms capture |
+| `captured_with_rationale` | No candidates above 0.66 but classifier extracted a verbatim rationale | Persists with prose rationale |
+| `propose` | Candidates above 0.66 but below auto-link threshold OR a guardrail tripped | Returns top-2 candidates as a reminder; user picks; nothing persisted |
+| `rationale_needed` | No candidates, no rationale | Persists nothing; reminder asks the agent to ask the user *why* |
+
+### Three guardrails
+
+1. **Softener detection.** If the classified value contains hedging
+   language (`if possible`, `try to`, `would be nice`, `maybe`,
+   `perhaps`, `consider`, `ideally`, `someday`, `nice to have`),
+   downgrade auto-link to propose. Calibrated against the M11.5
+   P0 false positive ("Make this faster if possible.").
+2. **Domain whitelist.** Only `behavior`, `data`, and `architecture`
+   trigger auto-capture. `ui`, `terminology`, and out-of-enum
+   inventions like `security` (observed in P0) get downgraded to
+   propose so the user can correct.
+3. **Daily budget.** After `LOOM_INTAKE_DAILY_BUDGET` (default 30)
+   auto-link captures in a project's intake log, the rest of the
+   day's hits downgrade to propose. Prevents runaway capture.
+
+### Logging
+
+Every fire appends a JSONL line to
+`~/.openclaw/loom/<project>/.intake-log.jsonl` with `{ts, branch,
+captured_req_id, classifier_latency_ms, candidates_top_score,
+candidates_count, rationale_source, ...}`. The M11.5 P3 phase will
+add `loom intake-stats` to aggregate this log.
+
+### What the agent sees
+
+On a chat message that looks like a requirement, before the agent
+responds, Claude receives a system-reminder like:
+
+```
+<system-reminder source="loom-intake">
+Loom captured this as REQ-abc12345 derived from REQ-payment-rate-limit.
+If that's wrong, archive with `loom set-status REQ-abc12345 archived`
+and re-extract.
+</system-reminder>
+```
+
+For a propose-branch case, the reminder lists candidates:
+
+```
+<system-reminder source="loom-intake">
+Loom thinks this might be a requirement. Possible linkages:
+  - REQ-payment-rate-limit: Rate-limit on every payment-path endpoint... (score 0.74)
+  - REQ-abuse-detection: Detect rapid retries from a single IP... (score 0.69)
+If one applies, run `loom extract --derives-from REQ-X --rationale "..."`.
+If none, ask the user why this is needed and capture the rationale.
+</system-reminder>
+```
+
+### Failure modes
+
+The hook never blocks the user's prompt:
+
+- Classifier LLM unavailable → exit 0, no reminder, log entry.
+- Classifier returns malformed JSON → treat as "not a requirement,"
+  no-op.
+- `find_related_requirements` raises → fall through to no-candidates
+  branch.
+- `services.extract` raises (e.g. cycle) → reminder explains the
+  rejection.
+- Daily budget exceeded → downgrade to propose, log.
+- Hook latency exceeds Claude Code's hook timeout → user prompt
+  passes through unchanged.
+
+Set `LOOM_INTAKE_DEBUG=1` to trace branch decisions.
