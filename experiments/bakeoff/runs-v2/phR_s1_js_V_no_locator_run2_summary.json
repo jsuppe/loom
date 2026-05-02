@@ -1,0 +1,17 @@
+{
+  "phase": "R_rhetorical_ablation",
+  "cell": "V_no_locator",
+  "run_id": "2",
+  "passed": 1,
+  "total": 2,
+  "pass_rate": 0.5,
+  "compile_failed": false,
+  "rationale_chars": 339,
+  "input_tokens": 830,
+  "output_tokens": 226,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 38.1,
+  "wall_s": 38.8,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (expected null, got [object Object])\nPASS: error_does_not_propagate\nSUMMARY: 1 passed, 1 failed\n"
+}

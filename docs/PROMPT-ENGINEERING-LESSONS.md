@@ -31,11 +31,12 @@ says: invest in better steering before more horsepower.
 
 ---
 
-## Lesson 1 — Rationale is load-bearing, not decorative
+## Lesson 1 — Rationale is load-bearing, especially the framing-defuser
 
 **Source:** M8.1 D-smoke
 ([`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md));
-M10.3 phQ3-phQ7 series.
+M10.3 phQ3-phQ7 series; phR rhetorical ablation
+([`FINDINGS-bakeoff-v2-rhetorical-ablation.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rhetorical-ablation.md)).
 
 The first signal came from M8.1: same data in the store, but D2
 (stored, undelivered) scored **0% compliance** and D3 (stored AND
@@ -54,8 +55,35 @@ This isn't "rationale helps a bit." Without it, the rule is
 effectively invisible to the model on contrarian specs. With it,
 compliance saturates.
 
+**Sharpened by phR (rhetorical ablation, M11+).** Decomposing the
+RATIONALE constant into 6 atomic features and ablating each:
+
+| feature stripped | compliance | drop |
+|---|---|---|
+| (full rationale) | 100% | baseline |
+| Mechanism explanation | 100% | 0pp |
+| Cost quantification | 100% | 0pp |
+| Codebase locator | 95% | −5pp |
+| Incident date | 90% | −10pp |
+| Dependence assertion | 90% | −10pp |
+| **The reframe ("actually working as intended")** | **80%** | **−20pp** |
+
+The reframe — the sentence that **anticipates and defuses the task
+framing's "fix the bug" pull** — carries 2× the impact of any
+other feature. Mechanism, cost, and locator can be stripped with
+no measurable loss.
+
 **The prompt-engineering takeaway:** stop treating rationale as
 documentation overhead. It's the prompt's most leveraged token.
+And the most leveraged sentence within rationale is the one that
+**anticipates how someone would misread the rule and corrects them
+in advance.**
+
+For Loom users capturing rationale, this becomes a practical
+guideline: ask "if a future agent reads this rule, what would
+they mistakenly conclude they should do?" Then write the sentence
+that defuses that misreading. That sentence is worth more than
+five sentences of mechanism, cost, or history.
 
 ---
 
