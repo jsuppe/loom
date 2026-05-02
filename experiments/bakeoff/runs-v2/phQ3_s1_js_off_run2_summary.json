@@ -1,0 +1,22 @@
+{
+  "phase": "Q3_crosssession_js_stub_clean",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "2",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 642,
+  "output_tokens": 197,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-js-clean",
+  "semantic_context_chars": 955,
+  "llm_elapsed_s": 13.6,
+  "wall_s": 13.7,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_s1_js_zf3t_uit",
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

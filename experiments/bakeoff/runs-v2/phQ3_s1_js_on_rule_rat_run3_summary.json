@@ -1,0 +1,22 @@
+{
+  "phase": "Q3_crosssession_js_stub_clean",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "3",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 370,
+  "input_tokens": 775,
+  "output_tokens": 236,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-js-clean",
+  "semantic_context_chars": 955,
+  "llm_elapsed_s": 16.3,
+  "wall_s": 16.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_s1_js_em82ryu6",
+  "grade_stdout_tail": "mp\\phQ3_grade_s1_65l5bfvk\\retry.js:7:11)\n    at fetchWithRetry (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_grade_s1_65l5bfvk\\retry.js:19:20)\n    at Object.<anonymous> (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_grade_s1_65l5bfvk\\test_retry.js:19:20)\n    at Module._compile (node:internal/modules/cjs/loader:1809:14)\n    at Object..js (node:internal/modules/cjs/loader:1940:10)\n    at Module.load (node:internal/modules/cjs/loader:1530:32)\n    at Module._load (node:internal/modules/cjs/loader:1332:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47\nAll attempts failed: Error: connection failed: http://example.com\n    at doFetch (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_grade_s1_65l5bfvk\\retry.js:7:11)\n    at fetchWithRetry (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_grade_s1_65l5bfvk\\retry.js:19:20)\n    at Object.<anonymous> (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ3_grade_s1_65l5bfvk\\test_retry.js:34:5)\n    at Module._compile (node:internal/modules/cjs/loader:1809:14)\n    at Object..js (node:internal/modules/cjs/loader:1940:10)\n    at Module.load (node:internal/modules/cjs/loader:1530:32)\n    at Module._load (node:internal/modules/cjs/loader:1332:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47\n"
+}
