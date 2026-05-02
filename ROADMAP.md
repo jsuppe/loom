@@ -82,9 +82,24 @@ Design + threshold-calibration pilot in
           One spec addition called out: softener-detection
           guardrail (lexical match on "if possible" / "try to" /
           "would be nice" → downgrade auto-capture to propose).
-    - [ ] **P1 hook scaffold.** `hooks/loom_intake.py` per spec.
-          Manually invocable for testing before registration as
-          a Claude Code hook in P2.
+    - [x] **P1 hook scaffold.** Three pieces shipped: testable core
+          at `src/loom/intake.py` (classifier prompt, six-branch
+          decision tree including a new `duplicate` branch added
+          after a real-world collision was caught in smoke testing,
+          softener-detection guardrail from P0 findings, daily
+          auto-capture budget, domain whitelist), CLI manual-test
+          surface `loom intake --text "..."` (or stdin), and the
+          unregistered Claude Code hook shim
+          `hooks/loom_intake.py` (P2 will register it in
+          `.claude/settings.json`). 22 unit tests cover parser
+          tolerance + every branch + every guardrail. Full suite
+          passes. The duplicate-branch addition is worth flagging:
+          the M11.5 spec didn't anticipate this case, but it's
+          obvious in retrospect — running the same intake message
+          twice produced the same deterministic req_id, and the
+          auto-link path tried to link the req to itself. The
+          duplicate branch correctly catches "we already have this"
+          and returns a refine-suggesting reminder instead.
     - [ ] **P2 Claude Code integration.** Register as
           UserPromptSubmit in `.claude/settings.json`. Document
           install steps. Run on real chat session.

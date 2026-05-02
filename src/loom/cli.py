@@ -754,6 +754,68 @@ def cmd_related(args):
     return 0
 
 
+def cmd_intake(args):
+    """Manually run the intake hook on a chat-style message (M11.5 P1).
+
+    Useful for testing the classifier + branch logic before
+    registering ``hooks/loom_intake.py`` as a Claude Code
+    UserPromptSubmit hook (M11.5 P2).
+    """
+    from loom import intake
+    store = LoomStore(args.project)
+
+    if args.text:
+        message = args.text
+    elif not sys.stdin.isatty():
+        message = sys.stdin.read().strip()
+    else:
+        print("Provide message via --text or stdin")
+        return 1
+
+    outcome = intake.process_message(
+        store, message,
+        model=args.model,
+        msg_id=args.msg_id or "intake-cli",
+        session=args.session or "intake-cli",
+        daily_budget=args.daily_budget,
+    )
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(outcome, indent=2))
+        return 0
+
+    branch = outcome["branch"]
+    if branch == "noop":
+        print("✗ not requirement-shape (no action)")
+        if outcome.get("classification") is None:
+            print("  (classifier returned no parsable JSON or errored)")
+        return 0
+
+    print(f"🧵 Loom Intake — branch: {branch}")
+    print()
+    if outcome["softener_triggered"]:
+        print("  ⓘ softener language detected → propose forced")
+    if outcome["domain_whitelist_blocked"]:
+        print("  ⓘ domain not in auto-capture whitelist → propose forced")
+    if outcome["budget_exceeded"]:
+        print("  ⓘ daily auto-capture budget exceeded → propose forced")
+    if outcome.get("req_id"):
+        print(f"  req_id: {outcome['req_id']}")
+    if outcome.get("rationale_links"):
+        print(f"  builds on: {', '.join(outcome['rationale_links'])}")
+    if outcome["candidates"]:
+        print()
+        print("  candidates:")
+        for c in outcome["candidates"]:
+            print(f"    {c['req_id']}  score={c['score']}  "
+                  f"{c['value'][:70]}")
+    print()
+    print("system-reminder that would be injected:")
+    print(f"  {outcome['reminder']}")
+    return 0
+
+
 def cmd_needs_rationale(args):
     """List requirements with status=rationale_needed (M11.1).
 
@@ -2311,6 +2373,25 @@ def main():
     )
     p_needsr.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # intake (M11.5 P1) — manual invocation of the intake hook logic
+    p_intake = sp(
+        "intake",
+        help="Run the intake hook on a chat message (M11.5 P1 manual test)",
+    )
+    p_intake.add_argument("--text", "-t", help="Message text (or pass via stdin)")
+    p_intake.add_argument("--msg-id", help="Message ID for provenance")
+    p_intake.add_argument("--session", help="Session key for provenance")
+    p_intake.add_argument(
+        "--model",
+        help="Override classifier model "
+             "(e.g. ollama:qwen3.5:latest, anthropic:claude-haiku-4-5-20251001)",
+    )
+    p_intake.add_argument(
+        "--daily-budget", type=int, default=30,
+        help="Cap on auto-link branches per day per project (default 30)",
+    )
+    p_intake.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # task subcommand group
     p_task = sp("task", help="Manage atomic work items (Task entity)")
     task_subs = p_task.add_subparsers(dest="task_verb", required=True)
@@ -2457,6 +2538,7 @@ def main():
         "indexer-doctor": cmd_indexer_doctor,
         "related": cmd_related,
         "needs-rationale": cmd_needs_rationale,
+        "intake": cmd_intake,
         "task": cmd_task,
         "decompose": cmd_decompose,
     }
