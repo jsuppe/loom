@@ -97,6 +97,16 @@ class SemanticIndexer:
         is unknown."""
         return None
 
+    def health(self) -> dict:
+        """Self-test for ``loom indexer-doctor``. Returns
+        ``{"ok": bool, "detail": str}``. Default implementation
+        reports OK with no detail; subclasses with external
+        dependencies (binary on PATH, network, build artifacts)
+        should override and probe their dependencies. Must not
+        spawn long-lived subprocesses — this is invoked from a
+        health-check command that should return quickly."""
+        return {"ok": True, "detail": ""}
+
 
 class NoOpIndexer(SemanticIndexer):
     """Default. Reports no language support, returns empty context,

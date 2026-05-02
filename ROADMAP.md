@@ -290,8 +290,22 @@ pipeline complexity.
       is wired but reports False for JS impls. Other indexers
       (Pyright, Kythe, …) can light it up immediately by
       implementing `signature_of()` and registering.
-- [ ] **10.5 `loom indexer doctor`** — health check for the user's
-      indexer pipeline.
+- [x] **10.5 `loom indexer-doctor`** — health check for the
+      semantic-indexer pipeline. `services.indexer_doctor(store)`
+      enumerates registered indexers, calls each one's `health()`
+      method (added to the `SemanticIndexer` interface as a default
+      no-op; `JsIndexer` overrides to verify
+      typescript-language-server is on PATH), and walks the store for
+      symbol-linked `Implementation` rows to flag any whose language
+      lacks a registered indexer (their structural drift channel is
+      silently broken). CLI subcommand: `loom indexer-doctor [--json]`.
+      Exit code 1 when not OK. Roll-up `ok` requires (a) at least one
+      non-NoOp indexer registered, (b) all registered indexers report
+      healthy, (c) every symbol-linked impl has an indexer for its
+      language. Tests: 6 (TestIndexerDoctor). Full suite passes.
+      Side-effect: added `LoomStore.list_implementations()` since the
+      doctor needs a store-wide impl walk and only per-req/spec/pattern
+      lookups existed before.
 
 ### 10.7 Open questions
 

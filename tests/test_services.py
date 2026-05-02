@@ -2469,3 +2469,147 @@ class TestHealthScore:
         h = services.health_score(store)
         # impl=0, test=0, freshness=0, non_drift=100 → avg = 25.
         assert h["score"] == 25
+
+
+class TestIndexerDoctor:
+    """M10.5 — `loom indexer-doctor` health check for the indexer pipeline."""
+
+    def _clear_indexers(self):
+        """Drop any indexers registered by other tests (registry is
+        process-global)."""
+        from loom import indexers
+        for ix in list(indexers.registered()):
+            indexers.unregister(ix)
+
+    def test_no_indexers_reports_warning(self, store):
+        self._clear_indexers()
+        d = services.indexer_doctor(store)
+        assert d["ok"] is False
+        assert d["indexer_count"] == 0
+        assert d["has_real_indexer"] is False
+        assert any("No real indexer" in w for w in d["warnings"])
+
+    def test_real_indexer_passes_when_healthy(self, store):
+        from loom import indexers
+        self._clear_indexers()
+
+        class FakeIndexer(indexers.SemanticIndexer):
+            name = "fake"
+            languages = ("python",)
+            def health(self):
+                return {"ok": True, "detail": "fixture indexer"}
+
+        ix = FakeIndexer()
+        indexers.register(ix)
+        try:
+            d = services.indexer_doctor(store)
+        finally:
+            indexers.unregister(ix)
+
+        assert d["ok"] is True
+        assert d["has_real_indexer"] is True
+        assert d["indexer_count"] == 1
+        assert d["indexers"][0]["name"] == "fake"
+        assert d["indexers"][0]["health"]["ok"] is True
+        assert d["warnings"] == []
+
+    def test_unhealthy_indexer_fails_overall(self, store):
+        from loom import indexers
+        self._clear_indexers()
+
+        class BrokenIndexer(indexers.SemanticIndexer):
+            name = "broken"
+            languages = ("python",)
+            def health(self):
+                return {"ok": False, "detail": "binary missing"}
+
+        ix = BrokenIndexer()
+        indexers.register(ix)
+        try:
+            d = services.indexer_doctor(store)
+        finally:
+            indexers.unregister(ix)
+
+        assert d["ok"] is False
+        assert d["indexers"][0]["health"]["ok"] is False
+        assert any("unhealthy" in w for w in d["warnings"])
+
+    def test_health_method_raising_does_not_crash_doctor(self, store):
+        from loom import indexers
+        self._clear_indexers()
+
+        class FlakyIndexer(indexers.SemanticIndexer):
+            name = "flaky"
+            languages = ("python",)
+            def health(self):
+                raise RuntimeError("network down")
+
+        ix = FlakyIndexer()
+        indexers.register(ix)
+        try:
+            d = services.indexer_doctor(store)
+        finally:
+            indexers.unregister(ix)
+        assert d["ok"] is False
+        assert "raised" in d["indexers"][0]["health"]["detail"]
+
+    def test_symbol_linked_impls_counted_by_language(self, store, fake_embedding, tmp_path):
+        from loom.store import generate_impl_id
+        from loom import indexers
+        self._clear_indexers()
+
+        class JsFake(indexers.SemanticIndexer):
+            name = "js-fake"
+            languages = ("javascript",)
+        indexers.register(JsFake())
+
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f1 = tmp_path / "a.js"
+        f1.write_text("//\n")
+        f2 = tmp_path / "b.js"
+        f2.write_text("//\n")
+        for f in (f1, f2):
+            store.add_implementation(Implementation(
+                id=generate_impl_id(str(f), "all"),
+                file=str(f), lines="all",
+                content="//\n", content_hash=generate_content_hash("//\n"),
+                satisfies=[{"req_id": "REQ-a"}],
+                timestamp="2026-01-01T00:00:00Z",
+                symbol_ticket=f"loom://js/{f.stem}",
+                symbol_signature_hash="sig",
+            ), fake_embedding)
+
+        try:
+            d = services.indexer_doctor(store)
+        finally:
+            self._clear_indexers()
+        assert d["symbol_linked_impls"]["total"] == 2
+        assert d["symbol_linked_impls"]["by_language"]["javascript"] == 2
+        assert d["symbol_linked_impls"]["uncovered_by_language"] == {}
+
+    def test_symbol_linked_impls_without_indexer_warn(self, store, fake_embedding, tmp_path):
+        # Symbol-linked impl exists but no indexer covers its language —
+        # structural drift channel is silently broken for that impl.
+        from loom.store import generate_impl_id
+        self._clear_indexers()
+
+        _mk_req(store, "REQ-z", "behavior", "z", fake_embedding)
+        f = tmp_path / "x.go"
+        f.write_text("package x\n")
+        store.add_implementation(Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="package x\n",
+            content_hash=generate_content_hash("package x\n"),
+            satisfies=[{"req_id": "REQ-z"}],
+            timestamp="2026-01-01T00:00:00Z",
+            symbol_ticket="loom://go/X",
+            symbol_signature_hash="sig",
+        ), fake_embedding)
+
+        d = services.indexer_doctor(store)
+        assert d["symbol_linked_impls"]["uncovered_by_language"] == {"go": 1}
+        assert any(
+            "no registered indexer" in w for w in d["warnings"]
+        )
+        assert d["ok"] is False  # uncovered impls fail overall

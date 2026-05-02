@@ -160,6 +160,32 @@ class JsIndexer(SemanticIndexer):
                 )
                 return ""
 
+    def health(self) -> dict:
+        """Probe whether typescript-language-server is reachable on
+        PATH. Does NOT spawn the LSP — that's deferred to first
+        ``context_for`` call. ``loom indexer-doctor`` invokes this
+        for a fast pre-flight check."""
+        if self._server_cmd_override:
+            cmd = self._server_cmd_override[0]
+            return {
+                "ok": True,
+                "detail": f"server_cmd override: {cmd}",
+            }
+        path = shutil.which(_DEFAULT_BINARY)
+        if path is None:
+            return {
+                "ok": False,
+                "detail": (
+                    f"{_DEFAULT_BINARY} not found on PATH. Install "
+                    f"with: npm install -g typescript-language-server "
+                    f"typescript"
+                ),
+            }
+        return {
+            "ok": True,
+            "detail": f"binary: {path}",
+        }
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------

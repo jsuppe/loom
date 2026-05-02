@@ -1736,6 +1736,123 @@ def health_score(store: LoomStore) -> dict[str, Any]:
     }
 
 
+def indexer_doctor(store: LoomStore) -> dict[str, Any]:
+    """Health check for the user's semantic-indexer pipeline (M10.5).
+
+    Reports:
+      * which indexers are registered (name, languages, class)
+      * each indexer's self-reported ``health()`` (binary on PATH,
+        config issues, etc.)
+      * how many ``Implementation`` rows have ``symbol_ticket`` set,
+        broken down by language — the user's exposure to the
+        structural-drift channel
+      * which symbol-linked impls have NO registered indexer for
+        their language (their structural drift channel is silently
+        broken — content drift still works)
+
+    Roll-up ``ok`` is True when:
+      - at least one non-NoOp indexer is registered, AND
+      - every registered indexer reports ``health.ok == True``, AND
+      - every symbol-linked impl has an indexer for its language.
+
+    Returns a JSON-serializable dict suitable for ``--json``.
+    """
+    from . import indexers as _indexers
+
+    registered = _indexers.registered()
+    indexer_reports = []
+    all_indexers_ok = True
+    has_real_indexer = False
+    for ix in registered:
+        try:
+            health = ix.health()
+        except Exception as e:
+            health = {"ok": False, "detail": f"health() raised: {e}"}
+        if not health.get("ok", True):
+            all_indexers_ok = False
+        if ix.languages:
+            has_real_indexer = True
+        indexer_reports.append({
+            "name": ix.name,
+            "languages": list(ix.languages),
+            "class": type(ix).__name__,
+            "health": health,
+        })
+
+    # Walk the store for symbol-linked impls.
+    by_language: dict[str, int] = {}
+    by_language_uncovered: dict[str, int] = {}
+    sample_uncovered: list[dict[str, str]] = []
+    total_symbol_linked = 0
+
+    # Map registered indexers' supported languages → True for fast lookup.
+    supported_langs: set[str] = set()
+    for ix in registered:
+        supported_langs.update(ix.languages)
+
+    for impl in store.list_implementations():
+        if not impl.symbol_ticket:
+            continue
+        total_symbol_linked += 1
+        language = _indexer_language_from_path(impl.file)
+        if not language:
+            language = "unknown"
+        by_language[language] = by_language.get(language, 0) + 1
+        if language not in supported_langs:
+            by_language_uncovered[language] = by_language_uncovered.get(
+                language, 0,
+            ) + 1
+            if len(sample_uncovered) < 5:
+                sample_uncovered.append({
+                    "impl_id": impl.id,
+                    "file": impl.file,
+                    "language": language,
+                })
+
+    impls_covered = all(
+        lang in supported_langs for lang in by_language
+    ) if total_symbol_linked else True
+    overall_ok = (
+        has_real_indexer and all_indexers_ok and impls_covered
+    )
+
+    warnings: list[str] = []
+    if not has_real_indexer:
+        warnings.append(
+            "No real indexer is registered (only NoOp). The structural "
+            "drift channel in `loom check` will always be False. "
+            "Register an indexer (e.g. `loom.indexers_js.JsIndexer`) "
+            "to enable it."
+        )
+    if not all_indexers_ok:
+        warnings.append(
+            "At least one registered indexer reports unhealthy. See "
+            "the per-indexer detail below."
+        )
+    if by_language_uncovered:
+        langs = ", ".join(sorted(by_language_uncovered))
+        warnings.append(
+            f"{sum(by_language_uncovered.values())} symbol-linked "
+            f"impl(s) have no registered indexer for their language "
+            f"({langs}) — structural drift detection is silently "
+            f"broken for those impls."
+        )
+
+    return {
+        "ok": overall_ok,
+        "indexers": indexer_reports,
+        "indexer_count": len(registered),
+        "has_real_indexer": has_real_indexer,
+        "symbol_linked_impls": {
+            "total": total_symbol_linked,
+            "by_language": by_language,
+            "uncovered_by_language": by_language_uncovered,
+            "sample_uncovered": sample_uncovered,
+        },
+        "warnings": warnings,
+    }
+
+
 def detect_requirements(
     store: LoomStore, file_path: str, lines: str | None = None, n: int = 3
 ) -> list[dict[str, Any]]:

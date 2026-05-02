@@ -328,6 +328,51 @@ def cmd_health_score(args):
     return 0
 
 
+def cmd_indexer_doctor(args):
+    """Health check for the semantic-indexer pipeline (M10.5)."""
+    store = LoomStore(args.project)
+    data = services.indexer_doctor(store)
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, indent=2))
+        return 0 if data["ok"] else 1
+
+    overall = "OK" if data["ok"] else "ATTENTION NEEDED"
+    print(f"🧵 Loom Indexer Doctor — {args.project}")
+    print()
+    print(f"Overall: {overall}")
+    print()
+    print(f"Registered indexers ({data['indexer_count']}):")
+    if not data["indexers"]:
+        print("  (none — only the default NoOpIndexer fallback is in effect)")
+    for ix in data["indexers"]:
+        h = ix["health"]
+        marker = "✓" if h.get("ok") else "✗"
+        langs = ", ".join(ix["languages"]) or "(no languages)"
+        print(f"  {marker} {ix['name']} [{ix['class']}] — {langs}")
+        if h.get("detail"):
+            print(f"      {h['detail']}")
+    print()
+    sym = data["symbol_linked_impls"]
+    print(f"Symbol-linked implementations: {sym['total']}")
+    if sym["total"]:
+        for lang, n in sorted(sym["by_language"].items()):
+            uncov = sym["uncovered_by_language"].get(lang, 0)
+            tag = f" — NO INDEXER (drift channel disabled)" if uncov else ""
+            print(f"  {lang}: {n}{tag}")
+        if sym["sample_uncovered"]:
+            print()
+            print("  Sample uncovered impls:")
+            for s in sym["sample_uncovered"]:
+                print(f"    {s['impl_id']} {s['file']} ({s['language']})")
+    print()
+    if data["warnings"]:
+        print("Warnings:")
+        for w in data["warnings"]:
+            print(f"  ⚠  {w}")
+    return 0 if data["ok"] else 1
+
+
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
@@ -2137,6 +2182,13 @@ def main():
     )
     p_health.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # indexer-doctor (M10.5) — health check for the indexer pipeline
+    p_idoc = sp(
+        "indexer-doctor",
+        help="Health check for the semantic-indexer pipeline",
+    )
+    p_idoc.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # task subcommand group
     p_task = sp("task", help="Manage atomic work items (Task entity)")
     task_subs = p_task.add_subparsers(dest="task_verb", required=True)
@@ -2280,6 +2332,7 @@ def main():
         "cost": cmd_cost,
         "metrics": cmd_metrics,
         "health-score": cmd_health_score,
+        "indexer-doctor": cmd_indexer_doctor,
         "task": cmd_task,
         "decompose": cmd_decompose,
     }

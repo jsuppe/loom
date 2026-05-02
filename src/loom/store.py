@@ -909,6 +909,12 @@ class LoomStore:
         meta["satisfies_patterns"] = json.loads(meta.get("satisfies_patterns", "[]"))
         return Implementation.from_dict(meta)
     
+    def list_implementations(self) -> List[Implementation]:
+        """All implementations in the store. Used by ``loom indexer-doctor``
+        and other store-wide consumers."""
+        result = self.implementations.get(include=["metadatas"])
+        return [self._parse_impl_meta(m) for m in result["metadatas"]]
+
     def get_implementations_for_requirement(self, req_id: str) -> List[Implementation]:
         """Get all implementations linked to a requirement."""
         result = self.implementations.get(include=["metadatas"])
