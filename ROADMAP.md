@@ -241,14 +241,23 @@ pipeline complexity.
       Identifies the test-reference (`assert(result === null)`) as
       the most likely remaining missing ingredient. Findings:
       [`FINDINGS-bakeoff-v2-js-real-lsp-v2.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-real-lsp-v2.md).
-- [ ] **10.3f phQ7 — test-reference surfacing experiment.** Add a
-      `surface_test_refs` mode to `JsIndexer` that locates
-      `*.test.js` / `*.spec.js` / `tests/*.js` files in the project
-      and surfaces references to the target's exported symbols from
-      those files. ~30 LoC + a phQ7 sweep. Validation target: lift
-      placebo from phQ6's 30% toward phQ3's 90%. Confirms or denies
-      the test-reference hypothesis as the dominant placebo lift
-      mechanism.
+- [x] **10.3f phQ7 — test-reference surfacing experiment.** Tested
+      the phQ6 hypothesis that test references were the load-bearing
+      missing piece. **Confirmed strongly.** No JsIndexer code
+      change required — `_walk_project` already includes test files
+      because they're not in `_PROJECT_GLOB_IGNORE_DIRS`. The phQ5/
+      phQ6 placebo gap was an artifact of harness workspace setup
+      excluding `tests/`. With test file copied alongside source
+      (one-line `setup_workspace` change), the LSP indexes it
+      naturally and surfaces its references with the load-bearing
+      `if (result === null) { console.log("PASS: ...") }` snippets.
+      Result: placebo **30% → 70% (+40pp)**, the largest single-
+      intervention effect across the entire M10 series. Rationale
+      held at 100%, off / on-rule held at 0%. Remaining 20pp gap
+      to phQ3's stub (90%) is plausibly N=10 noise. Operational
+      guidance: instantiate `JsIndexer(root=...)` with the project
+      root, not a subset that excludes tests. Findings:
+      [`FINDINGS-bakeoff-v2-js-test-refs.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-test-refs.md).
 - [ ] **10.4 Structural drift detection in `services.check`** — add
       the structural-signal channel to `drift_detected`. Blocked on
       real indexer.
