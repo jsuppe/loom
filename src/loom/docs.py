@@ -72,6 +72,34 @@ def _format_impl_links(store: LoomStore, req_id: str, superseded_req_ids: Set[st
     return lines
 
 
+def _format_link_chain(store: LoomStore, link_ids: List[str], *, value_chars: int = 80, rationale_chars: int = 80) -> List[str]:
+    """Render a "Builds on:" entry per linked req (M11.2).
+
+    Each line shows ``REQ-id`` plus the parent's value (truncated)
+    plus the parent's rationale (truncated, italicized) when present.
+    Returns a list of markdown lines (no leading/trailing blanks).
+    """
+    if not link_ids:
+        return []
+    out: List[str] = []
+    for lid in link_ids:
+        parent = store.get_requirement(lid)
+        if parent is None:
+            out.append(f"- `{lid}` *(missing — was the link target deleted?)*")
+            continue
+        value = parent.value
+        if len(value) > value_chars:
+            value = value[:value_chars - 1].rstrip() + "…"
+        line = f"- `{parent.id}` — {value}"
+        if parent.rationale:
+            r = parent.rationale
+            if len(r) > rationale_chars:
+                r = r[:rationale_chars - 1].rstrip() + "…"
+            line += f"\n  *Rationale: {r}*"
+        out.append(line)
+    return out
+
+
 def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: Set[str] = None, public_mode: bool = False) -> Path:
     """Generate REQUIREMENTS.md from stored requirements.
 
@@ -123,7 +151,12 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
         lines.append(f"## {domain.title()}")
         lines.append("")
         for req in sorted(domain_reqs, key=lambda r: r.timestamp):
-            lines.append(f"### {req.id}")
+            # M11.2: surface rationale_needed as a visible marker on
+            # the heading so debt is impossible to overlook in scans.
+            if req.status == "rationale_needed":
+                lines.append(f"### {req.id}   ⚠ rationale_needed")
+            else:
+                lines.append(f"### {req.id}")
             lines.append("")
             lines.append(f"> {req.value}")
             lines.append("")
@@ -132,6 +165,25 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
             lines.append(f"- **Status:** {req.status}")
             if getattr(req, 'rationale', None):
                 lines.append(f"- **Rationale:** {req.rationale}")
+            # M11.2: structured citation chain.
+            link_ids = getattr(req, 'rationale_links', None) or []
+            if link_ids:
+                lines.append("")
+                lines.append("**Builds on:**")
+                lines.append("")
+                lines.extend(_format_link_chain(store, link_ids))
+                lines.append("")
+            # M11.2: remediation prompt for visible-debt reqs.
+            if req.status == "rationale_needed" and not req.rationale and not link_ids:
+                lines.append("")
+                lines.append(
+                    "**Rationale needed.** No prose rationale captured and no "
+                    "linkage to prior decisions found. Resolve by running "
+                    f"`loom extract --rationale \"...\"` or `loom extract "
+                    f"--derives-from REQ-X` again, then `loom set-status "
+                    f"{req.id} pending`."
+                )
+                lines.append("")
             lines.extend(_format_spec_block(store, req.id, superseded_ids))
             lines.append("")
         lines.append("---")
@@ -152,8 +204,19 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
     lines.append("")
     lines.append("*Requirements → Specifications → Implementations*")
     lines.append("")
-    lines.append("| Requirement | Domain | Specs | Files | Test Spec |")
-    lines.append("|---|---|---|---|---|")
+
+    # M11.2: include "Derives from" column only when at least one
+    # active req has linkage. Avoids cluttering the matrix for
+    # projects that haven't started using rationale_links yet.
+    any_links = any(
+        getattr(r, 'rationale_links', None) for r in reqs
+    )
+    if any_links:
+        lines.append("| Requirement | Domain | Derives from | Specs | Files | Test Spec |")
+        lines.append("|---|---|---|---|---|---|")
+    else:
+        lines.append("| Requirement | Domain | Specs | Files | Test Spec |")
+        lines.append("|---|---|---|---|---|")
     for req in sorted(reqs, key=lambda r: r.domain + r.timestamp):
         specs = req_specs.get(req.id, [])
         impls = req_impls.get(req.id, [])
@@ -163,14 +226,24 @@ def generate_requirements_doc(store: LoomStore, output_dir: Path, private_ids: S
         else:
             specs_str = "—"
 
-        # Files grouped via specs when possible
         if impls:
             files = ", ".join(f"`{impl.file}`" for impl in impls)
         else:
             files = "—"
 
         test = req.test_spec_id if req.test_spec_id else "—"
-        lines.append(f"| {req.id} | {req.domain} | {specs_str} | {files} | {test} |")
+
+        if any_links:
+            link_ids = getattr(req, 'rationale_links', None) or []
+            derives = ", ".join(f"`{lid}`" for lid in link_ids) if link_ids else "—"
+            lines.append(
+                f"| {req.id} | {req.domain} | {derives} | "
+                f"{specs_str} | {files} | {test} |"
+            )
+        else:
+            lines.append(
+                f"| {req.id} | {req.domain} | {specs_str} | {files} | {test} |"
+            )
     lines.append("")
 
     output_path = output_dir / "REQUIREMENTS.md"

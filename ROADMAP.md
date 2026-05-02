@@ -53,9 +53,21 @@ Design + threshold-calibration pilot in
 
 ### 11.2 Open work (deferred)
 
-- [ ] **11.2 Doc rendering.** REQUIREMENTS.md "Builds on:"
-      subsections + `rationale_needed` markers in
-      `src/loom/docs.py`. Cleanly separable from the mechanic.
+- [x] **11.2 Doc rendering.** Three additions to
+      `src/loom/docs.generate_requirements_doc`: (a) a "Builds on:"
+      subsection per requirement when `rationale_links` is non-empty,
+      showing each parent's id, value (truncated to 80 chars), and
+      rationale (truncated to 80 chars, italicized); (b) `⚠
+      rationale_needed` suffix on the section heading for reqs in
+      that status, plus a remediation prompt body when both rationale
+      and links are absent; (c) traceability matrix gains a "Derives
+      from" column only when at least one active req has linkage —
+      avoids cluttering the matrix for projects that haven't started
+      using `--derives-from`. New helper
+      `docs._format_link_chain(store, link_ids)` does the rendering;
+      missing/deleted parents fall through cleanly. 5 new tests in
+      `tests/test_store.py::TestDocGeneration` (11 total). Full suite
+      passes.
 - [x] **11.3 Health-score integration.** Added `rationale_coverage`
       as a 5th equal-weighted component to `services.health_score`.
       Active requirement set excludes `rationale_needed` reqs from

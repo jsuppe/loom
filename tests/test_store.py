@@ -484,6 +484,146 @@ class TestDocGeneration:
             # Traceability matrix shows spec ID
             assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py` | — |" in content
 
+    # M11.2 — rationale linkage rendering
+
+    def test_requirements_doc_renders_builds_on_section(self, temp_store, sample_embedding):
+        """When a requirement has rationale_links, REQUIREMENTS.md
+        should include a 'Builds on:' subsection (M11.2)."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        # Anchor with rationale.
+        anchor = Requirement(
+            id="REQ-anchor", domain="behavior",
+            value="Rate-limit on every payment-path endpoint",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="incident 2024-09-12 — abuse via rapid retries",
+        )
+        temp_store.add_requirement(anchor, sample_embedding)
+
+        # Derived req that links to the anchor.
+        derived = Requirement(
+            id="REQ-derived", domain="behavior",
+            value="Rate-limit refunds at 10/min",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale_links=["REQ-anchor"],
+        )
+        temp_store.add_requirement(derived, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir),
+            ).read_text(encoding="utf-8")
+
+        assert "**Builds on:**" in content
+        assert "`REQ-anchor`" in content
+        assert "Rate-limit on every payment-path endpoint" in content
+        assert "incident 2024-09-12" in content
+
+    def test_requirements_doc_marks_rationale_needed_in_heading(self, temp_store, sample_embedding):
+        """Reqs with status=rationale_needed get a visible heading
+        marker so the debt is hard to miss in scans (M11.2)."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        req = Requirement(
+            id="REQ-debt", domain="behavior",
+            value="Some captured-but-unjustified requirement",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            status="rationale_needed",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir),
+            ).read_text(encoding="utf-8")
+        assert "REQ-debt   ⚠ rationale_needed" in content
+
+    def test_requirements_doc_renders_remediation_prompt(self, temp_store, sample_embedding):
+        """rationale_needed reqs without rationale or links get a
+        remediation prompt explaining how to clear the debt (M11.2)."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        req = Requirement(
+            id="REQ-debt2", domain="behavior",
+            value="Unjustified",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            status="rationale_needed",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir),
+            ).read_text(encoding="utf-8")
+        assert "Rationale needed" in content
+        assert "loom set-status REQ-debt2 pending" in content
+
+    def test_traceability_matrix_adds_derives_column_when_links_exist(
+        self, temp_store, sample_embedding,
+    ):
+        """The matrix gains a 'Derives from' column when at least
+        one req has rationale_links (M11.2)."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        anchor = Requirement(
+            id="REQ-A", domain="behavior", value="anchor",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="origin",
+        )
+        derived = Requirement(
+            id="REQ-B", domain="behavior", value="derived",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale_links=["REQ-A"],
+        )
+        temp_store.add_requirement(anchor, sample_embedding)
+        temp_store.add_requirement(derived, sample_embedding)
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir),
+            ).read_text(encoding="utf-8")
+        # Header gains the column.
+        assert "| Requirement | Domain | Derives from | Specs | Files | Test Spec |" in content
+        # Derived row shows the link.
+        assert "| REQ-B | behavior | `REQ-A` |" in content
+        # Anchor row shows em-dash for empty.
+        assert "| REQ-A | behavior | — |" in content
+
+    def test_traceability_matrix_omits_derives_column_when_no_links(
+        self, temp_store, sample_embedding,
+    ):
+        """When no reqs have links, the matrix keeps the original
+        5-column shape (M11.2)."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        req = Requirement(
+            id="REQ-plain", domain="behavior", value="plain req",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir),
+            ).read_text(encoding="utf-8")
+        assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
+        assert "Derives from" not in content
+
 
 class TestSpecificationTestFile:
     def test_defaults_to_empty_string(self):
