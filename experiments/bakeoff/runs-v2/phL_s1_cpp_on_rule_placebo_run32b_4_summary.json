@@ -1,0 +1,20 @@
+{
+  "phase": "L_crosssession_cpp_smoke",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "32b_4",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 403,
+  "input_tokens": 576,
+  "output_tokens": 239,
+  "model": "qwen2.5-coder:32b",
+  "llm_elapsed_s": 15.2,
+  "wall_s": 15.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL_s1_cpp_015cuuwt",
+  "grade_stdout_tail": "PASS: runtime_error_swallowed_returns_nullopt\nPASS: runtime_error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

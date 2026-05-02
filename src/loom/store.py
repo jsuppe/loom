@@ -323,6 +323,13 @@ class Implementation:
     satisfies: List[Dict[str, str]]  # [{"req_id": "...", "req_version": "..."}]
     satisfies_specs: Optional[List[str]] = None  # [SPEC-xxx, SPEC-yyy]
     satisfies_patterns: Optional[List[str]] = None  # [PAT-xxx]
+    # M10.1: optional indexer-resolved symbol identity. When set by
+    # `loom link --symbol`, these survive line shifts / file moves and
+    # let `services.check` add a structural drift signal alongside the
+    # content-hash one. Both default None for back-compat with stores
+    # that predate M10.
+    symbol_ticket: Optional[str] = None  # e.g. Kythe ticket URI
+    symbol_signature_hash: Optional[str] = None  # hash at link time
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -336,6 +343,8 @@ class Implementation:
     def from_dict(cls, d: Dict[str, Any]) -> "Implementation":
         d.setdefault('satisfies_specs', None)
         d.setdefault('satisfies_patterns', None)
+        d.setdefault('symbol_ticket', None)
+        d.setdefault('symbol_signature_hash', None)
         return cls(**d)
 
 

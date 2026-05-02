@@ -2024,6 +2024,83 @@ class TestStale:
         assert "REQ-A" not in ids
 
 
+class TestLinkSymbol:
+    """M10.1 — services.link(symbol=...) routes through the registered
+    SemanticIndexer. Most behavior is shape-checking the error paths;
+    the happy path is exercised with a fake indexer."""
+
+    @pytest.fixture(autouse=True)
+    def clean_indexer_registry(self):
+        from loom import indexers
+        snapshot = list(indexers._INDEXERS)
+        indexers._INDEXERS.clear()
+        yield
+        indexers._INDEXERS.clear()
+        indexers._INDEXERS.extend(snapshot)
+
+    def test_symbol_without_language_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError, match="requires language"):
+            services.link(store, symbol="app::commit", req_ids=["REQ-x"])
+
+    def test_no_indexer_registered_raises_with_actionable_message(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError, match="no SemanticIndexer registered"):
+            services.link(store, symbol="app::commit", language="c++",
+                          req_ids=["REQ-x"])
+
+    def test_indexer_returns_none_raises(self, store, fake_embedding):
+        from loom import indexers
+
+        class CantResolve(indexers.SemanticIndexer):
+            name = "cant"
+            languages = ("python",)
+            # resolve_symbol returns None per the abstract default.
+
+        indexers.register(CantResolve())
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError, match="could not resolve"):
+            services.link(store, symbol="app::missing", language="python",
+                          req_ids=["REQ-x"])
+
+    def test_no_file_no_symbol_raises(self, store):
+        with pytest.raises(ValueError, match="file_path or symbol"):
+            services.link(store, req_ids=["REQ-x"])
+
+    def test_symbol_happy_path_persists_ticket(self, store, fake_embedding, tmp_path):
+        """Fake indexer resolves a symbol; resulting Implementation
+        carries the ticket + signature_hash forward."""
+        from loom import indexers
+
+        f = tmp_path / "app.py"
+        f.write_text("def commit():\n    pass\n")
+
+        class FakePy(indexers.SemanticIndexer):
+            name = "fake-py"
+            languages = ("python",)
+            def resolve_symbol(self, ref):
+                return indexers.SymbolHit(
+                    ticket=f"fake://{ref}",
+                    file=f,
+                    byte_range=(0, len(f.read_text())),
+                    signature_hash="sig:test",
+                )
+
+        indexers.register(FakePy())
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+
+        result = services.link(
+            store, symbol="app::commit", language="python",
+            req_ids=["REQ-x"],
+        )
+        assert result["linked"] is True
+        assert result["file"] == str(f)
+
+        impl = store.get_implementation(result["impl_id"])
+        assert impl.symbol_ticket == "fake://app::commit"
+        assert impl.symbol_signature_hash == "sig:test"
+
+
 # ---------------------------------------------------------------------------
 # M5 — Metrics & Effectiveness
 # ---------------------------------------------------------------------------

@@ -1,0 +1,20 @@
+{
+  "phase": "L_crosssession_cpp_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "32b_2",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 491,
+  "output_tokens": 255,
+  "model": "qwen2.5-coder:32b",
+  "llm_elapsed_s": 16.1,
+  "wall_s": 16.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL_s1_cpp_6crtto4_",
+  "grade_stdout_tail": "FAIL: runtime_error_swallowed_returns_nullopt (exception propagated: connection failed: http://example.com)\nFAIL: runtime_error_does_not_propagate (runtime_error propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

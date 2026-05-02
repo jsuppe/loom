@@ -645,6 +645,50 @@ class TestTaskStoreMethods:
         assert temp_store.stats()["tasks"] == 1
 
 
+class TestImplementationSymbolFields:
+    """M10.1 — Implementation gains optional symbol_ticket +
+    symbol_signature_hash fields. Both default None for back-compat
+    with stores that predate M10."""
+
+    def test_default_to_none(self, temp_store, sample_embedding):
+        impl = Implementation(
+            id="IMPL-noop", file="src/x.py", lines="all",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-x"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        assert impl.symbol_ticket is None
+        assert impl.symbol_signature_hash is None
+
+    def test_round_trip_with_symbol_fields(self, temp_store, sample_embedding):
+        impl = Implementation(
+            id="IMPL-sym", file="src/x.py", lines="42-78",
+            content="pass\n", content_hash="h",
+            satisfies=[{"req_id": "REQ-x"}],
+            timestamp="2026-01-01T00:00:00Z",
+            symbol_ticket="kythe://loom?path=src/x.py#Service.commit",
+            symbol_signature_hash="sig:abc123",
+        )
+        temp_store.add_implementation(impl, sample_embedding)
+        roundtrip = temp_store.get_implementation("IMPL-sym")
+        assert roundtrip is not None
+        assert roundtrip.symbol_ticket == "kythe://loom?path=src/x.py#Service.commit"
+        assert roundtrip.symbol_signature_hash == "sig:abc123"
+
+    def test_legacy_dict_loads_with_setdefault(self):
+        # Simulate a dict from an older store (pre-M10) that lacks the
+        # two new fields entirely.
+        legacy = {
+            "id": "IMPL-old", "file": "src/x.py", "lines": "all",
+            "content": "pass\n", "content_hash": "h",
+            "satisfies": [{"req_id": "REQ-x"}],
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        impl = Implementation.from_dict(legacy)
+        assert impl.symbol_ticket is None
+        assert impl.symbol_signature_hash is None
+
+
 class TestEmbeddingDimensionPin:
     """M3.2 — store pins its embedding_dim on first write and rejects
     mismatched vectors thereafter (e.g. provider switched ollama→openai

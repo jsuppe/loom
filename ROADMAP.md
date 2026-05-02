@@ -1,5 +1,166 @@
 # Loom Roadmap
 
+## Milestone 10: Semantic indexer integration (PLANNED — v1.x)
+
+**Motivation.** The cross-language map (M8.4) showed C++ in a "collapsed"
+regime: off=0%, on-rule=0%, +placebo=100%* (artifact), +rat=67%. C/Go
+share the resistant-mid neighborhood. The hypothesis is that the
+"include the file body" context bundle is too thin for languages where
+meaning lives in headers, templates, ADL, and call-graph context that
+the local file doesn't carry.
+
+Before building anything heavy, the falsifying experiment is to swap
+qwen3.5:latest → **qwen2.5-coder:32b** on S1 C++ (cpp-orders already
+hit 6/6 with that executor at single-file in Phase C). If 32b bridges
+S1, C++ is an executor-capacity ceiling, not a context ceiling — and
+indexers are overkill. If it stays flat, semantic context becomes the
+next lever, and this milestone defines how it integrates with Loom.
+
+### 10.1 `SemanticIndexer` interface (DOES NOT REQUIRE Kythe)
+
+A pluggable registry mirroring `runners.py`. Lives at `src/loom/indexers.py`.
+
+```python
+class SemanticIndexer:
+    def supports(self, language: str) -> bool: ...
+    def context_for(self, file: Path) -> str:
+        """Symbol-level context for the executor prompt — definitions of
+        referenced symbols, override chains, call sites. Empty string
+        when no signal."""
+    def resolve_symbol(self, ref: str) -> SymbolHit | None:
+        """`app::OrderService::commit` → (file, byte-range, ticket)."""
+    def signature_of(self, ticket: str) -> str | None:
+        """Stable hash of the symbol's structural signature, for
+        drift detection."""
+```
+
+`INDEXERS` registry holds zero or more registered indexers. Default is
+**`NoOpIndexer`** — `supports()` returns False for everything;
+`context_for()` returns `""`; `resolve_symbol()` returns `None`. Loom
+keeps working unchanged when no real indexer is plugged in.
+
+### 10.2 Context-bundle enrichment
+
+When `loom_exec` builds a task prompt, it asks the registered indexer
+for the target file's language: `context_for(file)`. The returned
+string gets stitched into the prompt above the file body as
+`// SEMANTIC CONTEXT`. Smallest invasive change — no data-model edits,
+no link-surface changes.
+
+This is the falsifying experiment for "is C++'s ceiling about
+context, not capacity." Run S1 C++ with the indexer-enriched prompt
+and compare against the cross-language map's baseline.
+
+### 10.3 Symbol-level linking — `loom link --symbol`
+
+Today: `loom link app/orders.cpp --req REQ-xxx` records a `(file,
+line-range)` link. With an indexer:
+
+```bash
+loom link --symbol 'app::OrderService::commit' --req REQ-xxx
+```
+
+resolves the symbol via `indexers.resolve_symbol()` to a concrete
+`(file, byte-range, kythe-ticket)`. The `Implementation` row gains two
+new optional fields:
+
+| field | purpose |
+|---|---|
+| `symbol_ticket: Optional[str]` | indexer's stable identity for the symbol |
+| `symbol_signature_hash: Optional[str]` | hash of the symbol's structural signature at link time |
+
+Both default to `None` (`setdefault` in `from_dict` for backward
+compat). Existing stores keep loading; existing `--req` / `--spec`
+links keep working.
+
+### 10.4 Structural drift detection
+
+Today: drift = `content_hash(file) != stored_hash`. A whitespace edit
+trips drift; a function-signature change can hide if the bytes happen
+to match. With `symbol_signature_hash` recorded:
+
+```
+drift_signals = {
+    "content": stored.content_hash != recompute_content_hash(file),
+    "structural": indexer.signature_of(ticket) != stored.symbol_signature_hash,
+}
+```
+
+Reports both. The structural signal is far more useful for catching
+"someone changed the API of the function this requirement is linked
+to" — which is the actual concern requirements traceability is
+trying to surface.
+
+### 10.5 Build-time pipeline (the hard part)
+
+Kythe's clang indexer needs a `compile_commands.json` extracted by
+your build system. For a `pip install loom-cli` user that's
+non-trivial onboarding. Realistic shape: **Loom integrates with your
+existing Kythe deployment**, opinionated infra rather than bundled.
+A `loom indexer doctor` health-check tells the user whether their
+project has a working Kythe corpus before they try `--symbol`.
+
+Other languages, other indexers. The registry pattern means each
+plugs in independently:
+
+| language | likely indexer | invocation |
+|---|---|---|
+| C++ | Kythe (clang-based) | `kythe -corpus loom -build_config compile_commands.json` |
+| Java | Kythe (javac extractor) | same Kythe pipeline |
+| Go | Kythe (Go indexer) | same Kythe pipeline |
+| Python | Pyright (LSP) | runtime, no extraction step |
+| TypeScript | tsserver (LSP) | runtime, no extraction step |
+| Rust | rust-analyzer (LSP) | runtime, no extraction step |
+
+LSP-backed indexers (Python/TS/Rust) are operationally cheaper than
+Kythe — no graphstore to maintain, no extraction step. The Kythe
+languages get the richest cross-references but pay for it in build-
+pipeline complexity.
+
+### 10.6 Tasks (status)
+
+- [x] **10.1a Roadmap captured** — this section.
+- [x] **10.1b Falsification: qwen2.5-coder:32b on S1 C++** — 20 trials
+      (4 cells × N=5), 5.9 min wall. Result: **0/10 off, 0/10 on-rule,
+      2/10 +placebo (noise), 0/10 +rat**. The bigger executor did NOT
+      bridge S1 C++ — actually scored *worse* on the rat cell than
+      qwen3.5's 67%. Conclusion: **C++ ceiling is NOT executor
+      capacity**, semantic context becomes the next defensible lever.
+      See `FINDINGS-bakeoff-v2-cpp-executor-falsification.md`.
+- [x] **10.1c `SemanticIndexer` abstract interface + registry +
+      `NoOpIndexer`** — `src/loom/indexers.py`.
+- [x] **10.1d `Implementation.symbol_ticket` + `symbol_signature_hash`
+      fields** — backward-compatible via `setdefault`.
+- [x] **10.1e `loom link --symbol` plumbing** — works as a stub error
+      path until a real indexer is registered.
+- [ ] **10.2 Context-bundle enrichment in `loom_exec`** — call
+      `indexer.context_for(file)`, prepend to the prompt. Blocked on
+      a real indexer being available, OR a stub indexer that returns
+      hand-curated context for the falsification experiment.
+- [ ] **10.3 First real indexer: `KytheIndexer` (C++) OR
+      `PyrightIndexer` (Python).** Pick whichever gets us a falsifying
+      run faster.
+- [ ] **10.4 Structural drift detection in `services.check`** — add
+      the structural-signal channel to `drift_detected`. Blocked on
+      real indexer.
+- [ ] **10.5 `loom indexer doctor`** — health check for the user's
+      indexer pipeline.
+
+### 10.7 Open questions
+
+- **Cache invalidation.** Kythe graphs go stale on file edits. Watch
+  with inotify, re-run on every `loom link`, or accept eventual-
+  consistency with surfaced "stale-index" warnings? Probably the third
+  for v1.x.
+- **Pricing.** Indexer infra is opinionated. Whether `loom-cli[kythe]`
+  ships a Kythe deployment or just connects to a user-supplied one is
+  a deployment-shape decision tied to the broader Loom-as-product story.
+- **Python and friends.** LSP-backed indexers can run inline without
+  any extraction step — they may be the cheaper proving ground for the
+  whole architecture even though Python isn't the language with the
+  ceiling. A `PyrightIndexer` would prove the seams without the Kythe
+  build complexity.
+
 ## Milestone 9: PyPI packaging (DONE)
 
 Loom installs from PyPI as `loom-cli`. Two console scripts (`loom`,

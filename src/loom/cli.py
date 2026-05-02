@@ -325,14 +325,24 @@ def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
 
-    print(f"🧵 Loom Link — {args.file}")
+    symbol = getattr(args, "symbol", None)
+    language = getattr(args, "language", None)
+    file_arg = args.file if not symbol else None
+
+    print(f"🧵 Loom Link — {symbol or args.file}")
     print()
 
     spec_ids = list(getattr(args, 'spec', None) or [])
     req_ids = list(getattr(args, 'req', None) or [])
 
-    # Auto-detect if nothing specified.
+    # Auto-detect requires a file path (we semantic-search its contents).
+    # Symbol-mode skips auto-detect — the user knows which symbol they're
+    # linking; if they don't pass --req or --spec, that's an error to
+    # surface, not something to guess at.
     if not spec_ids and not req_ids:
+        if symbol is not None:
+            print("--symbol requires --req or --spec; auto-detection is file-mode only.")
+            return 1
         try:
             detected = services.detect_requirements(
                 store, args.file, lines=args.lines, n=3
@@ -350,12 +360,14 @@ def cmd_link(args):
 
     try:
         result = services.link(
-            store, args.file,
+            store, file_arg,
             lines=args.lines,
             req_ids=req_ids,
             spec_ids=spec_ids,
+            symbol=symbol,
+            language=language,
         )
-    except LookupError as e:
+    except (LookupError, ValueError) as e:
         print(str(e))
         return 1
 
@@ -1876,10 +1888,19 @@ def main():
     
     # link
     p_link = sp("link", help="Link code to requirements or specifications")
-    p_link.add_argument("file", help="File to link")
+    p_link.add_argument("file", nargs="?", default=None,
+                        help="File to link (omit when using --symbol)")
     p_link.add_argument("--lines", help="Line range")
     p_link.add_argument("--req", action="append", help="Requirement ID(s) — direct link (use sparingly; prefer --spec)")
     p_link.add_argument("--spec", action="append", help="Specification ID(s) — preferred link target")
+    p_link.add_argument("--symbol",
+                        help="Resolve a symbol via the registered SemanticIndexer "
+                             "instead of linking by file path. Requires --language. "
+                             "Persists the indexer's ticket on the Implementation so "
+                             "the link survives line shifts (M10.1).")
+    p_link.add_argument("--language",
+                        help="Language for the SemanticIndexer lookup when --symbol "
+                             "is given (e.g. python, c++, rust).")
     
     # status
     p_status = sp("status", help="Show status")

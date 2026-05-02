@@ -1674,16 +1674,26 @@ def detect_requirements(
 
 def link(
     store: LoomStore,
-    file_path: str,
+    file_path: str | None = None,
     *,
     lines: str | None = None,
     req_ids: list[str] | tuple[str, ...] = (),
     spec_ids: list[str] | tuple[str, ...] = (),
+    symbol: str | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
-    """Link a file (or line range) to requirements and/or specifications.
+    """Link a file (or line range, or resolved symbol) to requirements
+    and/or specifications.
 
     Both `req_ids` and `spec_ids` are taken as-given — if you want
     auto-detection, call `detect_requirements` first and pass the IDs in.
+
+    M10.1: when ``symbol`` is given, the link is resolved through the
+    registered ``SemanticIndexer`` for ``language``. The resolved
+    location replaces ``file_path`` / ``lines``, and the indexer's
+    ``ticket`` + ``signature_hash`` are persisted on the Implementation
+    so the link survives line shifts and gains a structural drift
+    signal. ``language`` is required when ``symbol`` is given.
 
     For each spec linked, the spec's parent requirement is also linked
     (preserving the dual-index pattern that lets `loom trace REQ-id`
@@ -1702,10 +1712,47 @@ def link(
 
     Raises:
         LookupError: file not found.
+        ValueError: bad arg shape (no file_path or symbol given,
+                    symbol given without language, indexer can't
+                    resolve the symbol).
     """
     from datetime import datetime, timezone
     from .store import Implementation, generate_impl_id, generate_content_hash
     from .embedding import get_embedding
+
+    # M10.1 — resolve symbol into a concrete (file, range) before
+    # falling through to the file-link path. Captures the indexer's
+    # ticket + signature_hash for structural drift detection later.
+    symbol_ticket: str | None = None
+    symbol_signature_hash: str | None = None
+    if symbol is not None:
+        if language is None:
+            raise ValueError("link(symbol=...) requires language=")
+        from . import indexers
+        indexer = indexers.for_language(language)
+        if isinstance(indexer, indexers.NoOpIndexer):
+            raise ValueError(
+                f"no SemanticIndexer registered for language={language!r}; "
+                "see ROADMAP.md::Milestone 10 for the indexer plug-in design."
+            )
+        hit = indexer.resolve_symbol(symbol)
+        if hit is None:
+            raise ValueError(
+                f"indexer {indexer.name!r} could not resolve symbol "
+                f"{symbol!r} for language={language!r}"
+            )
+        file_path = str(hit.file)
+        if hit.byte_range is not None:
+            # Convert byte-range to a 1-indexed line range so it round-
+            # trips through the existing (file, lines) link surface.
+            text = Path(file_path).read_text(encoding="utf-8")
+            start_line = text.count("\n", 0, hit.byte_range[0]) + 1
+            end_line = text.count("\n", 0, hit.byte_range[1]) + 1
+            lines = f"{start_line}-{end_line}"
+        symbol_ticket = hit.ticket
+        symbol_signature_hash = hit.signature_hash
+    elif file_path is None:
+        raise ValueError("link() requires either file_path or symbol=")
 
     content = _read_file_content(file_path, lines)
     impl_id = generate_impl_id(file_path, lines or "all")
@@ -1774,6 +1821,8 @@ def link(
         timestamp=datetime.now(timezone.utc).isoformat(),
         satisfies=satisfies,
         satisfies_specs=satisfies_specs or None,
+        symbol_ticket=symbol_ticket,
+        symbol_signature_hash=symbol_signature_hash,
     )
     embedding = get_embedding(content)
     store.add_implementation(impl, embedding)
