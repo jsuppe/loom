@@ -2009,18 +2009,32 @@ def metrics(
 
 
 def health_score(store: LoomStore) -> dict[str, Any]:
-    """Compute a single 0-100 health score plus its components (M5.3).
+    """Compute a single 0-100 health score plus its components.
 
-    Equal-weighted average of four signals over the active requirement
+    Equal-weighted average of FIVE signals over the active requirement
     set:
-        impl_coverage     — fraction of active reqs with linked code
-        test_coverage     — fraction of active reqs with a test spec
-        freshness         — fraction of active reqs referenced in the
-                            last 90 days (never-referenced counts as
-                            cold)
-        non_drift         — fraction of recent (90-day window) checks
-                            that found no drift; 100 if no checks
-                            recorded yet (no signal = no degradation)
+        impl_coverage       — fraction of active reqs with linked code
+        test_coverage       — fraction of active reqs with a test spec
+        freshness           — fraction of active reqs referenced in the
+                              last 90 days (never-referenced counts as
+                              cold)
+        non_drift           — fraction of recent (90-day window) checks
+                              that found no drift; 100 if no checks
+                              recorded yet (no signal = no degradation)
+        rationale_coverage  — fraction of active reqs with prose
+                              rationale or rationale_links (M11.3).
+                              `rationale_needed`-status reqs are
+                              excluded from "active" in the denominator
+                              so they don't double-count: that status
+                              is *precisely* "no rationale," and
+                              counting them in the denominator-as-
+                              missing AND not-active would penalize
+                              twice.
+
+    **Breaking change in M11.3** — the score formula switched from a
+    4-component to a 5-component average. Projects that pinned CI
+    thresholds against the M5.3 4-component score may need to retune.
+    See `docs/DESIGN-rationale-linkage.md` for the rationale.
 
     Empty store: returns score=0 with all components zero. Useful for
     CI gates: ``loom health-score --json | jq .score`` returns an int.
@@ -2028,8 +2042,13 @@ def health_score(store: LoomStore) -> dict[str, Any]:
     from datetime import datetime, timezone
 
     all_reqs = store.list_requirements(include_superseded=True)
-    active = [r for r in all_reqs
-              if r.superseded_at is None and r.status != "archived"]
+    # M11.3: rationale_needed is excluded from active so it doesn't
+    # double-count against the rationale_coverage denominator.
+    active = [
+        r for r in all_reqs
+        if r.superseded_at is None
+        and r.status not in ("archived", "rationale_needed")
+    ]
     n_active = len(active)
     if n_active == 0:
         return {
@@ -2039,6 +2058,7 @@ def health_score(store: LoomStore) -> dict[str, Any]:
                 "test_coverage": 0.0,
                 "freshness": 0.0,
                 "non_drift": 100.0,
+                "rationale_coverage": 0.0,
             },
             "active_requirements": 0,
         }
@@ -2050,6 +2070,11 @@ def health_score(store: LoomStore) -> dict[str, Any]:
         1 for r in active if store.get_implementations_for_requirement(r.id)
     )
     with_tests = sum(1 for r in active if spec_store.get_spec(r.id))
+    # M11.3: rationale signal — prose OR linkage chain qualifies.
+    with_rationale = sum(
+        1 for r in active
+        if r.rationale or r.rationale_links
+    )
 
     now = datetime.now(timezone.utc)
     fresh = 0
@@ -2076,8 +2101,11 @@ def health_score(store: LoomStore) -> dict[str, Any]:
     impl_pct = 100.0 * with_impls / n_active
     test_pct = 100.0 * with_tests / n_active
     fresh_pct = 100.0 * fresh / n_active
+    rationale_pct = 100.0 * with_rationale / n_active
 
-    score = round((impl_pct + test_pct + fresh_pct + non_drift_pct) / 4.0)
+    score = round(
+        (impl_pct + test_pct + fresh_pct + non_drift_pct + rationale_pct) / 5.0
+    )
 
     return {
         "score": int(score),
@@ -2086,6 +2114,7 @@ def health_score(store: LoomStore) -> dict[str, Any]:
             "test_coverage": round(test_pct, 1),
             "freshness": round(fresh_pct, 1),
             "non_drift": round(non_drift_pct, 1),
+            "rationale_coverage": round(rationale_pct, 1),
         },
         "active_requirements": n_active,
     }

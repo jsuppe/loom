@@ -330,10 +330,11 @@ def cmd_health_score(args):
     print(f"Score: {data['score']}/100  ({data['active_requirements']} active reqs)")
     print()
     cs = data["components"]
-    print(f"  impl_coverage:  {cs['impl_coverage']}%")
-    print(f"  test_coverage:  {cs['test_coverage']}%")
-    print(f"  freshness:      {cs['freshness']}%  (referenced ≤90d)")
-    print(f"  non_drift:      {cs['non_drift']}%  (clean checks ratio, 90d window)")
+    print(f"  impl_coverage:       {cs['impl_coverage']}%")
+    print(f"  test_coverage:       {cs['test_coverage']}%")
+    print(f"  freshness:           {cs['freshness']}%  (referenced ≤90d)")
+    print(f"  non_drift:           {cs['non_drift']}%  (clean checks ratio, 90d window)")
+    print(f"  rationale_coverage:  {cs.get('rationale_coverage', 0.0)}%  (prose or rationale_links)")
     return 0
 
 

@@ -2634,11 +2634,18 @@ class TestHealthScore:
         assert h["active_requirements"] == 0
 
     def test_perfect_score_with_full_coverage(self, store, fake_embedding, tmp_path):
-        from loom.store import generate_impl_id
-        from datetime import datetime, timezone
+        from loom.store import generate_impl_id, Requirement
         from loom.testspec import TestSpecStore, TestSpec
 
-        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        # M11.3: active reqs need rationale to score on the
+        # rationale_coverage axis. Add it directly to the seed req.
+        req = Requirement(
+            id="REQ-1", domain="behavior", value="x",
+            source_msg_id="m1", source_session="s1",
+            timestamp="2026-01-01T00:00:00Z",
+            rationale="prevent abuse",
+        )
+        store.add_requirement(req, fake_embedding)
         # Touch to mark as fresh.
         store.touch_requirement("REQ-1")
 
@@ -2668,13 +2675,82 @@ class TestHealthScore:
         assert h["components"]["freshness"] == 100.0
         # No checks recorded → non_drift defaults to 100.
         assert h["components"]["non_drift"] == 100.0
+        # M11.3: rationale present → rationale_coverage = 100.
+        assert h["components"]["rationale_coverage"] == 100.0
 
     def test_no_coverage_no_freshness_drops_score(self, store, fake_embedding):
         _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
-        # Never touched, no impl, no test.
+        # Never touched, no impl, no test, no rationale.
         h = services.health_score(store)
-        # impl=0, test=0, freshness=0, non_drift=100 → avg = 25.
-        assert h["score"] == 25
+        # M11.3: 5-component avg now. impl=0, test=0, freshness=0,
+        # non_drift=100, rationale=0 → avg = 20.
+        assert h["score"] == 20
+
+    # M11.3 — rationale_coverage component
+
+    def test_rationale_coverage_full_when_all_have_prose(self, store):
+        services.extract(store, domain="behavior", value="A", rationale="r1")
+        services.extract(store, domain="behavior", value="B", rationale="r2")
+        h = services.health_score(store)
+        assert h["components"]["rationale_coverage"] == 100.0
+
+    def test_rationale_coverage_full_when_all_have_links(self, store):
+        a = services.extract(store, domain="behavior", value="anchor", rationale="origin")
+        services.extract(
+            store, domain="behavior", value="derived",
+            rationale_links=[a["req_id"]],
+        )
+        h = services.health_score(store)
+        assert h["components"]["rationale_coverage"] == 100.0
+
+    def test_rationale_coverage_zero_when_none_have_either(self, store, fake_embedding):
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        h = services.health_score(store)
+        assert h["components"]["rationale_coverage"] == 0.0
+
+    def test_rationale_coverage_partial_split(self, store, fake_embedding):
+        # 1 of 2 active reqs has rationale → 50.0%.
+        _mk_req(store, "REQ-1", "behavior", "no rationale", fake_embedding)
+        services.extract(store, domain="behavior", value="has rationale", rationale="r")
+        h = services.health_score(store)
+        assert h["components"]["rationale_coverage"] == 50.0
+
+    def test_rationale_needed_excluded_from_active(self, store, fake_embedding):
+        # rationale_needed reqs must NOT count in the active denominator.
+        # Create one bare req and one with rationale; the bare one will
+        # be `rationale_needed` because services.extract defaults
+        # to that status when no rationale source is provided.
+        bare = services.extract(store, domain="behavior", value="bare requirement")
+        assert bare["status"] == "rationale_needed"
+        services.extract(store, domain="behavior", value="grounded", rationale="r")
+
+        h = services.health_score(store)
+        # Only the grounded req counts as active → rationale_coverage 100%.
+        assert h["active_requirements"] == 1
+        assert h["components"]["rationale_coverage"] == 100.0
+
+    def test_score_formula_is_5_component_average(self, store, fake_embedding):
+        # Hand-construct a state where each component lands at a
+        # known value, then verify the score is the 5-way mean.
+        services.extract(store, domain="behavior", value="anchor", rationale="r")
+        # Components for this single req in a virgin store:
+        #   impl_coverage = 0   (no Implementation linked)
+        #   test_coverage = 0   (no TestSpec)
+        #   freshness     = 0   (last_referenced is None)
+        #   non_drift     = 100 (no checks recorded)
+        #   rationale_coverage = 100 (it has prose rationale)
+        # → mean = (0+0+0+100+100)/5 = 40
+        h = services.health_score(store)
+        assert h["components"]["rationale_coverage"] == 100.0
+        assert h["components"]["non_drift"] == 100.0
+        assert h["score"] == 40
+
+    def test_score_components_dict_has_5_keys(self, store):
+        h = services.health_score(store)
+        assert set(h["components"].keys()) == {
+            "impl_coverage", "test_coverage", "freshness",
+            "non_drift", "rationale_coverage",
+        }
 
 
 class TestIndexerDoctor:

@@ -56,11 +56,22 @@ Design + threshold-calibration pilot in
 - [ ] **11.2 Doc rendering.** REQUIREMENTS.md "Builds on:"
       subsections + `rationale_needed` markers in
       `src/loom/docs.py`. Cleanly separable from the mechanic.
-- [ ] **11.3 Health-score integration.** Decide whether to add a
-      `rationale_coverage` component (5-component avg) or replace
-      one (currently `non_drift`). The design doc recommends
-      starting conservative — add as a separate metric without
-      changing the headline number.
+- [x] **11.3 Health-score integration.** Added `rationale_coverage`
+      as a 5th equal-weighted component to `services.health_score`.
+      Active requirement set excludes `rationale_needed` reqs from
+      the denominator — that status is *precisely* "no rationale,"
+      so counting them would double-count against the score.
+      `rationale_coverage = % of active reqs with prose rationale OR
+      rationale_links non-empty`. Score formula:
+      `mean(impl_coverage, test_coverage, freshness, non_drift,
+      rationale_coverage)`. **Breaking change** — projects with CI
+      thresholds pinned to the M5.3 4-component score may need to
+      retune. CLI updates `loom health-score` output to surface the
+      new component. 10 tests in TestHealthScore (was 3): existing
+      perfect-score test updated to include rationale; new tests for
+      full-via-prose, full-via-links, zero, partial-split,
+      rationale_needed exclusion, 5-component formula, 5-key
+      components dict.
 - [ ] **11.4 `is_complete()` extension.** Current
       `Requirement.is_complete()` checks elaboration + acceptance
       criteria. Extending to require rationale-or-links is a breaking
