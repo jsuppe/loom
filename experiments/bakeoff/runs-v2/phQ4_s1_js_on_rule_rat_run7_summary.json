@@ -1,0 +1,22 @@
+{
+  "phase": "Q4_crosssession_js_no_stub_32b",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "7",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 370,
+  "input_tokens": 529,
+  "output_tokens": 230,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "none",
+  "semantic_context_chars": 0,
+  "llm_elapsed_s": 17.3,
+  "wall_s": 17.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_s1_js_6yqfigrv",
+  "grade_stdout_tail": "4_grade_s1_8v79v66q\\retry.js:7:11)\n    at fetchWithRetry (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_grade_s1_8v79v66q\\retry.js:19:20)\n    at Object.<anonymous> (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_grade_s1_8v79v66q\\test_retry.js:19:20)\n    at Module._compile (node:internal/modules/cjs/loader:1809:14)\n    at Object..js (node:internal/modules/cjs/loader:1940:10)\n    at Module.load (node:internal/modules/cjs/loader:1530:32)\n    at Module._load (node:internal/modules/cjs/loader:1332:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47\nAll fetch attempts failed: Error: connection failed: http://example.com\n    at doFetch (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_grade_s1_8v79v66q\\retry.js:7:11)\n    at fetchWithRetry (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_grade_s1_8v79v66q\\retry.js:19:20)\n    at Object.<anonymous> (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ4_grade_s1_8v79v66q\\test_retry.js:34:5)\n    at Module._compile (node:internal/modules/cjs/loader:1809:14)\n    at Object..js (node:internal/modules/cjs/loader:1940:10)\n    at Module.load (node:internal/modules/cjs/loader:1530:32)\n    at Module._load (node:internal/modules/cjs/loader:1332:12)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47\n"
+}
