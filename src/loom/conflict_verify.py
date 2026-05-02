@@ -70,6 +70,7 @@ def verify(
     the caller can decide whether to drop the pair or surface the error.
     """
     model = model or DEFAULT_MODEL
+    keep_alive = os.environ.get("LOOM_OLLAMA_KEEP_ALIVE", "30m")
     try:
         payload = json.dumps({
             "model": model,
@@ -78,6 +79,7 @@ def verify(
             # on thinking models (gemma4, qwen3.5) so the yes/no lands
             # in the `content` field.
             "think": False,
+            "keep_alive": keep_alive,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(candidate, existing)},

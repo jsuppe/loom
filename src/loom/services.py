@@ -3452,6 +3452,7 @@ def _call_decomposer_llm(model: str, prompt: str, timeout: int = 900) -> dict:
     import json as _json
     import os as _os
     import time as _time
+    import urllib.error as _urlerr
     import urllib.request as _urlreq
 
     if ":" not in model:
@@ -3463,10 +3464,12 @@ def _call_decomposer_llm(model: str, prompt: str, timeout: int = 900) -> dict:
 
     if provider == "ollama":
         url = _os.environ.get("OLLAMA_URL", "http://localhost:11434")
+        keep_alive = _os.environ.get("LOOM_OLLAMA_KEEP_ALIVE", "30m")
         payload = _json.dumps({
             "model": name,
             "stream": False,
             "think": False,
+            "keep_alive": keep_alive,
             "messages": [{"role": "user", "content": prompt}],
             "options": {"temperature": 0.0, "num_predict": 8000},
         }).encode()
@@ -3475,18 +3478,31 @@ def _call_decomposer_llm(model: str, prompt: str, timeout: int = 900) -> dict:
             data=payload,
             headers={"Content-Type": "application/json"},
         )
-        try:
-            with _urlreq.urlopen(req, timeout=timeout) as resp:
-                body = _json.loads(resp.read().decode())
-        except Exception as e:
-            raise RuntimeError(f"Ollama call failed: {e}") from e
-        msg = body.get("message", {}) or {}
-        return {
-            "content": msg.get("content", ""),
-            "elapsed_s": round(_time.perf_counter() - t0, 2),
-            "input_tokens": body.get("prompt_eval_count", 0),
-            "output_tokens": body.get("eval_count", 0),
-        }
+        backoffs = [5, 15]
+        last_err: Exception | None = None
+        for attempt in range(len(backoffs) + 1):
+            try:
+                with _urlreq.urlopen(req, timeout=timeout) as resp:
+                    body = _json.loads(resp.read().decode())
+                msg = body.get("message", {}) or {}
+                return {
+                    "content": msg.get("content", ""),
+                    "elapsed_s": round(_time.perf_counter() - t0, 2),
+                    "input_tokens": body.get("prompt_eval_count", 0),
+                    "output_tokens": body.get("eval_count", 0),
+                }
+            except _urlerr.HTTPError as e:
+                last_err = e
+                if e.code not in (500, 502, 503, 504) or attempt == len(backoffs):
+                    raise RuntimeError(f"Ollama call failed: {e}") from e
+            except _urlerr.URLError as e:
+                last_err = e
+                if attempt == len(backoffs):
+                    raise RuntimeError(f"Ollama call failed: {e}") from e
+            except Exception as e:
+                raise RuntimeError(f"Ollama call failed: {e}") from e
+            _time.sleep(backoffs[attempt])
+        raise RuntimeError(f"Ollama call failed after retries: {last_err}")
 
     if provider == "anthropic":
         api_key = _os.environ.get("ANTHROPIC_API_KEY")

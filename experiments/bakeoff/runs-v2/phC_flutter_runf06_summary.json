@@ -1,0 +1,30 @@
+{
+  "phase": "C_flutter_counter_oneshot_auto",
+  "run_id": "f06",
+  "benchmark": "flutter-counter",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 17,
+  "total": 17,
+  "pass_rate": 1.0,
+  "opus_duration_s": 83.8,
+  "opus_cost_usd": 0.27876650000000003,
+  "spec_chars": 14975,
+  "exec_duration_s": 97.3,
+  "exec_rc": 0,
+  "wall_s": 194.0,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_lllxzewi",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_grade_9pb9oxki",
+  "file_sizes": {
+    "lib/counter_model.dart": 864,
+    "lib/counter_widget.dart": 2214,
+    "lib/counter_app.dart": 705
+  },
+  "spec_sections_found": [
+    "lib/counter_model.dart",
+    "lib/counter_widget.dart",
+    "lib/counter_app.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-9a077412c2a9  status=pending  title='Implement lib/counter_model.dart per the section labeled `### lib/counter_model.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_lllxzewi  runner: flutter_test (replace)\n[exec] prompt: 16175 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 24.1s  in=3950  out=259\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-9a077412c2a9\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_flutter_lllxzewi\\\\lib\\\\counter_model.dart\"}\n[exec] task TASK-d63f6c1a9fec  status=pending  title='Implement lib/counter_widget.dart per the section labeled `### lib/counter_widget.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_lllxzewi  runner: flutter_test (replace)\n[exec] prompt: 16181 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 38.0s  in=3947  out=502\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-d63f6c1a9fec\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_flutter_lllxzewi\\\\lib\\\\counter_widget.dart\"}\n[exec] task TASK-c4b32428a984  status=pending  title='Implement lib/counter_app.dart per the section labeled `### lib/counter_app.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_lllxzewi  runner: flutter_test (replace)\n[exec] prompt: 16163 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 14.6s  in=3949  out=182\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-c4b32428a984\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_flutter_lllxzewi\\\\lib\\\\counter_app.dart\"}\n[exec] no ready tasks",
+  "grade_stdout_tail": "00:00 +0: loading C:/Users/jonsu/AppData/Local/Temp/phC_flutter_grade_9pb9oxki/test/counter_test.dart\n00:00 +0: CounterModel initial value defaults to 0\n00:00 +1: CounterModel initial value can be set\n00:00 +2: CounterModel initial out of bounds raises ArgumentError\n00:00 +3: CounterModel increment + decrement\n00:00 +4: CounterModel increment at max raises StateError\n00:00 +5: CounterModel decrement at min raises StateError\n00:00 +6: CounterModel reset returns to 0\n00:00 +7: CounterModel history records every transition\n00:00 +8: CounterModel history is unmodifiable from outside\n00:00 +9: CounterWidget renders initial value\n00:00 +10: CounterWidget increment button increases the value\n00:00 +11: CounterWidget decrement button decreases the value\n00:00 +12: CounterWidget reset button restores 0\n00:00 +13: CounterWidget increment at max shows snackbar instead of crashing\n00:00 +14: CounterApp default app has Counter app bar title\n00:00 +15: CounterApp custom title appears in app bar\n00:00 +16: CounterApp CounterApp hosts a working CounterWidget\n00:00 +17: All tests passed!\n"
+}

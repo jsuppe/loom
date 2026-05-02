@@ -35,6 +35,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,11 +98,20 @@ def get_project_name() -> str:
 
 
 def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
-    """Single-turn Ollama chat. Returns content + token counts + elapsed."""
+    """Single-turn Ollama chat. Returns content + token counts + elapsed.
+
+    Keeps the model resident via `keep_alive` (default 30m, override
+    with $LOOM_OLLAMA_KEEP_ALIVE) so chained executor calls don't pay
+    cold-load latency between tasks. Retries transient 5xx / connection
+    errors twice with 5s/15s backoff to ride through Ollama mid-load
+    races (model eviction, VRAM contention).
+    """
+    keep_alive = os.environ.get("LOOM_OLLAMA_KEEP_ALIVE", "30m")
     payload = json.dumps({
         "model": model,
         "stream": False,
         "think": False,
+        "keep_alive": keep_alive,
         "messages": [{"role": "user", "content": prompt}],
         "options": {"temperature": 0.0, "num_predict": 6000},
     }).encode()
@@ -111,16 +121,30 @@ def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
         headers={"Content-Type": "application/json"},
     )
     t0 = time.perf_counter()
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = json.loads(resp.read().decode())
-    elapsed = time.perf_counter() - t0
-    msg = body.get("message", {}) or {}
-    return {
-        "content": msg.get("content", ""),
-        "elapsed_s": round(elapsed, 2),
-        "input_tokens": body.get("prompt_eval_count", 0),
-        "output_tokens": body.get("eval_count", 0),
-    }
+    backoffs = [5, 15]
+    last_err: Exception | None = None
+    for attempt in range(len(backoffs) + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = json.loads(resp.read().decode())
+            elapsed = time.perf_counter() - t0
+            msg = body.get("message", {}) or {}
+            return {
+                "content": msg.get("content", ""),
+                "elapsed_s": round(elapsed, 2),
+                "input_tokens": body.get("prompt_eval_count", 0),
+                "output_tokens": body.get("eval_count", 0),
+            }
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code not in (500, 502, 503, 504) or attempt == len(backoffs):
+                raise
+        except urllib.error.URLError as e:
+            last_err = e
+            if attempt == len(backoffs):
+                raise
+        time.sleep(backoffs[attempt])
+    raise RuntimeError(f"Ollama call failed after retries: {last_err}")
 
 
 def extract_code(content: str, fence: str = "python") -> str | None:
