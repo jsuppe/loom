@@ -1,0 +1,30 @@
+{
+  "phase": "C_flutter_counter_oneshot_auto",
+  "run_id": "f04",
+  "benchmark": "flutter-counter",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 53.6,
+  "opus_cost_usd": 0.2104165,
+  "spec_chars": 10421,
+  "exec_duration_s": 171.8,
+  "exec_rc": 0,
+  "wall_s": 236.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_zap6_3tj",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_grade_spm8mkb9",
+  "file_sizes": {
+    "lib/counter_model.dart": 961,
+    "lib/counter_widget.dart": 2222,
+    "lib/counter_app.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/counter_model.dart",
+    "lib/counter_widget.dart",
+    "lib/counter_app.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-30130cca41cb  status=pending  title='Implement lib/counter_model.dart per the section labeled `### lib/counter_model.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_zap6_3tj  runner: flutter_test (replace)\n[exec] prompt: 11621 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 48.4s  in=2782  out=282\n[exec] grading: 2/2\n[exec] result: {\"task_id\": \"TASK-30130cca41cb\", \"outcome\": \"complete\", \"passed\": 2, \"total\": 2, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_flutter_zap6_3tj\\\\lib\\\\counter_model.dart\"}\n[exec] task TASK-85ed33894b9a  status=pending  title='Implement lib/counter_widget.dart per the section labeled `### lib/counter_widget.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_zap6_3tj  runner: flutter_test (replace)\n[exec] prompt: 11627 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] model: 85.3s  in=2784  out=506\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-85ed33894b9a\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phC_flutter_zap6_3tj\\\\lib\\\\counter_widget.dart\"}\n[exec] task TASK-9433ed3e12f5  status=pending  title='Implement lib/counter_app.dart per the section labeled `### lib/counter_app.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_zap6_3tj  runner: flutter_test (replace)\n[exec] prompt: 11609 chars\n[exec] claimed by qwen2.5-coder:32b\n[exec] calling qwen2.5-coder:32b...\n[exec] result: {\"task_id\": \"TASK-9433ed3e12f5\", \"outcome\": \"llm_error\", \"reason\": \"ollama call failed: HTTP Error 500: Internal Server Error\"}",
+  "grade_stdout_tail": "00:00 +0: loading C:/Users/jonsu/AppData/Local/Temp/phC_flutter_grade_spm8mkb9/test/counter_test.dart\n00:00 +0 -1: loading C:/Users/jonsu/AppData/Local/Temp/phC_flutter_grade_spm8mkb9/test/counter_test.dart [E]\n  Failed to load \"C:/Users/jonsu/AppData/Local/Temp/phC_flutter_grade_spm8mkb9/test/counter_test.dart\":\n  Compilation failed for testPath=C:/Users/jonsu/AppData/Local/Temp/phC_flutter_grade_spm8mkb9/test/counter_test.dart: test/counter_test.dart:126:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp());\n                                      ^^^^^^^^^^\n  test/counter_test.dart:131:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp(title: 'My Counter'));\n                                      ^^^^^^^^^^\n  test/counter_test.dart:136:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp(initial: 3));\n                                      ^^^^^^^^^^\n  .\n00:00 +0 -1: Some tests failed.\n"
+}

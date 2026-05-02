@@ -1,0 +1,30 @@
+{
+  "phase": "C_flutter_counter_oneshot_auto",
+  "run_id": "f01",
+  "benchmark": "flutter-counter",
+  "planner": "opus(claude -p)",
+  "executor": "qwen2.5-coder:32b",
+  "passed": 0,
+  "total": 1,
+  "pass_rate": 0.0,
+  "opus_duration_s": 72.3,
+  "opus_cost_usd": 0.242604,
+  "spec_chars": 12922,
+  "exec_duration_s": 0.8,
+  "exec_rc": 1,
+  "wall_s": 84.1,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_rkalpq8g",
+  "grade_dir": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_grade_svb_a326",
+  "file_sizes": {
+    "lib/counter_model.dart": 0,
+    "lib/counter_widget.dart": 0,
+    "lib/counter_app.dart": 0
+  },
+  "spec_sections_found": [
+    "lib/counter_model.dart",
+    "lib/counter_widget.dart",
+    "lib/counter_app.dart"
+  ],
+  "exec_stdout_tail": "[exec] task TASK-a7e007f2e0d7  status=pending  title='Implement lib/counter_model.dart per the section labeled `### lib/counter_model.dart` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phC_flutter_rkalpq8g  runner: flutter_test (replace)\n[exec] prompt: 14122 chars",
+  "grade_stdout_tail": ".\n        expect(() => CounterModel(initial: 200, max: 100),\n                     ^^^^^^^^^^^^\n  test/counter_test.dart:31:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel();\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:39:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel(initial: 100, max: 100);\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:44:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel(initial: -100, min: -100);\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:49:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel(initial: 7);\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:56:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel(initial: 5);\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:65:17: Error: Method not found: 'CounterModel'.\n        final m = CounterModel();\n                  ^^^^^^^^^^^^\n  test/counter_test.dart:76:30: Error: Method not found: 'CounterWidget'.\n          home: Scaffold(body: CounterWidget(initial: 7)),\n                               ^^^^^^^^^^^^^\n  test/counter_test.dart:83:30: Error: Method not found: 'CounterWidget'.\n          home: Scaffold(body: CounterWidget(initial: 0)),\n                               ^^^^^^^^^^^^^\n  test/counter_test.dart:92:30: Error: Method not found: 'CounterWidget'.\n          home: Scaffold(body: CounterWidget(initial: 5)),\n                               ^^^^^^^^^^^^^\n  test/counter_test.dart:101:30: Error: Method not found: 'CounterWidget'.\n          home: Scaffold(body: CounterWidget(initial: 5)),\n                               ^^^^^^^^^^^^^\n  test/counter_test.dart:111:30: Error: Method not found: 'CounterWidget'.\n          home: Scaffold(body: CounterWidget(initial: 5, max: 5)),\n                               ^^^^^^^^^^^^^\n  test/counter_test.dart:126:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp());\n                                      ^^^^^^^^^^\n  test/counter_test.dart:131:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp(title: 'My Counter'));\n                                      ^^^^^^^^^^\n  test/counter_test.dart:136:37: Error: Couldn't find constructor 'CounterApp'.\n        await tester.pumpWidget(const CounterApp(initial: 3));\n                                      ^^^^^^^^^^\n  .\n00:00 +0 -1: Some tests failed.\n"
+}

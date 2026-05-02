@@ -590,7 +590,7 @@ Headline expansion (9 languages × S1 cross-session smoke):
 | **Python** | ✅ 100% (Phase D) | (skipped) | ✅ **5/5 = 100%** (qwen3.5) | use it freely up to ~9 files |
 | **Dart (pure)** | (skipped) | ✅ 100% after Tier 2 | ❌ 0/35 (qwen3.5 + qwen2.5-coder:32b) | use for ≤ 3 files; ceiling robust to executor at 9 |
 | **C++** | ✅ 100% (cpp-orders) | (skipped) | v1 header-only: 2/5 = 40% · **v2 split:** **4/5 = 80%** (qwen2.5-coder:32b) | use split `.h/.cpp` convention; matching qwen's native idiom doubled the pass rate |
-| **Flutter Dart** | ❓ untested | ❓ untested | ❓ untested | benchmark + driver authored, not run |
+| **Flutter Dart** | (skipped, multi-file by nature) | ✅ **3/3 = 100%** capability (qwen2.5-coder:32b) | ❓ untested (no `flutter-inventory` benchmark) | use for ≤ 3 widgets; widget-tree + ScaffoldMessenger + Key selectors all carry |
 
 **Cross-language S1 smoke (Milestone 8)** added 7 more languages on
 a focused contrarian-rule scenario (single file, qwen3.5):
@@ -661,7 +661,12 @@ See [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-b
 - [x] **6.6.3 qwen2.5-coder:32b on dart-inventory N=5** — 0/5 = 0%, ceiling holds.
 - [x] **6.6.4 Per-language static check between body and grading** — `LOOM_EXEC_STATIC_CHECK=1`.
 - [x] **6.6.5 Worked-example demo** — `docs/WORKED_EXAMPLE.md`.
-- [x] **6.6.6 Flutter multi-widget benchmark** — authored.
+- [x] **6.6.6 Flutter multi-widget benchmark** — authored + run.
+      6 trials on `qwen2.5-coder:32b`, 3/3 = 100% capability when
+      the chain ran end-to-end. Naive 4/6 = 67% — pre-patch losses
+      were Ollama keep_alive eviction races (fixed in commit
+      `4c66c13`). Findings:
+      [`FINDINGS-bakeoff-v2-flutter-counter.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-flutter-counter.md).
 
 ### 6.7 Pointers to data and code
 
