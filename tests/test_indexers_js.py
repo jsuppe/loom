@@ -98,6 +98,60 @@ class TestHelpers:
         assert flat[1]["name"] == "inner"
         assert flat[1]["kind"] == 6
 
+    def test_is_import_ref_detects_es_import(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text(
+            "import { foo } from './foo.js';\n"
+            "export function bar() { return foo(); }\n"
+        )
+        assert indexers_js._is_import_ref(f, 0) is True
+        assert indexers_js._is_import_ref(f, 1) is False
+
+    def test_is_import_ref_detects_default_import(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text("import foo from './foo.js';\nfoo();\n")
+        assert indexers_js._is_import_ref(f, 0) is True
+
+    def test_is_import_ref_detects_namespace_import(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text("import * as foo from './foo.js';\nfoo.bar();\n")
+        assert indexers_js._is_import_ref(f, 0) is True
+
+    def test_is_import_ref_detects_commonjs_require(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text(
+            "const { foo } = require('./foo');\n"
+            "let bar = require('./bar');\n"
+            "function use() { foo(); bar(); }\n"
+        )
+        assert indexers_js._is_import_ref(f, 0) is True
+        assert indexers_js._is_import_ref(f, 1) is True
+        assert indexers_js._is_import_ref(f, 2) is False
+
+    def test_is_import_ref_detects_re_export(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text(
+            "export { foo } from './foo.js';\n"
+            "export * from './bar.js';\n"
+            "function local() { }\n"
+        )
+        assert indexers_js._is_import_ref(f, 0) is True
+        assert indexers_js._is_import_ref(f, 1) is True
+        assert indexers_js._is_import_ref(f, 2) is False
+
+    def test_is_import_ref_returns_false_for_missing_file(self, tmp_path):
+        assert indexers_js._is_import_ref(tmp_path / "nope.js", 0) is False
+
+    def test_read_signature_line_strips_trailing_brace(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text("export class Foo extends Error {\n  bar() { }\n}\n")
+        assert indexers_js._read_signature_line(f, 0) == "export class Foo extends Error"
+
+    def test_read_signature_line_handles_blank_first_line(self, tmp_path):
+        f = tmp_path / "x.js"
+        f.write_text("\n\nexport class Foo {}\n")
+        assert indexers_js._read_signature_line(f, 0) == "export class Foo {}"
+
     def test_flatten_symbols_handles_symbol_information(self):
         symbols = [
             {
@@ -192,6 +246,16 @@ class TestIntegration:
         assert "consumer.js" in out
         # Snippets should include the call-site code line.
         assert "await fetchWithRetry" in out
+        # M10.3e: import lines should NOT appear as reference snippets.
+        # The consumer's call site is on line 3 (`const result = await
+        # fetchWithRetry...`), the import on line 1 — only the call
+        # site should show up.
+        for line in out.splitlines():
+            if line.startswith("//   consumer.js:"):
+                # ":1" would be the import line; we should see ":3".
+                assert not line.endswith(":1"), (
+                    f"import line leaked into refs: {line!r}"
+                )
 
     def test_returns_empty_for_nonexistent_file(self, fixture_root):
         idx = indexers_js.JsIndexer(root=fixture_root)
@@ -200,6 +264,41 @@ class TestIntegration:
         finally:
             idx.shutdown()
         assert out == ""
+
+    def test_includes_adjacent_type_defs(self, tmp_path):
+        # Fixture with a class in a referenced sibling — confirms the
+        # M10.3e "Symbols defined in referenced files" section appears.
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "retry.js").write_text(
+            "export function fetchWithRetry(url) { return null; }\n"
+        )
+        (src / "consumer.js").write_text(
+            "import { fetchWithRetry } from './retry.js';\n"
+            "export class BackoffError extends Error { }\n"
+            "export function run(url) {\n"
+            "  const result = fetchWithRetry(url);\n"
+            "  if (result === null) throw new BackoffError('x');\n"
+            "}\n"
+        )
+        (tmp_path / "package.json").write_text(json.dumps({"type": "module"}))
+        (tmp_path / "jsconfig.json").write_text(json.dumps({
+            "compilerOptions": {
+                "module": "esnext", "target": "es2020",
+                "moduleResolution": "node",
+                "checkJs": True, "allowJs": True,
+            },
+            "include": ["src/**/*"],
+        }))
+
+        idx = indexers_js.JsIndexer(root=tmp_path)
+        try:
+            out = idx.context_for(src / "retry.js")
+        finally:
+            idx.shutdown()
+        assert "Symbols defined in referenced files" in out
+        assert "BackoffError" in out
+        assert "consumer.js:" in out
 
     def test_register_works_through_indexers_module(self, fixture_root):
         from loom import indexers

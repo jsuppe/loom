@@ -1,0 +1,23 @@
+{
+  "phase": "Q6_crosssession_js_real_lsp_v2",
+  "scenario": "S1_esm",
+  "cell": "on-rule+rat",
+  "run_id": "6",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 370,
+  "input_tokens": 838,
+  "output_tokens": 226,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp",
+  "lsp_elapsed_s": 0.52,
+  "semantic_context_chars": 1293,
+  "llm_elapsed_s": 16.8,
+  "wall_s": 17.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ6_s1_js_4ccvtbgf",
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\nAll attempts failed: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/retry.js:19:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/test_retry.js:19:20\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nAll attempts failed: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/retry.js:19:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phQ6_grade_s1_d9aq5hvv/test_retry.js:34:5\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n"
+}

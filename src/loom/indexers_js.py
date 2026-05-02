@@ -42,6 +42,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -64,6 +65,15 @@ _SNIPPET_LINES_AFTER = 4
 # 3 references; real codebases can have hundreds.
 _MAX_SYMBOLS_PER_FILE = 5
 _MAX_REFS_PER_SYMBOL = 5
+
+# How many top-level Class symbols to include from each
+# referenced sibling file, in the "Symbols defined in referenced
+# files" section. phQ5 (M10.3d) found that this section is what
+# closes the gap between hand-curated stubs and raw LSP refs on
+# placebo-augmented prompts. 5 per file is enough for the typical
+# Loom-target file (1-3 classes); larger files surface their
+# first 5.
+_MAX_TYPE_DEFS_PER_FILE = 5
 
 # Cap on how many sibling files we open eagerly to populate the LSP's
 # project view. typescript-language-server only resolves references in
@@ -372,6 +382,13 @@ class JsIndexer(SemanticIndexer):
         out.append(f"// === SEMANTIC CONTEXT (lsp:{self.name} for {file.name}) ===")
         out.append("//")
 
+        # Track sibling files that had at least one *non-import* reference
+        # so we can append type definitions from those files (M10.3e).
+        # Importing a symbol doesn't tell the executor anything about the
+        # types in the importing file; an actual call site does.
+        interesting_siblings: list[Path] = []
+        seen_siblings: set[Path] = set()
+
         any_emitted = False
         for sym in top[:_MAX_SYMBOLS_PER_FILE]:
             references = self._send_request("textDocument/references", {
@@ -381,13 +398,24 @@ class JsIndexer(SemanticIndexer):
             }) or []
             if not references:
                 continue
+            # Filter out reference lines that are just import statements.
+            # phQ5 (M10.3d) showed these are noise that displaced curated
+            # signal in the prompt — every import-line ref dilutes the
+            # call-site density without adding information.
+            filtered = [
+                r for r in references
+                if not _is_import_ref(_uri_to_path(r["uri"]),
+                                      r["range"]["start"]["line"])
+            ]
+            if not filtered:
+                continue
             kind_name = _KIND_NAMES.get(sym["kind"], "symbol")
             out.append(
                 f"// References to {sym['name']} ({kind_name}, "
-                f"{len(references)} results from textDocument/references):"
+                f"{len(filtered)} results from textDocument/references):"
             )
             out.append("//")
-            for ref in references[:_MAX_REFS_PER_SYMBOL]:
+            for ref in filtered[:_MAX_REFS_PER_SYMBOL]:
                 ref_uri = ref["uri"]
                 ref_path = _uri_to_path(ref_uri)
                 ref_line = ref["range"]["start"]["line"]
@@ -398,12 +426,63 @@ class JsIndexer(SemanticIndexer):
                 for sl in snippet:
                     out.append(f"//       {sl.rstrip()}")
                 out.append("//")
+                # Note this file as worth scanning for adjacent type defs.
+                if (ref_path != file.resolve()
+                        and ref_path not in seen_siblings):
+                    seen_siblings.add(ref_path)
+                    interesting_siblings.append(ref_path)
             any_emitted = True
 
         if not any_emitted:
             return ""
+
+        # M10.3e: adjacent type definitions from referenced files.
+        type_def_lines = self._collect_adjacent_type_defs(
+            interesting_siblings, exclude=file.resolve(),
+        )
+        if type_def_lines:
+            out.append("// Symbols defined in referenced files:")
+            out.append("//")
+            for line in type_def_lines:
+                out.append(f"//   {line}")
+            out.append("//")
+
         out.append("// === END SEMANTIC CONTEXT ===")
         return "\n".join(out)
+
+    def _collect_adjacent_type_defs(self, files: list[Path],
+                                     *, exclude: Path) -> list[str]:
+        """Query each referenced sibling file for its top-level Class
+        definitions. Returns formatted single-line summaries — one per
+        class, suffixed with ``// path:line``."""
+        if self._proc is None:
+            return []
+        results: list[str] = []
+        for sibling in files:
+            if sibling == exclude:
+                continue
+            try:
+                self._open_file(sibling)
+            except (OSError, UnicodeDecodeError):
+                continue
+            try:
+                syms = self._send_request("textDocument/documentSymbol", {
+                    "textDocument": {"uri": _path_to_uri(sibling)},
+                }) or []
+            except Exception:
+                continue
+            flat = _flatten_symbols(syms)
+            classes = [s for s in flat if s["kind"] == _KIND_CLASS]
+            if not classes:
+                continue
+            rel = _relative_to(sibling, self._root)
+            for cls in classes[:_MAX_TYPE_DEFS_PER_FILE]:
+                line_no = cls["position"]["line"]
+                signature = _read_signature_line(sibling, line_no)
+                if not signature:
+                    continue
+                results.append(f"{signature}    // {rel}:{line_no + 1}")
+        return results
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +567,47 @@ def _walk_project(root: Path):
                 stack.append(entry)
             elif entry.is_file() and entry.suffix.lower() in _PROJECT_GLOB_SUFFIXES:
                 yield entry
+
+
+_IMPORT_LINE_RE = re.compile(
+    r"^\s*(?:import\b|export\s+\{[^}]*\}\s+from\b|export\s+\*\s+from\b"
+    r"|(?:const|let|var)\s+[\w{}\s,]*=\s*require\s*\()"
+)
+
+
+def _is_import_ref(file: Path, line_num: int) -> bool:
+    """Is the reference at ``file:line_num`` just an import or
+    re-export statement? phQ5 (M10.3d) found that LSP's
+    ``textDocument/references`` returns import lines as references,
+    which dilutes call-site density without adding signal — every
+    such ref displaces a real use site from the cap."""
+    try:
+        text = file.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    lines = text.splitlines()
+    if line_num >= len(lines):
+        return False
+    return bool(_IMPORT_LINE_RE.match(lines[line_num]))
+
+
+def _read_signature_line(file: Path, line_num: int) -> str:
+    """Read the first non-empty line at or after ``line_num`` and
+    strip it. Used for the bare class-signature line in the adjacent-
+    type-defs section. Returns ``""`` on miss."""
+    try:
+        text = file.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    lines = text.splitlines()
+    for i in range(line_num, min(line_num + 3, len(lines))):
+        stripped = lines[i].strip()
+        if stripped:
+            # Strip trailing `{` so we get just the declaration head.
+            if stripped.endswith("{"):
+                stripped = stripped[:-1].rstrip()
+            return stripped
+    return ""
 
 
 def _read_snippet(file: Path, line: int, *, before: int = 0,

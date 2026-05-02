@@ -226,14 +226,29 @@ pipeline complexity.
       two concrete follow-ups to close the gap (import-filtering,
       adjacent type defs). Findings:
       [`FINDINGS-bakeoff-v2-js-real-lsp.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-real-lsp.md).
-- [ ] **10.3e JsIndexer v2: filter import refs + adjacent type defs.**
-      The phQ5 placebo gap is attributable to the real LSP returning
-      noisier output than the hand-authored stub. Two bounded
-      improvements: (a) skip reference snippets that are import
-      statements (5 LoC heuristic); (b) for symbols mentioned in
-      reference snippets, query `textDocument/definition` and append
-      bare signatures (~30-50 LoC). Rerun as phQ6. Validation
-      target: lift placebo cell from 20% toward phQ3's 90%.
+- [x] **10.3e JsIndexer v2: filter import refs + adjacent type defs.**
+      Both improvements landed in `src/loom/indexers_js.py`:
+      `_is_import_ref` heuristic skips import-statement references
+      before emission, and `_collect_adjacent_type_defs` queries
+      `documentSymbol` on each sibling file with surviving refs and
+      appends top-level Class signatures. 22 unit + integration tests
+      pass (13 from M10.3c + 9 new). Validation via phQ6 (N=40)
+      lifted placebo from 20% → **30%** (+10pp) — useful but well
+      short of phQ3's 90%. Rationale held at 100%, off / on-rule
+      held at 0%. **Falsifies** the M10.3d hypothesis that adjacent
+      type defs were the load-bearing missing piece (phQ6 v2 has
+      MORE type defs than phQ3, still 60pp short on placebo).
+      Identifies the test-reference (`assert(result === null)`) as
+      the most likely remaining missing ingredient. Findings:
+      [`FINDINGS-bakeoff-v2-js-real-lsp-v2.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-real-lsp-v2.md).
+- [ ] **10.3f phQ7 — test-reference surfacing experiment.** Add a
+      `surface_test_refs` mode to `JsIndexer` that locates
+      `*.test.js` / `*.spec.js` / `tests/*.js` files in the project
+      and surfaces references to the target's exported symbols from
+      those files. ~30 LoC + a phQ7 sweep. Validation target: lift
+      placebo from phQ6's 30% toward phQ3's 90%. Confirms or denies
+      the test-reference hypothesis as the dominant placebo lift
+      mechanism.
 - [ ] **10.4 Structural drift detection in `services.check`** — add
       the structural-signal channel to `drift_detected`. Blocked on
       real indexer.
