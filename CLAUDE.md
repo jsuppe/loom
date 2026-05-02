@@ -32,9 +32,10 @@ loom/
 │   └── templates/              # In-package: starter templates per runtime
 ├── scripts/loom, loom_exec     # Thin shims that delegate to the package (clone-mode)
 ├── hooks/loom_pretool.py       # PreToolUse hook for Claude Code (lives outside the package on purpose)
+├── hooks/loom_intake.py        # UserPromptSubmit hook (M11.5) — same outside-package rationale
 ├── mcp_server/                 # MCP server wrapping LoomStore as typed tools
 ├── agents.d/                   # Drop-in snippets for AGENTS.md integration
-├── tests/                      # pytest suite (313 tests, 0 require Ollama in default mode)
+├── tests/                      # pytest suite (~410 tests, 0 require Ollama in default mode)
 ├── docs/                       # GETTING_STARTED.md, WORKED_EXAMPLE.md, generated REQUIREMENTS.md/TEST_SPEC.md
 ├── benchmarks/                 # capability + retrieval microbenchmarks
 ├── experiments/                # bake-off harnesses + findings docs (~830 trials)
@@ -59,14 +60,22 @@ loom/
 - **`src/loom/cli.py`** — Argparse CLI. Each subcommand is a `cmd_*` function. Entry point is `main()`. Registered as `loom` console script via pyproject.
 - **`src/loom/exec_cli.py`** — Small-model task executor. Claims the next ready `Task`, assembles its context bundle, calls Ollama, extracts the code block, applies to a scratch copy, runs the grading test, and promotes on pass. Logs to `<project>/.exec-log.jsonl`. Default model from `LOOM_EXECUTOR_MODEL`, falling back to `qwen3.5:latest`. Registered as `loom_exec` console script.
 - **`hooks/loom_pretool.py`** — `PreToolUse` hook. Runs `loom context <file>` on Edit/Write/MultiEdit/NotebookEdit, injects linked reqs + rationale + drift as a system-reminder, and appends `{ts, tool, file, latency_ms, bytes, reqs, specs, drift, fired, skipped}` to `<project>/.hook-log.jsonl`. `LOOM_HOOK_BLOCK_ON_DRIFT=1` turns drift into a hard block. Lives outside the package because it's a script users register in their `.claude/settings.json`, not Python they import.
+- **`hooks/loom_intake.py`** — `UserPromptSubmit` hook (M11.5). Classifies the user's chat message as requirement-shape, runs `services.find_related_requirements`, and routes to one of six branches (auto_link / propose / captured_with_rationale / rationale_needed / duplicate / noop). Persists captures via `services.extract` with `rationale_links` when applicable; injects a `<system-reminder>` describing the action so the agent knows what was just captured. Logs every fire to `<project>/.intake-log.jsonl` for `loom intake-stats`. Three guardrails (softener detection, domain whitelist, daily auto-link budget) keep auto-capture from polluting the store. Backed by the testable core in `src/loom/intake.py`.
+- **`src/loom/intake.py`** — testable core for the intake hook. Six-branch decision tree, classifier prompt, JSONL log helpers. Importable as `from loom import intake`.
+- **`src/loom/indexers.py` + `src/loom/indexers_js.py`** — pluggable `SemanticIndexer` registry (M10.1) plus the LSP-backed `JsIndexer` for JavaScript/TypeScript via `typescript-language-server` (M10.3c). Powers the `## Semantic context` block in `loom_exec` prompts and the structural-drift channel in `services.check`.
 
 ## CLI Commands (reference)
 
 | Command | Purpose | `--json` |
 |---|---|---|
-| `extract` | Parse `REQUIREMENT: domain \| text` from stdin. Accepts `--rationale` | — |
-| `check <file>` | Detect drift in a file | Yes |
-| `link <file>` | Link code to requirements (auto or `--req`) | — |
+| `extract` | Parse `REQUIREMENT: domain \| text` from stdin. Accepts `--rationale`, `--derives-from REQ-xxx` (M11.1) | — |
+| `related <text>` | Find existing requirements semantically related to the query (M11.1) | Yes |
+| `needs-rationale` | List requirements captured without rationale or linkage (M11.1) | Yes |
+| `intake [--text "..."]` | Manually run the intake hook on a chat message (M11.5 P1) | Yes |
+| `intake-stats` | Aggregate intake-hook activity from `.intake-log.jsonl` (M11.5 P3) | Yes |
+| `indexer-doctor` | Health check for the semantic-indexer pipeline (M10.5) | Yes |
+| `check <file>` | Multi-channel drift detection (content/structural/superseded; M10.4) | Yes |
+| `link <file>` | Link code to requirements (auto, `--req`, or `--symbol`) | — |
 | `status` | Project overview with drift summary | Yes |
 | `query <text>` | Semantic search | Yes |
 | `list` | List requirements | Yes |
@@ -125,6 +134,7 @@ A seventh small table, **`_loom_meta`** (key/value), holds per-store invariants 
 | `.loom-specs.json` | `TestSpecStore` | `loom test` / `verify` / `tests` |
 | `.loom-events.jsonl` | `services._record_event` (extract / link / check) | `loom metrics`, `loom health-score` (M5) |
 | `.hook-log.jsonl` | `hooks/loom_pretool.py` | `loom cost` |
+| `.intake-log.jsonl` | `hooks/loom_intake.py` (via `services.intake._record`) | `loom intake-stats` (M11.5) |
 | `.exec-log.jsonl` | `loom_exec` | bake-off harnesses, manual inspection |
 | `PRIVATE.md` | user | `loom sync --public` |
 

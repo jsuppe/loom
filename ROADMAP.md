@@ -123,7 +123,21 @@ Design + threshold-calibration pilot in
           when classifier p95 latency exceeds the 5s budget after
           ≥5 fires (otherwise informational). 8 new tests
           (TestIntakeStats). Full suite passes.
-    - [ ] **P4 documentation + agents.d snippet.**
+    - [x] **P4 documentation + agents.d snippet.** Three docs
+          updates: (a) `agents.d/loom-integration.md` gains a
+          "When a Decision is Made" section covering
+          `--derives-from`, `loom related`, and the
+          `rationale_needed` debt surface; a new "Automatic Intake
+          (M11.5)" section covering hook behavior and the four
+          branches an agent will see; quick-reference table
+          extended with intake / related / needs-rationale /
+          intake-stats / indexer-doctor / link --symbol; env-var
+          table extended with LOOM_INTAKE_*; (b) `CLAUDE.md`
+          gains the new modules in repo layout + key-modules
+          sections, and the new commands in the CLI reference
+          table with milestone tags; (c) `hooks/README.md`
+          loom_intake.py section already shipped in P2 covers
+          install + behavior. M11.5 complete.
 
 ## Milestone 10: Semantic indexer integration (PLANNED — v1.x)
 
