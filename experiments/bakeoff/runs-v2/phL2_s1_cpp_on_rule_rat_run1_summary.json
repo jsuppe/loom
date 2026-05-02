@@ -1,0 +1,22 @@
+{
+  "phase": "L2_crosssession_cpp_stub_indexer",
+  "scenario": "S1",
+  "cell": "on-rule+rat",
+  "run_id": "1",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 402,
+  "input_tokens": 1111,
+  "output_tokens": 239,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-cpp",
+  "semantic_context_chars": 2094,
+  "llm_elapsed_s": 17.1,
+  "wall_s": 17.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL2_s1_cpp_i30s_6c9",
+  "grade_stdout_tail": "PASS: runtime_error_swallowed_returns_nullopt\nPASS: runtime_error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

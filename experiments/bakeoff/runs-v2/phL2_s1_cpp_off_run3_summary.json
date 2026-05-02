@@ -1,0 +1,22 @@
+{
+  "phase": "L2_crosssession_cpp_stub_indexer",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "3",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 965,
+  "output_tokens": 269,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "stub-cpp",
+  "semantic_context_chars": 2094,
+  "llm_elapsed_s": 18.9,
+  "wall_s": 19.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL2_s1_cpp_9m6hq8nv",
+  "grade_stdout_tail": "FAIL: runtime_error_swallowed_returns_nullopt (exception propagated: connection failed: http://example.com)\nFAIL: runtime_error_does_not_propagate (runtime_error propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

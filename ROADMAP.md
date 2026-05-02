@@ -133,10 +133,23 @@ pipeline complexity.
       fields** — backward-compatible via `setdefault`.
 - [x] **10.1e `loom link --symbol` plumbing** — works as a stub error
       path until a real indexer is registered.
-- [ ] **10.2 Context-bundle enrichment in `loom_exec`** — call
-      `indexer.context_for(file)`, prepend to the prompt. Blocked on
-      a real indexer being available, OR a stub indexer that returns
-      hand-curated context for the falsification experiment.
+- [x] **10.2 Context-bundle enrichment falsified with stub indexer**
+      — phL2 ran 20 trials (4 cells × N=5) with a hand-authored
+      `StubCppIndexer` that returns Kythe-shaped semantic context
+      for `retry.hpp`. Same model as M10.1b (qwen2.5-coder:32b).
+      Result vs the falsification baseline:
+      | cell | baseline | with stub | delta |
+      |---|---|---|---|
+      | off | 0% | 0% | +0pp |
+      | on-rule | 0% | 20% | **+20pp** |
+      | on-rule+placebo | 20% | 60% | **+40pp** |
+      | on-rule+rat | 0% | 40% | **+40pp** |
+      Conclusion: **semantic context is the M10 lever for C++.** Lift
+      is real but partial (peak 60%, not saturation) — context is
+      necessary but not sufficient on this scenario. Wiring through
+      `loom_exec` proper is now blocked only on a real indexer
+      backend; the prompt-assembly seam is validated. Findings doc:
+      `FINDINGS-bakeoff-v2-cpp-stub-indexer.md`.
 - [ ] **10.3 First real indexer: `KytheIndexer` (C++) OR
       `PyrightIndexer` (Python).** Pick whichever gets us a falsifying
       run faster.
