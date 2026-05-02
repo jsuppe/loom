@@ -103,9 +103,77 @@ class TestRequirements:
         
         temp_store.add_requirement(req, sample_embedding)
         temp_store.supersede_requirement("REQ-001")
-        
+
         updated = temp_store.get_requirement("REQ-001")
         assert updated.superseded_at is not None
+
+
+class TestIsCompleteGate:
+    """M11.4 Phase A — gated rationale requirement on is_complete()."""
+
+    def _refined_req(self, *, rationale=None, rationale_links=None):
+        from loom.store import Requirement
+        return Requirement(
+            id="REQ-x", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+            elaboration="Detailed implementation note",
+            acceptance_criteria=["Step 1", "Step 2"],
+            rationale=rationale,
+            rationale_links=rationale_links,
+        )
+
+    def test_default_passes_without_rationale(self, monkeypatch):
+        """Default behavior (env flag absent): elaboration +
+        acceptance criteria are sufficient. Existing callers must
+        not flip when M11.4 lands."""
+        monkeypatch.delenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", raising=False)
+        req = self._refined_req(rationale=None, rationale_links=None)
+        assert req.is_complete() is True
+
+    def test_default_fails_without_elaboration(self, monkeypatch):
+        from loom.store import Requirement
+        monkeypatch.delenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", raising=False)
+        req = Requirement(
+            id="REQ-x", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+            acceptance_criteria=["a"],
+        )
+        assert req.is_complete() is False
+
+    def test_flag_off_string_zero_treated_as_off(self, monkeypatch):
+        # Only the literal "1" enables the strict check; everything
+        # else (including "0", "false", empty) keeps default behavior.
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "0")
+        req = self._refined_req(rationale=None, rationale_links=None)
+        assert req.is_complete() is True
+
+    def test_flag_on_fails_without_rationale_or_links(self, monkeypatch):
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "1")
+        req = self._refined_req(rationale=None, rationale_links=None)
+        assert req.is_complete() is False
+
+    def test_flag_on_passes_with_prose_rationale(self, monkeypatch):
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "1")
+        req = self._refined_req(rationale="why we did this")
+        assert req.is_complete() is True
+
+    def test_flag_on_passes_with_rationale_links(self, monkeypatch):
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "1")
+        req = self._refined_req(rationale_links=["REQ-parent"])
+        assert req.is_complete() is True
+
+    def test_flag_on_still_fails_basic_when_unrefined(self, monkeypatch):
+        from loom.store import Requirement
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "1")
+        req = Requirement(
+            id="REQ-x", domain="behavior", value="x",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+            rationale="have it",  # has rationale but no elaboration
+        )
+        assert req.is_complete() is False
 
 
 class TestSearchRequirements:

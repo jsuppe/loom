@@ -2284,6 +2284,115 @@ class TestArchive:
         assert store.get_requirement("REQ-1").status == "pending"
 
 
+class TestAuditRationale:
+    """M11.4 — preview the impact of flipping
+    LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1."""
+
+    def _refined(self, store, *, req_id, value, fake_embedding,
+                 rationale=None, rationale_links=None):
+        from loom.store import Requirement
+        req = Requirement(
+            id=req_id, domain="behavior", value=value,
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+            elaboration="how to satisfy this",
+            acceptance_criteria=["criterion 1"],
+            rationale=rationale,
+            rationale_links=rationale_links,
+        )
+        store.add_requirement(req, fake_embedding)
+        return req
+
+    def test_empty_store_returns_zero_counts(self, store):
+        out = services.audit_rationale(store)
+        assert out["active_total"] == 0
+        assert out["would_flip_count"] == 0
+        assert out["unaffected"] == 0
+        assert out["already_failing"] == 0
+
+    def test_classifies_unaffected_already_failing_and_would_flip(
+        self, store, fake_embedding,
+    ):
+        # Three reqs:
+        # - REQ-good: refined + has rationale → unaffected
+        # - REQ-flip: refined but NO rationale → would_flip
+        # - REQ-bare: no elaboration → already_failing
+        from loom.store import Requirement
+        self._refined(
+            store, req_id="REQ-good", value="g",
+            fake_embedding=fake_embedding, rationale="r",
+        )
+        self._refined(
+            store, req_id="REQ-flip", value="f",
+            fake_embedding=fake_embedding,
+            rationale=None, rationale_links=None,
+        )
+        bare = Requirement(
+            id="REQ-bare", domain="behavior", value="b",
+            source_msg_id="m", source_session="s",
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_requirement(bare, fake_embedding)
+
+        out = services.audit_rationale(store)
+        assert out["active_total"] == 3
+        assert out["unaffected"] == 1
+        assert out["already_failing"] == 1
+        assert out["would_flip_count"] == 1
+        assert out["would_flip"][0]["req_id"] == "REQ-flip"
+
+    def test_links_count_as_rationale(self, store, fake_embedding):
+        # A req with rationale_links (and no prose) should NOT be in
+        # would_flip — the linkage chain qualifies as rationale.
+        self._refined(
+            store, req_id="REQ-anchor", value="a",
+            fake_embedding=fake_embedding, rationale="origin",
+        )
+        self._refined(
+            store, req_id="REQ-derived", value="d",
+            fake_embedding=fake_embedding,
+            rationale_links=["REQ-anchor"],
+        )
+        out = services.audit_rationale(store)
+        assert out["would_flip_count"] == 0
+        assert out["unaffected"] == 2
+
+    def test_excludes_archived_and_rationale_needed(self, store, fake_embedding):
+        # archived and rationale_needed reqs should not appear in any
+        # bucket (they're filtered out of "active").
+        self._refined(
+            store, req_id="REQ-good", value="g",
+            fake_embedding=fake_embedding, rationale="r",
+        )
+        self._refined(
+            store, req_id="REQ-arc", value="arc",
+            fake_embedding=fake_embedding,
+        )
+        services.set_status(store, "REQ-arc", "archived")
+        # Force a rationale_needed status onto another req.
+        self._refined(
+            store, req_id="REQ-rn", value="rn",
+            fake_embedding=fake_embedding,
+        )
+        services.set_status(store, "REQ-rn", "rationale_needed")
+
+        out = services.audit_rationale(store)
+        assert out["active_total"] == 1  # only REQ-good
+
+    def test_does_not_leak_env_flag(self, store, fake_embedding, monkeypatch):
+        # The audit toggles LOOM_REQUIRE_RATIONALE_FOR_COMPLETE
+        # internally; it must restore the original value (or
+        # absence) on exit.
+        import os
+        monkeypatch.delenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", raising=False)
+        services.audit_rationale(store)
+        assert "LOOM_REQUIRE_RATIONALE_FOR_COMPLETE" not in os.environ
+
+        monkeypatch.setenv("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", "preserved")
+        services.audit_rationale(store)
+        assert os.environ["LOOM_REQUIRE_RATIONALE_FOR_COMPLETE"] == "preserved"
+
+
 class TestStale:
     """M2.2 — surface cold/unlinked requirements."""
 

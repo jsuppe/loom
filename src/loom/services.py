@@ -2535,6 +2535,82 @@ def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
     return {"req_id": req_id, "status": status}
 
 
+def audit_rationale(store: LoomStore) -> dict[str, Any]:
+    """Preview the impact of flipping
+    ``LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1`` (M11.4 Phase B).
+
+    Today (Phase A, default off): ``Requirement.is_complete()`` checks
+    elaboration + acceptance_criteria. With the flag on, it ALSO
+    requires prose rationale or non-empty rationale_links.
+
+    This audit walks every active (non-superseded, non-archived)
+    requirement and reports:
+
+      * ``would_flip``: reqs that are currently is_complete()=True but
+        would become False under the new check (i.e. elaborated +
+        acceptance_criteria + NO rationale and NO links).
+      * ``already_failing``: reqs that fail the basic check and would
+        also fail the new check — no behavior change.
+      * ``unaffected``: reqs that pass both checks — no behavior change.
+
+    Returns::
+
+        {
+            "active_total": int,
+            "would_flip": [{"req_id", "domain", "value"}],
+            "would_flip_count": int,
+            "already_failing": int,
+            "unaffected": int,
+        }
+    """
+    import os as _os
+
+    # Save and restore the env flag so the audit doesn't accidentally
+    # mutate it for the rest of the process.
+    saved = _os.environ.pop("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", None)
+    try:
+        active = [
+            r for r in store.list_requirements(include_superseded=False)
+            if r.status not in ("archived", "rationale_needed")
+        ]
+
+        # Default-mode is_complete (rationale not required).
+        current_complete = {r.id: r.is_complete() for r in active}
+
+        # New-mode is_complete (rationale required).
+        _os.environ["LOOM_REQUIRE_RATIONALE_FOR_COMPLETE"] = "1"
+        new_complete = {r.id: r.is_complete() for r in active}
+    finally:
+        _os.environ.pop("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE", None)
+        if saved is not None:
+            _os.environ["LOOM_REQUIRE_RATIONALE_FOR_COMPLETE"] = saved
+
+    would_flip: list[dict[str, Any]] = []
+    already_failing = 0
+    unaffected = 0
+    for r in active:
+        cur = current_complete[r.id]
+        new = new_complete[r.id]
+        if cur and not new:
+            would_flip.append({
+                "req_id": r.id,
+                "domain": r.domain,
+                "value": r.value,
+            })
+        elif not cur:
+            already_failing += 1
+        else:  # cur and new
+            unaffected += 1
+
+    return {
+        "active_total": len(active),
+        "would_flip": would_flip,
+        "would_flip_count": len(would_flip),
+        "already_failing": already_failing,
+        "unaffected": unaffected,
+    }
+
+
 def archive(store: LoomStore, req_id: str) -> dict[str, Any]:
     """Mark a requirement as archived (M2.3).
 

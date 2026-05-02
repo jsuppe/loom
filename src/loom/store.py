@@ -253,12 +253,30 @@ class Requirement:
         return cls(**d)
     
     def is_complete(self) -> bool:
-        """Check if requirement has full refinement."""
-        return bool(
-            self.elaboration and 
-            self.acceptance_criteria and 
-            len(self.acceptance_criteria) > 0
+        """Check if requirement has full refinement.
+
+        Default: requires elaboration + at least one acceptance
+        criterion.
+
+        M11.4 Phase A (gated breaking change): when
+        ``LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1``, ALSO requires
+        either prose ``rationale`` or non-empty ``rationale_links``.
+        Default off — preserves existing behavior. Phase B (next
+        release) flips the default to on; Phase C removes the flag.
+        Use ``loom audit-rationale`` to preview the impact before
+        flipping.
+        """
+        import os as _os
+        basic = bool(
+            self.elaboration
+            and self.acceptance_criteria
+            and len(self.acceptance_criteria) > 0
         )
+        if not basic:
+            return False
+        if _os.environ.get("LOOM_REQUIRE_RATIONALE_FOR_COMPLETE") == "1":
+            return bool(self.rationale or self.rationale_links)
+        return True
 
 
 @dataclass

@@ -869,6 +869,38 @@ def cmd_intake(args):
     return 0
 
 
+def cmd_audit_rationale(args):
+    """Preview the impact of LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1
+    (M11.4 Phase B). Reports which reqs would flip from
+    is_complete()=True to False under the new check."""
+    store = LoomStore(args.project)
+    data = services.audit_rationale(store)
+
+    if getattr(args, "json", False):
+        import json as _json
+        print(_json.dumps(data, indent=2))
+        return 0
+
+    print(f"🧵 Loom Audit Rationale — {args.project}")
+    print()
+    print(f"Active requirements: {data['active_total']}")
+    print(f"  unaffected (pass both):       {data['unaffected']}")
+    print(f"  already failing basic check:  {data['already_failing']}")
+    print(f"  WOULD FLIP under new check:   {data['would_flip_count']}")
+    if data['would_flip']:
+        print()
+        print("These requirements are currently complete but would "
+              "become incomplete when LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1:")
+        for r in data['would_flip']:
+            print(f"  ⚠ {r['req_id']}  [{r['domain']}]")
+            print(f"    {r['value'][:80]}{'...' if len(r['value']) > 80 else ''}")
+        print()
+        print("To clear: add `--rationale \"...\"` or `--derives-from REQ-X` "
+              "to each via `loom extract` (or use `loom refine` to add "
+              "rationale in place).")
+    return 0
+
+
 def cmd_needs_rationale(args):
     """List requirements with status=rationale_needed (M11.1).
 
@@ -2426,6 +2458,13 @@ def main():
     )
     p_needsr.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # audit-rationale (M11.4) — preview Phase B's is_complete() change
+    p_audit = sp(
+        "audit-rationale",
+        help="Preview LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1 impact (M11.4)",
+    )
+    p_audit.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # intake-stats (M11.5 P3) — aggregate the intake JSONL log
     p_istats = sp(
         "intake-stats",
@@ -2602,6 +2641,7 @@ def main():
         "indexer-doctor": cmd_indexer_doctor,
         "related": cmd_related,
         "needs-rationale": cmd_needs_rationale,
+        "audit-rationale": cmd_audit_rationale,
         "intake": cmd_intake,
         "intake-stats": cmd_intake_stats,
         "task": cmd_task,

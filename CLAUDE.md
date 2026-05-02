@@ -73,6 +73,7 @@ loom/
 | `needs-rationale` | List requirements captured without rationale or linkage (M11.1) | Yes |
 | `intake [--text "..."]` | Manually run the intake hook on a chat message (M11.5 P1) | Yes |
 | `intake-stats` | Aggregate intake-hook activity from `.intake-log.jsonl` (M11.5 P3) | Yes |
+| `audit-rationale` | Preview `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` impact (M11.4) | Yes |
 | `indexer-doctor` | Health check for the semantic-indexer pipeline (M10.5) | Yes |
 | `check <file>` | Multi-channel drift detection (content/structural/superseded; M10.4) | Yes |
 | `link <file>` | Link code to requirements (auto, `--req`, or `--symbol`) | — |

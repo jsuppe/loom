@@ -84,11 +84,35 @@ Design + threshold-calibration pilot in
       full-via-prose, full-via-links, zero, partial-split,
       rationale_needed exclusion, 5-component formula, 5-key
       components dict.
-- [ ] **11.4 `is_complete()` extension.** Current
-      `Requirement.is_complete()` checks elaboration + acceptance
-      criteria. Extending to require rationale-or-links is a breaking
-      change for callers; gate behind a config flag for one release
-      before flipping default.
+- [x] **11.4 `is_complete()` extension (Phase A).**
+      `Requirement.is_complete()` now respects
+      `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1`: when set, ALSO requires
+      prose `rationale` OR non-empty `rationale_links` on top of the
+      existing elaboration + acceptance_criteria check. Default off
+      preserves prior behavior; only the literal `"1"` enables (so
+      `"0"`, `"false"`, empty are all off). Phase B (next release)
+      flips the default to on; Phase C removes the flag.
+
+      `services.audit_rationale(store)` previews the impact of
+      flipping by classifying every active requirement as one of:
+      `would_flip` (currently `is_complete()=True`, would become
+      False), `already_failing` (basic check fails, no behavior
+      change), `unaffected` (passes both checks). Properly excludes
+      archived and `rationale_needed` reqs from active. Restores
+      the env flag on exit so the audit doesn't pollute the
+      caller's environment.
+
+      CLI: `loom audit-rationale [--json]` pretty-prints the buckets
+      and lists `would_flip` reqs with a remediation suggestion.
+
+      Tests: 12 new (7 in `TestIsCompleteGate` + 5 in
+      `TestAuditRationale`) covering env-flag semantics, both
+      rationale sources qualifying, classification correctness,
+      and env-leak prevention. Full suite passes.
+
+      **M11 milestone complete.** All five sub-items shipped (M11.1
+      mechanic, M11.2 doc rendering, M11.3 health-score, M11.4
+      gated is_complete, M11.5 intake hook P0-P4).
 - [ ] **11.5 Intake hook.** UserPromptSubmit hook that classifies
       incoming user messages, runs `find_related_requirements`,
       proposes top-2 candidates as system-reminder, and surfaces
