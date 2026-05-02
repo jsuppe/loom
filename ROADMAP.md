@@ -211,15 +211,29 @@ pipeline complexity.
       of `tsserver` checkJs mode — pending follow-up). 13 unit +
       integration tests pass. Install: `npm install -g
       typescript-language-server typescript`.
-- [ ] **10.3d phQ5 — JsIndexer end-to-end validation.** Author a
-      benchmark scenario with real sibling JS files (currently the
-      crosssession_js scenario only ships retry.js; phQ3 used a
-      hand-authored stub for the references). Re-run the 4-cell
-      sweep with `JsIndexer` registered. Validation target:
-      replicate phQ3's +placebo (90%) and +rat (100%) numbers on
-      real LSP output. Until phQ5 lands, the JsIndexer is shipped
-      based on the architecture seam being right + smoke validation
-      that output shape matches phQ3, not on a falsifying experiment.
+- [x] **10.3d phQ5 — JsIndexer end-to-end validation.** Authored
+      a parallel ESM scenario (`s1_swallow_error_esm/`) with real
+      sibling files (`retry.js` + `backoff_loop.js` + `sync_worker.js`
+      + `package.json` + `jsconfig.json`) so typescript-language-server
+      could index a real project. N=40, 4 cells × 10. **Validated
+      partially:** rat cell saturates at 100% (matches phQ3 stub),
+      confirming the rationale-amplification pitch holds with real
+      LSP output. **Falsified partially:** placebo cell drops 90%
+      → 20% (-70pp) — the phQ3 stub's lift on placebo was not pure
+      structural facts. The hand-authored stub had additional
+      curated content (test references, adjacent type definitions)
+      that real `textDocument/references` doesn't surface. Identifies
+      two concrete follow-ups to close the gap (import-filtering,
+      adjacent type defs). Findings:
+      [`FINDINGS-bakeoff-v2-js-real-lsp.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-real-lsp.md).
+- [ ] **10.3e JsIndexer v2: filter import refs + adjacent type defs.**
+      The phQ5 placebo gap is attributable to the real LSP returning
+      noisier output than the hand-authored stub. Two bounded
+      improvements: (a) skip reference snippets that are import
+      statements (5 LoC heuristic); (b) for symbols mentioned in
+      reference snippets, query `textDocument/definition` and append
+      bare signatures (~30-50 LoC). Rerun as phQ6. Validation
+      target: lift placebo cell from 20% toward phQ3's 90%.
 - [ ] **10.4 Structural drift detection in `services.check`** — add
       the structural-signal channel to `drift_detected`. Blocked on
       real indexer.

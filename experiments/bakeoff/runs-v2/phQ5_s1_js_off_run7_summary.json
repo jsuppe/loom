@@ -1,0 +1,23 @@
+{
+  "phase": "Q5_crosssession_js_real_lsp",
+  "scenario": "S1_esm",
+  "cell": "off",
+  "run_id": "7",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 719,
+  "output_tokens": 188,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp",
+  "lsp_elapsed_s": 0.5,
+  "semantic_context_chars": 1397,
+  "llm_elapsed_s": 14.1,
+  "wall_s": 14.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ5_s1_js_4jgxky8d",
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

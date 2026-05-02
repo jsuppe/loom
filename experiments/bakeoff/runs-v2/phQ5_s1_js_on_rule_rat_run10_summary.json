@@ -1,0 +1,23 @@
+{
+  "phase": "Q5_crosssession_js_real_lsp",
+  "scenario": "S1_esm",
+  "cell": "on-rule+rat",
+  "run_id": "10",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 370,
+  "input_tokens": 852,
+  "output_tokens": 223,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp",
+  "lsp_elapsed_s": 0.49,
+  "semantic_context_chars": 1397,
+  "llm_elapsed_s": 16.7,
+  "wall_s": 17.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phQ5_s1_js__ifu52gv",
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\nAll fetch attempts failed: connection failed: http://example.com\nAll fetch attempts failed: connection failed: http://example.com\n"
+}
