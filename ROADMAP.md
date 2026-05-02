@@ -177,9 +177,49 @@ pipeline complexity.
       Side fix: phL2/phM2/phQ2 harnesses patched to write summary
       files even on Ollama-call failure, so future 32b crashes don't
       silently drop trials.
-- [ ] **10.3 First real indexer: `KytheIndexer` (C++) OR
-      `PyrightIndexer` (Python).** Pick whichever gets us a falsifying
-      run faster.
+- [x] **10.3a phQ3 — clean-stub falsification of phQ2 (JS).** Stripped
+      the JSDoc-style contract assertions from the JS stub, leaving
+      peek-references-style structural facts only. N=40 (4 cells × 10).
+      Result: phQ2's striking 0→60% off-cell lift was the JSDoc rule
+      leak; on the clean stub it collapses back to 0%. The on-rule
+      cell collapses below the no-stub baseline (0% vs 20%) — bare
+      structural facts can be an *active distractor* without
+      explanation alongside. Placebo and rationale cells stay near
+      saturation (90% / 100%). Findings:
+      [`FINDINGS-bakeoff-v2-js-stub-clean.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-stub-clean.md).
+- [x] **10.3b phQ4 — 32b no-stub baseline (JS).** Holds the model at
+      qwen2.5-coder:32b and removes the stub. N=40. Decomposes the
+      phQ3 vs phQ baseline +rat 60→100% lift into +20pp model tier
+      and +20pp stub effect (additive). Surfaces a counter-intuitive
+      finding: **the bigger code-specialist model HURTS bare-rule
+      cells on contrarian specs** (-20pp on rule, -30pp on placebo
+      vs qwen3.5). qwen2.5-coder:32b's "good practice" priors fight
+      the contrarian rule. The stub effect is concentrated on
+      placebo (**+80pp**, 10→90%) — strongest cell-specific stub
+      effect across all M10 experiments. Reframes the JsIndexer
+      product pitch: the indexer **amplifies the rationale signal**,
+      it doesn't fix bare rule compliance. Findings:
+      [`FINDINGS-bakeoff-v2-js-no-stub-32b.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-js-no-stub-32b.md).
+- [x] **10.3c First real indexer: `JsIndexer` (LSP-backed,
+      typescript-language-server).** `src/loom/indexers_js.py`.
+      Subprocess wraps `typescript-language-server --stdio` over
+      JSON-RPC, surfaces peek-references-style context shaped to
+      match the phQ3 stub. Soft-fails to empty context with a one-
+      time warning when the binary isn't on PATH. Validated against
+      a JS fixture: cross-file references resolve correctly through
+      ES module imports (CommonJS `require()` is a known limitation
+      of `tsserver` checkJs mode — pending follow-up). 13 unit +
+      integration tests pass. Install: `npm install -g
+      typescript-language-server typescript`.
+- [ ] **10.3d phQ5 — JsIndexer end-to-end validation.** Author a
+      benchmark scenario with real sibling JS files (currently the
+      crosssession_js scenario only ships retry.js; phQ3 used a
+      hand-authored stub for the references). Re-run the 4-cell
+      sweep with `JsIndexer` registered. Validation target:
+      replicate phQ3's +placebo (90%) and +rat (100%) numbers on
+      real LSP output. Until phQ5 lands, the JsIndexer is shipped
+      based on the architecture seam being right + smoke validation
+      that output shape matches phQ3, not on a falsifying experiment.
 - [ ] **10.4 Structural drift detection in `services.check`** — add
       the structural-signal channel to `drift_detected`. Blocked on
       real indexer.
