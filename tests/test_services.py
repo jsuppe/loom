@@ -577,6 +577,212 @@ class TestExtract:
         req = store.get_requirement(result["req_id"])
         assert req.rationale == "prevent abuse"
 
+    # M11.1 — rationale linkage tests
+
+    def test_no_rationale_no_links_defaults_to_rationale_needed(self, store):
+        result = services.extract(
+            store, domain="behavior", value="some bare requirement",
+        )
+        assert result["status"] == "rationale_needed"
+        req = store.get_requirement(result["req_id"])
+        assert req.status == "rationale_needed"
+        assert req.rationale is None
+        assert (req.rationale_links or []) == []
+
+    def test_rationale_text_alone_is_pending(self, store):
+        result = services.extract(
+            store, domain="behavior", value="rate limit again",
+            rationale="incident 2026-01",
+        )
+        assert result["status"] == "pending"
+
+    def test_rationale_links_alone_is_pending(self, store):
+        parent = services.extract(
+            store, domain="behavior", value="parent decision",
+            rationale="originator",
+        )
+        result = services.extract(
+            store, domain="behavior", value="derives from parent",
+            rationale_links=[parent["req_id"]],
+        )
+        assert result["status"] == "pending"
+        assert result["rationale_links"] == [parent["req_id"]]
+        req = store.get_requirement(result["req_id"])
+        assert req.rationale_links == [parent["req_id"]]
+
+    def test_rationale_links_round_trip_through_store(self, store):
+        parent = services.extract(
+            store, domain="behavior", value="round-trip parent",
+            rationale="origin",
+        )
+        child = services.extract(
+            store, domain="behavior", value="round-trip child",
+            rationale_links=[parent["req_id"]],
+        )
+        roundtrip = store.get_requirement(child["req_id"])
+        assert roundtrip.rationale_links == [parent["req_id"]]
+
+    def test_rationale_links_dedup_and_strip(self, store):
+        p1 = services.extract(store, domain="b", value="p1", rationale="r")
+        p2 = services.extract(store, domain="b", value="p2", rationale="r")
+        result = services.extract(
+            store, domain="b", value="dedup test",
+            rationale_links=[
+                p1["req_id"], p2["req_id"], p1["req_id"], "  ",
+                f"  {p2['req_id']}  ",
+            ],
+        )
+        # Dupes dropped, blanks dropped, whitespace stripped.
+        assert result["rationale_links"] == [p1["req_id"], p2["req_id"]]
+
+    def test_invalid_link_target_raises(self, store):
+        with pytest.raises(ValueError, match="does not resolve"):
+            services.extract(
+                store, domain="behavior", value="bad link",
+                rationale_links=["REQ-doesnotexist"],
+            )
+
+    def test_superseded_link_target_raises(self, store):
+        parent = services.extract(
+            store, domain="b", value="superseded parent", rationale="x",
+        )
+        store.supersede_requirement(parent["req_id"])
+        with pytest.raises(ValueError, match="superseded"):
+            services.extract(
+                store, domain="b", value="links to superseded",
+                rationale_links=[parent["req_id"]],
+            )
+
+    def test_archived_link_target_raises(self, store):
+        parent = services.extract(
+            store, domain="b", value="will be archived", rationale="x",
+        )
+        services.set_status(store, parent["req_id"], "archived")
+        with pytest.raises(ValueError, match="archived"):
+            services.extract(
+                store, domain="b", value="links to archived",
+                rationale_links=[parent["req_id"]],
+            )
+
+    def test_cycle_detection_via_transitive_chain(self, store, fake_embedding):
+        # A → B → C; trying to create D that derives from A is fine,
+        # but trying to make A derive from D would be a cycle. Since
+        # extract doesn't expose post-creation linkage editing, we
+        # construct the cycle scenario by directly manipulating the
+        # store: a pre-existing req whose rationale_links transitively
+        # point at an id that would be the new req's deterministic id.
+        from loom.store import Requirement
+        # Step 1: figure out what new_req_id the about-to-be-extracted
+        # req would get, so we can make an existing req link to it.
+        import hashlib as _h
+        domain = "behavior"
+        value = "cycle anchor target"
+        new_id = "REQ-" + _h.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]
+        # Step 2: hand-craft an existing req that already links to new_id.
+        existing = Requirement(
+            id="REQ-cyclesrc",
+            domain="behavior",
+            value="existing req that links forward",
+            source_msg_id="test", source_session="test",
+            timestamp="2026-01-01T00:00:00Z",
+            rationale="originator",
+            rationale_links=[new_id],
+        )
+        store.add_requirement(existing, fake_embedding)
+        # Step 3: try to extract the new req with rationale_links pointing
+        # back to REQ-cyclesrc — that closes the loop.
+        with pytest.raises(ValueError, match="cycle"):
+            services.extract(
+                store, domain=domain, value=value,
+                rationale_links=["REQ-cyclesrc"],
+            )
+
+    def test_self_link_rejected(self, store):
+        # The deterministic ID lets us anticipate the new req's id and
+        # try to link to itself. The validator must reject.
+        import hashlib as _h
+        domain = "behavior"
+        value = "self-link attempt"
+        self_id = "REQ-" + _h.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]
+        with pytest.raises(ValueError, match="itself"):
+            services.extract(
+                store, domain=domain, value=value,
+                rationale_links=[self_id],
+            )
+
+
+class TestFindRelatedRequirements:
+    """M11.1 — semantic candidate retrieval for rationale linkage."""
+
+    def test_finds_close_match(self, store):
+        services.extract(
+            store, domain="behavior",
+            value="Drift detection should fire when file content has "
+                  "diverged from the linked requirement's recorded snapshot.",
+            rationale="catch byte-level changes",
+        )
+        results = services.find_related_requirements(
+            store, "report drift when file body changes after linking",
+            min_score=-10.0,  # accept any score (hash-fallback embeddings can go negative)  # accept anything for this test
+        )
+        assert len(results) >= 1
+        assert "drift" in results[0]["value"].lower()
+
+    def test_respects_min_score(self, store):
+        services.extract(
+            store, domain="behavior", value="totally unrelated thing",
+            rationale="x",
+        )
+        results = services.find_related_requirements(
+            store, "rate limit the API endpoint",
+            min_score=0.99,  # impossibly high
+        )
+        assert results == []
+
+    def test_excludes_superseded(self, store):
+        r = services.extract(
+            store, domain="behavior", value="will be superseded soon",
+            rationale="x",
+        )
+        store.supersede_requirement(r["req_id"])
+        results = services.find_related_requirements(
+            store, "will be superseded soon", min_score=0.0,
+        )
+        assert all(x["req_id"] != r["req_id"] for x in results)
+
+    def test_excludes_rationale_needed(self, store):
+        # A req captured without rationale starts at rationale_needed
+        # — those should not be candidates for new rationale linkage
+        # (you can't ground a chain in something that itself has no
+        # justification).
+        r = services.extract(
+            store, domain="behavior", value="captured without explanation",
+        )
+        assert r["status"] == "rationale_needed"
+        results = services.find_related_requirements(
+            store, "captured without explanation", min_score=0.0,
+        )
+        assert all(x["req_id"] != r["req_id"] for x in results)
+
+    def test_returns_top_n_only(self, store):
+        for i in range(5):
+            services.extract(
+                store, domain="behavior",
+                value=f"requirement number {i} about caching policy",
+                rationale="x",
+            )
+        results = services.find_related_requirements(
+            store, "caching policy requirement",
+            limit=2, min_score=-10.0,  # hash-fallback scores can be negative
+        )
+        assert len(results) == 2
+
+    def test_empty_store_returns_empty(self, store):
+        results = services.find_related_requirements(
+            store, "any text", min_score=0.0,
+        )
+        assert results == []
+
 
 class TestCheck:
     def test_missing_file_raises(self, store):

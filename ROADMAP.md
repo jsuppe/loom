@@ -1,5 +1,78 @@
 # Loom Roadmap
 
+## Milestone 11: Rationale linkage (v1.x)
+
+**Motivation.** The full M10 series (phQ3 / phQ4 / phQ5 / phQ7) showed
+that **rationale is the load-bearing signal** for compliance on
+contrarian specs — not the indexer, not the executor, not model size.
+Bare rule + no rationale = 0% compliance regardless of indexer; rule
++ rationale = 100% saturation. So rationale capture is the single
+most important user discipline, and the discipline users skip most
+often.
+
+M11.1 makes rationale a structured field, not just free-form prose:
+requirements can derive from earlier decisions via citation chains
+(`rationale_links: list[req_id]`), and reqs without rationale or
+linkage are flagged with a visible-debt status `rationale_needed`
+rather than silently captured as "thin." Prepares the ground for a
+later intake hook (proposed M11.2) that auto-detects requirement-
+shaped utterances and proposes linkage from existing decisions.
+
+Design + threshold-calibration pilot in
+[`docs/DESIGN-rationale-linkage.md`](docs/DESIGN-rationale-linkage.md).
+
+### 11.1 Tasks
+
+- [x] **11.1a Threshold calibration pilot.** Synthesized a 24-req
+      Loom-domain corpus + 8 hand-labeled queries; ran them through
+      `services.query` to find a confidence threshold that cleanly
+      separates "real candidate" from "noise." Result: top-1
+      precision 71%, **top-2 precision 100%**, correct-match scores
+      0.713–0.818, unrelated baseline 0.600. Recommended threshold
+      0.66. Validated the "propose top-2, user picks" UX over
+      auto-link top-1 (Q4 had a 0.003-point separation between
+      correct and noise — top-1 alone is unreliable on ambiguous
+      queries). Pilot:
+      `experiments/pilot/rationale_linkage_pilot.py`.
+- [x] **11.1b Mechanic shipped.** `Requirement.rationale_links`
+      field (`list[str]`, backward-compat via `setdefault`).
+      `rationale_needed` added to `VALID_STATUSES`.
+      `services.find_related_requirements(text, min_score=0.66,
+      limit=2)` wraps `query` with score floor + status filter +
+      structured shape. `services.extract` accepts `rationale_links`
+      with full validation (link must resolve, must not be
+      superseded/archived, no self-links, no transitive cycles).
+      Reqs with neither prose rationale nor links default to
+      `status=rationale_needed`. CLI: `loom extract --derives-from`
+      (repeatable), `loom related "..."`, `loom needs-rationale`.
+      Bug-fix: `LoomStore.set_requirement_status` had a hardcoded
+      valid-status list missing `archived` (M2.3 era) and now
+      `rationale_needed` — synced to match `services.VALID_STATUSES`.
+      Tests: 14 new (8 in TestExtract for rationale-linkage paths,
+      6 in TestFindRelatedRequirements for retrieval semantics).
+
+### 11.2 Open work (deferred)
+
+- [ ] **11.2 Doc rendering.** REQUIREMENTS.md "Builds on:"
+      subsections + `rationale_needed` markers in
+      `src/loom/docs.py`. Cleanly separable from the mechanic.
+- [ ] **11.3 Health-score integration.** Decide whether to add a
+      `rationale_coverage` component (5-component avg) or replace
+      one (currently `non_drift`). The design doc recommends
+      starting conservative — add as a separate metric without
+      changing the headline number.
+- [ ] **11.4 `is_complete()` extension.** Current
+      `Requirement.is_complete()` checks elaboration + acceptance
+      criteria. Extending to require rationale-or-links is a breaking
+      change for callers; gate behind a config flag for one release
+      before flipping default.
+- [ ] **11.5 Intake hook.** UserPromptSubmit hook that classifies
+      incoming user messages, runs `find_related_requirements`,
+      proposes top-2 candidates as system-reminder, and surfaces
+      `rationale_needed` debt back into the agent's context. The
+      bigger commitment — depends on the mechanic being trusted in
+      manual workflows first.
+
 ## Milestone 10: Semantic indexer integration (PLANNED — v1.x)
 
 **Motivation.** The cross-language map (M8.4) showed C++ in a "collapsed"

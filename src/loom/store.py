@@ -213,7 +213,13 @@ class Requirement:
     # Enhanced fields for actionable requirements
     elaboration: Optional[str] = None  # Agent-generated expansion of how to satisfy this
     rationale: Optional[str] = None  # Why this requirement exists (decision context)
-    status: str = "pending"  # pending, in_progress, implemented, verified, superseded, archived
+    # M11.1: structured citation chain. When this requirement derives
+    # from existing decisions, list their req_ids here. Coexists with
+    # `rationale` (prose) — a requirement may have either, both, or
+    # neither. The third case sets status="rationale_needed" so the
+    # missing-rationale debt is visible.
+    rationale_links: Optional[List[str]] = None
+    status: str = "pending"  # pending, in_progress, implemented, verified, superseded, archived, rationale_needed
     acceptance_criteria: Optional[List[str]] = None  # Definition of done
     test_spec_id: Optional[str] = None  # Link to test specification
     conversation_context: Optional[str] = None  # Key conversation excerpts
@@ -227,6 +233,10 @@ class Requirement:
         # Handle None/empty lists - ChromaDB rejects empty lists in metadata
         if not d.get('acceptance_criteria'):
             d['acceptance_criteria'] = ["TBD"]
+        # M11.1: rationale_links uses [] for unset (post-SQLite convention,
+        # matching satisfies_specs / satisfies_patterns).
+        if d.get('rationale_links') is None:
+            d['rationale_links'] = []
         return d
 
     @classmethod
@@ -234,6 +244,7 @@ class Requirement:
         # Handle missing fields for backwards compatibility
         d.setdefault('elaboration', None)
         d.setdefault('rationale', None)
+        d.setdefault('rationale_links', None)  # M11.1 (back-compat)
         d.setdefault('status', 'pending')
         d.setdefault('acceptance_criteria', None)
         d.setdefault('test_spec_id', None)
@@ -667,11 +678,16 @@ class LoomStore:
         return req
     
     def set_requirement_status(self, req_id: str, status: str) -> bool:
-        """Update requirement status (pending, in_progress, implemented, verified, superseded)."""
-        valid_statuses = ["pending", "in_progress", "implemented", "verified", "superseded"]
+        """Update requirement status. Synchronized with
+        ``services.VALID_STATUSES`` (kept as a literal here to avoid
+        importing from the service layer)."""
+        valid_statuses = [
+            "pending", "in_progress", "implemented", "verified",
+            "superseded", "archived", "rationale_needed",
+        ]
         if status not in valid_statuses:
             return False
-        
+
         req = self.update_requirement(req_id, {"status": status})
         return req is not None
     

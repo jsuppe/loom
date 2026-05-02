@@ -103,14 +103,20 @@ def cmd_extract(args):
             continue
         domain, value = content.split("|", 1)
 
-        result = services.extract(
-            store,
-            domain=domain,
-            value=value,
-            msg_id=args.msg_id or "manual",
-            session=args.session or "cli",
-            rationale=getattr(args, 'rationale', None),
-        )
+        rationale_links = list(getattr(args, "derives_from", None) or [])
+        try:
+            result = services.extract(
+                store,
+                domain=domain,
+                value=value,
+                msg_id=args.msg_id or "manual",
+                session=args.session or "cli",
+                rationale=getattr(args, 'rationale', None),
+                rationale_links=rationale_links or None,
+            )
+        except ValueError as e:
+            print(f"✗ extract rejected: {e}")
+            continue
 
         if result["conflicts"]:
             print(f"⚠️  CONFLICT DETECTED for: {result['value']}")
@@ -119,7 +125,10 @@ def cmd_extract(args):
             print(f"   → Consider using `loom supersede {result['conflicts'][0]['existing_id']}` first")
             print()
 
-        print(f"✓ {result['req_id']}: [{result['domain']}] {result['value']}")
+        marker = "⚠ rationale_needed" if result.get("status") == "rationale_needed" else "✓"
+        print(f"{marker} {result['req_id']}: [{result['domain']}] {result['value']}")
+        if result.get("rationale_links"):
+            print(f"   builds on: {', '.join(result['rationale_links'])}")
         extracted += 1
 
     print()
@@ -703,6 +712,87 @@ def cmd_stale(args):
         print(f"  {r['id']}  [{r['domain']}]  {kind}")
         print(f"    {r['value'][:70]}{'...' if len(r['value']) > 70 else ''}")
         print(f"    last_referenced: {last}  ({r['days_since_referenced']}d ago)")
+    return 0
+
+
+def cmd_related(args):
+    """Find existing requirements semantically related to a query (M11.1).
+
+    Used as the read-only counterpart to ``loom extract --derives-from``:
+    given some text, surface the top candidate prior decisions you might
+    cite as rationale.
+    """
+    store = LoomStore(args.project)
+    results = services.find_related_requirements(
+        store, args.text,
+        limit=args.limit,
+        min_score=args.min_score,
+    )
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(results, indent=2))
+        return 0
+
+    print(f"🧵 Related requirements — \"{args.text[:60]}\"")
+    print()
+    if not results:
+        print(
+            "No requirements above the score threshold "
+            f"({args.min_score}). The new requirement looks novel — "
+            "supply --rationale or accept rationale_needed status."
+        )
+        return 0
+    for r in results:
+        print(f"  {r['req_id']}  [{r['domain']}]  score={r['score']}")
+        print(f"    {r['value'][:80]}{'...' if len(r['value']) > 80 else ''}")
+        if r.get("rationale"):
+            print(f"    rationale: {r['rationale'][:80]}")
+        if r.get("rationale_links"):
+            print(f"    derives from: {', '.join(r['rationale_links'])}")
+        print()
+    return 0
+
+
+def cmd_needs_rationale(args):
+    """List requirements with status=rationale_needed (M11.1).
+
+    The visible-debt surface — reqs the user has captured but never
+    explained, either with prose or with a citation to a prior
+    decision. Pairs with ``loom stale`` and ``loom doctor``.
+    """
+    store = LoomStore(args.project)
+    rows = [
+        r for r in store.list_requirements(include_superseded=False)
+        if r.status == "rationale_needed"
+    ]
+
+    if args.json:
+        import json as _json
+        print(_json.dumps(
+            [{
+                "req_id": r.id, "domain": r.domain, "value": r.value,
+                "timestamp": r.timestamp,
+            } for r in rows],
+            indent=2,
+        ))
+        return 0
+
+    if not rows:
+        print("No requirements need rationale. ✓")
+        return 0
+    print(f"🧵 Requirements without rationale ({len(rows)}):")
+    print()
+    for r in rows:
+        print(f"  ⚠ {r.id}  [{r.domain}]")
+        print(f"    {r.value[:80]}{'...' if len(r.value) > 80 else ''}")
+        print(f"    captured: {r.timestamp}")
+    print()
+    print(
+        "To resolve: `loom set-status REQ-id pending` after running "
+        "extract again with --rationale or --derives-from, or use "
+        "`loom refine` to add rationale in place."
+    )
     return 0
 
 
@@ -1923,6 +2013,12 @@ def main():
     p_extract.add_argument("--msg-id", help="Message ID for provenance")
     p_extract.add_argument("--text", "-t", help="Requirement text")
     p_extract.add_argument("--rationale", "-r", help="Why this requirement exists")
+    p_extract.add_argument(
+        "--derives-from", action="append", default=[],
+        help="REQ-id this requirement derives from (M11.1). Repeatable. "
+             "Used as a structured citation chain alongside or instead "
+             "of --rationale.",
+    )
     
     # check
     p_check = sp("check", help="Check for drift")
@@ -2189,6 +2285,32 @@ def main():
     )
     p_idoc.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # related (M11.1) — find prior decisions a new req might cite
+    p_related = sp(
+        "related",
+        help="Find existing requirements related to a query "
+             "(rationale-linkage candidates)",
+    )
+    p_related.add_argument("text", help="Free-form text to match against")
+    p_related.add_argument(
+        "--limit", type=int, default=services.RATIONALE_LINK_TOP_N,
+        help=f"Max candidates (default {services.RATIONALE_LINK_TOP_N})",
+    )
+    p_related.add_argument(
+        "--min-score", type=float,
+        default=services.RATIONALE_LINK_MIN_SCORE,
+        help=f"Cosine similarity floor (default "
+             f"{services.RATIONALE_LINK_MIN_SCORE})",
+    )
+    p_related.add_argument("--json", "-j", action="store_true", help="JSON output")
+
+    # needs-rationale (M11.1) — debt surface
+    p_needsr = sp(
+        "needs-rationale",
+        help="List requirements captured without rationale or linkage",
+    )
+    p_needsr.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # task subcommand group
     p_task = sp("task", help="Manage atomic work items (Task entity)")
     task_subs = p_task.add_subparsers(dest="task_verb", required=True)
@@ -2333,6 +2455,8 @@ def main():
         "metrics": cmd_metrics,
         "health-score": cmd_health_score,
         "indexer-doctor": cmd_indexer_doctor,
+        "related": cmd_related,
+        "needs-rationale": cmd_needs_rationale,
         "task": cmd_task,
         "decompose": cmd_decompose,
     }

@@ -154,6 +154,78 @@ def query(
     ]
 
 
+# M11.1 — calibrated by experiments/pilot/rationale_linkage_pilot.py.
+# Top-2 precision was 100%; correct-match scores ranged 0.713–0.818;
+# unrelated-query top score was 0.600. 0.66 sits in the gap.
+RATIONALE_LINK_MIN_SCORE = 0.66
+RATIONALE_LINK_TOP_N = 2
+
+
+def find_related_requirements(
+    store: LoomStore,
+    text: str,
+    *,
+    limit: int = RATIONALE_LINK_TOP_N,
+    min_score: float = RATIONALE_LINK_MIN_SCORE,
+) -> list[dict[str, Any]]:
+    """Semantic search for prior decisions related to ``text`` (M11.1).
+
+    Wraps ``services.query`` with three policies the bare query
+    doesn't enforce:
+
+    * Drops candidates below ``min_score`` (cosine similarity).
+      Calibrated default 0.66 — see the design pilot
+      (`experiments/pilot/rationale_linkage_pilot.py`).
+    * Excludes superseded, archived, and rationale_needed reqs —
+      none of those should propagate as a rationale source.
+    * Returns at most ``limit`` candidates (default 2). Top-1 alone
+      is unreliable on ambiguous queries (pilot Q4: 3-thousandths
+      separated correct from incorrect); top-2 is reliable; top-N
+      where N>2 invites noise.
+
+    Result shape::
+
+        [{
+            "req_id": str,
+            "domain": str,
+            "value": str,
+            "rationale": Optional[str],
+            "rationale_links": list[str],
+            "score": float,  # 0..1 cosine similarity
+        }]
+
+    Sorted by score descending. Empty list when nothing meets
+    ``min_score``.
+    """
+    raw = query(store, text, limit=max(limit * 3, 6), include_archived=False)
+    out: list[dict[str, Any]] = []
+    for r in raw:
+        if r.get("superseded"):
+            continue
+        if r.get("status") in ("rationale_needed", "archived"):
+            continue
+        dist = r.get("distance") or 0.0
+        score = 1.0 - dist
+        if score < min_score:
+            continue
+        # Pull the full requirement to get rationale + links — the
+        # query() return shape is intentionally trimmed.
+        req = store.get_requirement(r["id"])
+        if req is None:
+            continue
+        out.append({
+            "req_id": req.id,
+            "domain": req.domain,
+            "value": req.value,
+            "rationale": req.rationale,
+            "rationale_links": list(req.rationale_links or []),
+            "score": round(score, 3),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def list_requirements(
     store: LoomStore,
     include_superseded: bool = False,
@@ -1000,13 +1072,28 @@ def extract(
     msg_id: str = "manual",
     session: str = "cli",
     rationale: str | None = None,
+    rationale_links: list[str] | None = None,
 ) -> dict[str, Any]:
     """Add a single requirement.
 
-    Returns {req_id, domain, value, conflicts}. Conflicts is a list of
-    conflict entries (same shape as `services.conflicts`); empty if none.
-    The requirement is added to the store regardless of conflicts —
-    callers (CLI, MCP) decide how to surface them.
+    Returns ``{req_id, domain, value, status, rationale_links, conflicts}``.
+    Conflicts is a list of conflict entries (same shape as
+    ``services.conflicts``); empty if none. The requirement is added
+    to the store regardless of conflicts — callers (CLI, MCP) decide
+    how to surface them.
+
+    M11.1 — rationale fields:
+      * ``rationale``: free-form prose justification (existing).
+      * ``rationale_links``: list of req_ids this requirement derives
+        from. Each must resolve to a non-superseded, non-archived
+        existing requirement. Cycles are rejected.
+      * If neither is provided, the new requirement's status defaults
+        to ``"rationale_needed"`` instead of ``"pending"`` so the
+        missing-rationale debt is visible.
+
+    Raises:
+        ValueError: when a ``rationale_links`` entry doesn't resolve,
+            points at a superseded/archived req, or would form a cycle.
 
     Note: callers that want to parse `REQUIREMENT: domain | text` syntax
     should do that themselves; this function takes structured fields.
@@ -1021,6 +1108,19 @@ def extract(
     timestamp = datetime.now(timezone.utc).isoformat()
     req_id = f"REQ-{_hashlib.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]}"
 
+    # M11.1: validate rationale_links before doing anything else so
+    # we fail fast on bad input.
+    cleaned_links: list[str] | None = None
+    if rationale_links:
+        cleaned_links = _validate_rationale_links(
+            store, req_id, rationale_links,
+        )
+
+    # M11.1: status defaults to rationale_needed when no rationale source
+    # was provided. Visible debt > silent thin requirement.
+    has_rationale_source = bool(rationale) or bool(cleaned_links)
+    initial_status = "pending" if has_rationale_source else "rationale_needed"
+
     req = Requirement(
         id=req_id,
         domain=domain,
@@ -1029,6 +1129,8 @@ def extract(
         source_session=session,
         timestamp=timestamp,
         rationale=rationale,
+        rationale_links=cleaned_links,
+        status=initial_status,
     )
 
     # Conflict check is best-effort. Done before adding so the conflict
@@ -1063,6 +1165,10 @@ def extract(
         store, "requirement_extracted",
         req_id=req_id, domain=domain,
         has_rationale=bool(rationale),
+        # M11.1: track linkage as a separate signal so future metrics
+        # can break "rationale-grounded vs not" down by source kind.
+        has_rationale_links=bool(cleaned_links),
+        status=req.status,
     )
     for c in conflicts_out:
         _record_event(
@@ -1075,8 +1181,102 @@ def extract(
         "req_id": req_id,
         "domain": domain,
         "value": value,
+        "status": req.status,  # M11.1
+        "rationale_links": list(cleaned_links or []),  # M11.1
         "conflicts": conflicts_out,
     }
+
+
+def _validate_rationale_links(
+    store: LoomStore,
+    new_req_id: str,
+    links: list[str],
+) -> list[str]:
+    """Validate the proposed rationale_links list (M11.1):
+
+    * Drop empties / duplicates while preserving order.
+    * Each entry must resolve to an existing requirement.
+    * Targets must not be superseded or archived (those have stopped
+      being load-bearing decisions).
+    * Reject self-links and cycles — if any target transitively links
+      back to ``new_req_id``, reject. ``new_req_id`` may not yet exist
+      in the store at validation time, so we walk targets' chains
+      looking for either ``new_req_id`` itself OR a back-edge to any
+      visited node (true cycle in the target graph would already have
+      been rejected at its creation, but defense in depth).
+
+    Returns the cleaned list. Raises ``ValueError`` on any failure.
+    """
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for link_id in links:
+        if not link_id or not isinstance(link_id, str):
+            raise ValueError(f"Invalid rationale_link entry: {link_id!r}")
+        link_id = link_id.strip()
+        if not link_id or link_id in seen:
+            continue
+        if link_id == new_req_id:
+            raise ValueError(
+                f"rationale_links cannot reference the requirement "
+                f"itself ({new_req_id})"
+            )
+        target = store.get_requirement(link_id)
+        if target is None:
+            raise ValueError(
+                f"rationale_links entry {link_id} does not resolve to "
+                f"an existing requirement"
+            )
+        if target.superseded_at is not None:
+            raise ValueError(
+                f"rationale_links entry {link_id} is superseded; pick a "
+                f"non-superseded requirement to derive from"
+            )
+        if target.status == "archived":
+            raise ValueError(
+                f"rationale_links entry {link_id} is archived"
+            )
+        # Cycle detection: walk the target's transitive links looking
+        # for new_req_id.
+        if _links_to(store, link_id, new_req_id, max_depth=20):
+            raise ValueError(
+                f"rationale_links would form a cycle: {link_id} "
+                f"already links transitively back to {new_req_id}"
+            )
+        cleaned.append(link_id)
+        seen.add(link_id)
+    return cleaned
+
+
+def _links_to(
+    store: LoomStore,
+    start_id: str,
+    target_id: str,
+    *,
+    max_depth: int = 20,
+) -> bool:
+    """BFS through ``rationale_links`` chains from ``start_id`` looking
+    for ``target_id``. Returns True on hit, False on exhaustion.
+    Bounds depth to keep pathological chains from hanging."""
+    visited: set[str] = set()
+    frontier = [start_id]
+    depth = 0
+    while frontier and depth < max_depth:
+        next_frontier: list[str] = []
+        for cur in frontier:
+            if cur in visited:
+                continue
+            visited.add(cur)
+            if cur == target_id:
+                return True
+            r = store.get_requirement(cur)
+            if r is None or not r.rationale_links:
+                continue
+            for nxt in r.rationale_links:
+                if nxt and nxt not in visited:
+                    next_frontier.append(nxt)
+        frontier = next_frontier
+        depth += 1
+    return False
 
 
 def _read_file_content(file_path: str, lines: str | None = None) -> str:
@@ -2059,6 +2259,7 @@ def link(
 VALID_STATUSES = (
     "pending", "in_progress", "implemented", "verified",
     "superseded", "archived",
+    "rationale_needed",  # M11.1: visible debt for reqs without rationale or links
 )
 
 
