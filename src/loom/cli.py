@@ -754,6 +754,58 @@ def cmd_related(args):
     return 0
 
 
+def cmd_intake_stats(args):
+    """Aggregate intake-hook activity from the JSONL log (M11.5 P3)."""
+    store = LoomStore(args.project)
+    data = services.intake_stats(store, tail=args.tail)
+
+    if getattr(args, "json", False):
+        import json as _json
+        print(_json.dumps(data, indent=2))
+        return 0
+
+    if not data["exists"]:
+        print(f"🧵 Loom Intake Stats — {args.project}")
+        print()
+        print(f"No intake log at {data['log_path']}.")
+        print("The intake hook hasn't fired yet — register "
+              "hooks/loom_intake.py in your .claude/settings.json.")
+        return 0
+
+    print(f"🧵 Loom Intake Stats — {args.project}")
+    print()
+    print(f"Fires: {data['fires']}")
+    if data['fires']:
+        print(f"  captured:  {data['captured']} ({data['captured_pct']}%)")
+        print()
+        print("By branch:")
+        for branch, n in sorted(
+            data['by_branch'].items(), key=lambda kv: -kv[1],
+        ):
+            print(f"  {branch:<30} {n}")
+        if data['noop_breakdown']:
+            print()
+            print("Noop reasons:")
+            for reason, n in sorted(
+                data['noop_breakdown'].items(), key=lambda kv: -kv[1],
+            ):
+                print(f"  {reason:<30} {n}")
+        gt = data['guardrail_triggers']
+        if any(gt.values()):
+            print()
+            print("Guardrail triggers:")
+            for k, v in gt.items():
+                if v:
+                    print(f"  {k:<30} {v}")
+        lat = data['latency_ms']
+        print()
+        print(f"Latency (ms):  p50={lat['p50']}  p95={lat['p95']}  "
+              f"p99={lat['p99']}  max={lat['max']}")
+        sc = data['candidates_top_score']
+        print(f"Top candidate score:  p50={sc['p50']}  p95={sc['p95']}")
+    return 0
+
+
 def cmd_intake(args):
     """Manually run the intake hook on a chat-style message (M11.5 P1).
 
@@ -2373,6 +2425,17 @@ def main():
     )
     p_needsr.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # intake-stats (M11.5 P3) — aggregate the intake JSONL log
+    p_istats = sp(
+        "intake-stats",
+        help="Aggregate intake-hook activity from the JSONL log",
+    )
+    p_istats.add_argument(
+        "--tail", type=int, default=None,
+        help="Only consider the last N entries",
+    )
+    p_istats.add_argument("--json", "-j", action="store_true", help="JSON output")
+
     # intake (M11.5 P1) — manual invocation of the intake hook logic
     p_intake = sp(
         "intake",
@@ -2539,6 +2602,7 @@ def main():
         "related": cmd_related,
         "needs-rationale": cmd_needs_rationale,
         "intake": cmd_intake,
+        "intake-stats": cmd_intake_stats,
         "task": cmd_task,
         "decompose": cmd_decompose,
     }

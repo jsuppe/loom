@@ -113,8 +113,16 @@ Design + threshold-calibration pilot in
           most messages will route through `rationale_needed` until
           dogfooding builds the corpus — which is exactly what the
           spec wants the hook to drive.
-    - [ ] **P3 stats + observability.** `loom intake-stats`
-          command, doctor integration.
+    - [x] **P3 stats + observability.** `services.intake_stats`
+          aggregates the intake JSONL log into per-branch counts,
+          captured (auto_link + captured_with_rationale) %, noop
+          breakdown by reason, guardrail trigger frequency, and
+          latency percentiles + top-candidate-score distribution.
+          New `loom intake-stats [--tail N] [--json]` CLI surfaces
+          it. `services.doctor` gains an `intake` check that warns
+          when classifier p95 latency exceeds the 5s budget after
+          ≥5 fires (otherwise informational). 8 new tests
+          (TestIntakeStats). Full suite passes.
     - [ ] **P4 documentation + agents.d snippet.**
 
 ## Milestone 10: Semantic indexer integration (PLANNED — v1.x)

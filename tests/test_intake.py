@@ -366,3 +366,125 @@ class TestProcessMessage:
         last = lines[-1]
         assert last["branch"] == "noop"
         assert last["classifier_latency_ms"] == 42
+
+
+# ---------------------------------------------------------------------------
+# intake_stats — M11.5 P3 observability surface
+# ---------------------------------------------------------------------------
+
+
+class TestIntakeStats:
+    def test_returns_zeros_when_log_missing(self, store):
+        out = services.intake_stats(store)
+        assert out["exists"] is False
+        assert out["fires"] == 0
+        assert out["by_branch"] == {}
+        assert out["captured"] == 0
+
+    def test_aggregates_branch_counts(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            for branch in ["auto_link", "auto_link",
+                           "captured_with_rationale", "propose",
+                           "rationale_needed", "noop", "noop", "duplicate"]:
+                f.write(json.dumps({
+                    "ts": ts, "branch": branch,
+                    "classifier_latency_ms": 500,
+                }) + "\n")
+        out = services.intake_stats(store)
+        assert out["fires"] == 8
+        assert out["by_branch"]["auto_link"] == 2
+        assert out["by_branch"]["noop"] == 2
+        # captured = auto_link + captured_with_rationale
+        assert out["captured"] == 3
+        assert out["captured_pct"] == round(3 / 8 * 100, 1)
+
+    def test_noop_breakdown(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            for reason in ["not_requirement", "not_requirement", "parse_failed"]:
+                f.write(json.dumps({
+                    "ts": ts, "branch": "noop", "reason": reason,
+                }) + "\n")
+        out = services.intake_stats(store)
+        assert out["noop_breakdown"]["not_requirement"] == 2
+        assert out["noop_breakdown"]["parse_failed"] == 1
+
+    def test_guardrail_triggers_counted(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": ts, "branch": "propose",
+                "softener_triggered": True,
+            }) + "\n")
+            f.write(json.dumps({
+                "ts": ts, "branch": "propose",
+                "domain_whitelist_blocked": True,
+            }) + "\n")
+            f.write(json.dumps({
+                "ts": ts, "branch": "propose",
+                "budget_exceeded": True,
+            }) + "\n")
+        out = services.intake_stats(store)
+        assert out["guardrail_triggers"]["softener"] == 1
+        assert out["guardrail_triggers"]["domain_blocked"] == 1
+        assert out["guardrail_triggers"]["budget_exceeded"] == 1
+
+    def test_latency_percentiles(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            for ms in [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]:
+                f.write(json.dumps({
+                    "ts": ts, "branch": "noop",
+                    "classifier_latency_ms": ms,
+                }) + "\n")
+        out = services.intake_stats(store)
+        # nearest-rank: p50 of 10 sorted values is the 5th (index 4) → 500
+        assert out["latency_ms"]["p50"] == 500
+        assert out["latency_ms"]["max"] == 1000
+
+    def test_tail_clip(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            for branch in ["auto_link"] * 5 + ["propose"] * 5:
+                f.write(json.dumps({"ts": ts, "branch": branch}) + "\n")
+        out = services.intake_stats(store, tail=5)
+        # The last 5 are all "propose"
+        assert out["by_branch"].get("auto_link", 0) == 0
+        assert out["by_branch"]["propose"] == 5
+
+    def test_doctor_includes_intake_section(self, store):
+        # Even with no intake log, doctor's intake section exists.
+        out = services.doctor(store)
+        assert "intake" in out["checks"]
+        assert out["checks"]["intake"]["registered"] is False
+        assert out["checks"]["intake"]["fires"] == 0
+
+    def test_doctor_warns_on_high_latency(self, store):
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            for _ in range(10):
+                f.write(json.dumps({
+                    "ts": ts, "branch": "noop",
+                    "classifier_latency_ms": 6000,  # over 5s budget
+                }) + "\n")
+        out = services.doctor(store)
+        assert any("Intake hook p95 latency" in w for w in out["warnings"])

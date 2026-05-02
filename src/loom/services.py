@@ -785,6 +785,27 @@ def doctor(store: LoomStore) -> dict[str, Any]:
         "items": duplicate_specs,
     }
 
+    # 7. Intake hook (M11.5 P3) — surface basic health signals from
+    # the intake log. Doesn't add issues unless latency is bad; the
+    # hook is optional, so absence isn't a failure.
+    try:
+        intake = intake_stats(store)
+        ck: dict[str, Any] = {
+            "registered": intake["exists"],
+            "fires": intake["fires"],
+            "captured": intake["captured"],
+            "captured_pct": intake["captured_pct"],
+            "latency_p95_ms": intake["latency_ms"]["p95"],
+        }
+        if intake["fires"] >= 5 and intake["latency_ms"]["p95"] > 5000:
+            warnings.append(
+                f"Intake hook p95 latency {intake['latency_ms']['p95']} ms "
+                f"exceeds 5s budget — classifier model may be underprovisioned"
+            )
+        checks["intake"] = ck
+    except Exception as e:
+        checks["intake"] = {"error": str(e)}
+
     return {
         "project": store.project,
         "healthy": len(issues) == 0,
@@ -1694,6 +1715,140 @@ def cost(
         },
         "by_tool": by_tool,
         "skipped": skipped,
+    }
+
+
+def intake_stats(
+    store: LoomStore,
+    *,
+    tail: int | None = None,
+    log_path: "Any" = None,
+) -> dict[str, Any]:
+    """Aggregate intake-hook activity from the JSONL log (M11.5 P3).
+
+    The intake hook (``hooks/loom_intake.py``) appends one line per
+    fire to ``<store.data_dir>/.intake-log.jsonl``. This reads that
+    log and reports per-branch counts, classifier latency
+    percentiles, capture rate, and guardrail trigger frequency —
+    the observability surface the M11.5 spec called out as the P3
+    deliverable.
+
+    Args:
+        store: LoomStore whose data_dir hosts the log.
+        tail: if set, only consider the last N entries.
+        log_path: explicit override for the log location.
+
+    Returns a dict with: log_path, exists, fires, by_branch (dict),
+    captured (int), captured_pct, noop_breakdown (dict),
+    guardrail_triggers (dict), latency_ms (p50/p95/p99/max),
+    candidates_top_score (p50/p95).
+    """
+    import json as _json
+    import math
+    from pathlib import Path as _Path
+
+    path = (
+        _Path(log_path)
+        if log_path is not None
+        else store.data_dir / ".intake-log.jsonl"
+    )
+
+    empty = {
+        "log_path": str(path),
+        "exists": False,
+        "fires": 0,
+        "by_branch": {},
+        "captured": 0,
+        "captured_pct": 0.0,
+        "noop_breakdown": {},
+        "guardrail_triggers": {
+            "softener": 0, "domain_blocked": 0, "budget_exceeded": 0,
+        },
+        "latency_ms": {"p50": 0, "p95": 0, "p99": 0, "max": 0},
+        "candidates_top_score": {"p50": 0.0, "p95": 0.0},
+    }
+    if not path.exists():
+        return empty
+
+    entries: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                continue
+    if tail is not None and tail > 0:
+        entries = entries[-tail:]
+    if not entries:
+        out = dict(empty)
+        out["exists"] = True
+        return out
+
+    fires = len(entries)
+    by_branch: dict[str, int] = {}
+    noop_breakdown: dict[str, int] = {}
+    guardrails = {"softener": 0, "domain_blocked": 0, "budget_exceeded": 0}
+    latencies: list[float] = []
+    top_scores: list[float] = []
+    captured = 0
+
+    for e in entries:
+        branch = e.get("branch") or "unknown"
+        by_branch[branch] = by_branch.get(branch, 0) + 1
+        if branch in ("auto_link", "captured_with_rationale"):
+            captured += 1
+        if branch == "noop":
+            reason = e.get("reason") or "unknown"
+            noop_breakdown[reason] = noop_breakdown.get(reason, 0) + 1
+        if e.get("softener_triggered"):
+            guardrails["softener"] += 1
+        if e.get("domain_whitelist_blocked"):
+            guardrails["domain_blocked"] += 1
+        if e.get("budget_exceeded"):
+            guardrails["budget_exceeded"] += 1
+        if (lat := e.get("classifier_latency_ms")) is not None:
+            try:
+                latencies.append(float(lat))
+            except (TypeError, ValueError):
+                pass
+        score = e.get("candidates_top_score")
+        if score is not None:
+            try:
+                top_scores.append(float(score))
+            except (TypeError, ValueError):
+                pass
+
+    latencies.sort()
+    top_scores.sort()
+
+    def _pct(values: list[float], p: float) -> float:
+        if not values:
+            return 0.0
+        idx = max(0, min(len(values) - 1, math.ceil(p * len(values)) - 1))
+        return round(values[idx], 2)
+
+    return {
+        "log_path": str(path),
+        "exists": True,
+        "fires": fires,
+        "by_branch": by_branch,
+        "captured": captured,
+        "captured_pct": round(captured / fires * 100.0, 1) if fires else 0.0,
+        "noop_breakdown": noop_breakdown,
+        "guardrail_triggers": guardrails,
+        "latency_ms": {
+            "p50": int(_pct(latencies, 0.50)),
+            "p95": int(_pct(latencies, 0.95)),
+            "p99": int(_pct(latencies, 0.99)),
+            "max": int(latencies[-1]) if latencies else 0,
+        },
+        "candidates_top_score": {
+            "p50": _pct(top_scores, 0.50),
+            "p95": _pct(top_scores, 0.95),
+        },
     }
 
 
