@@ -1522,6 +1522,18 @@ def cmd_set_status(args):
     return 0
 
 
+def cmd_set_kind(args):
+    """Reclassify a requirement's typological kind (M12.1)."""
+    store = LoomStore(args.project)
+    try:
+        result = services.set_kind(store, args.req_id, args.kind)
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
+        return 1
+    print(f"✅ {result['req_id']} → kind={result['kind']}")
+    return 0
+
+
 def cmd_incomplete(args):
     """List requirements that need refinement."""
     store = LoomStore(args.project)
@@ -2454,7 +2466,17 @@ def main():
             "accept superseded|archived|rationale_needed."
         ),
     )
-    
+
+    # set-kind (M12.1) — reclassify a captured req's kind
+    p_set_kind = sp("set-kind", help="Reclassify a requirement's kind (M12.1)")
+    p_set_kind.add_argument("req_id", help="Requirement ID")
+    p_set_kind.add_argument(
+        "kind",
+        choices=("requirement", "finding", "methodology", "hypothesis", "process_rule"),
+        help="New kind (M12.1). Useful when intake misclassified a "
+             "finding/process-rule as a generic requirement.",
+    )
+
     # incomplete (list requirements needing refinement)
     p_incomplete = sp("incomplete", help="List requirements needing refinement")
     
@@ -2750,6 +2772,7 @@ def main():
         "trace": cmd_trace,
         "refine": cmd_refine,
         "set-status": cmd_set_status,
+        "set-kind": cmd_set_kind,
         "incomplete": cmd_incomplete,
         "spec": cmd_spec_add,
         "specs": cmd_spec_list,

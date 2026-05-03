@@ -1,0 +1,98 @@
+[
+  {
+    "ts": "2026-05-03T14:31:31.979617+00:00",
+    "phase": "A",
+    "op": "archive",
+    "outcome": "ok",
+    "req_id": "REQ-8a9f714b"
+  },
+  {
+    "ts": "2026-05-03T14:31:32.321864+00:00",
+    "phase": "A",
+    "op": "set_kind",
+    "outcome": "ok",
+    "req_id": "REQ-c0e06e44",
+    "kind": "process_rule",
+    "status": "active"
+  },
+  {
+    "ts": "2026-05-03T14:31:32.667772+00:00",
+    "phase": "A",
+    "op": "set_kind",
+    "outcome": "ok",
+    "req_id": "REQ-73a0d7de",
+    "kind": "finding",
+    "status": "confirmed"
+  },
+  {
+    "ts": "2026-05-03T14:32:58.551781+00:00",
+    "phase": "B",
+    "op": "F_phQ_bare_vs_rationale",
+    "outcome": "ok",
+    "req_id": "REQ-5e01462c",
+    "derives_from": "REQ-ec36bd89"
+  },
+  {
+    "ts": "2026-05-03T14:32:58.824756+00:00",
+    "phase": "B",
+    "op": "F_phS_anti_rationale",
+    "outcome": "ok",
+    "req_id": "REQ-763cd262",
+    "derives_from": "REQ-ec36bd89"
+  },
+  {
+    "ts": "2026-05-03T14:32:59.097100+00:00",
+    "phase": "B",
+    "op": "F_phT_imperative_kit",
+    "outcome": "ok",
+    "req_id": "REQ-5c9db026",
+    "derives_from": "REQ-a636de03"
+  },
+  {
+    "ts": "2026-05-03T14:32:59.417356+00:00",
+    "phase": "B",
+    "op": "F_phQ7_test_files",
+    "outcome": "ok",
+    "req_id": "REQ-ab5b84b0",
+    "derives_from": "REQ-2a621c40"
+  },
+  {
+    "ts": "2026-05-03T14:32:59.785575+00:00",
+    "phase": "B",
+    "op": "F_phQ4_specialist_loses",
+    "outcome": "ok",
+    "req_id": "REQ-a9df428e",
+    "derives_from": "REQ-aaa595ca"
+  },
+  {
+    "ts": "2026-05-03T14:33:00.149000+00:00",
+    "phase": "C",
+    "op": "P_justify_design",
+    "outcome": "ok",
+    "req_id": "REQ-e4d6f7d4",
+    "status": "active"
+  },
+  {
+    "ts": "2026-05-03T14:33:00.357729+00:00",
+    "phase": "D",
+    "op": "sync",
+    "outcome": "ok",
+    "stdout_tail": "✓ Generated docs\\TEST_SPEC.md"
+  },
+  {
+    "ts": "2026-05-03T14:33:00.543452+00:00",
+    "phase": "D",
+    "op": "doctor",
+    "outcome": "ok",
+    "warnings": 2,
+    "ok": null
+  },
+  {
+    "ts": "2026-05-03T14:33:00.704122+00:00",
+    "phase": "D",
+    "op": "metrics",
+    "outcome": "ok",
+    "reqs": 18,
+    "by_kind": "n/a"
+  }
+]
