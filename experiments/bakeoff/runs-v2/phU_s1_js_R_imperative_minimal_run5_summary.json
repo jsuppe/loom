@@ -1,0 +1,19 @@
+{
+  "phase": "U_imperative_followups",
+  "cell": "R_imperative_minimal",
+  "run_id": "5",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 211,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "input_tokens": 812,
+  "output_tokens": 205,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 15.3,
+  "wall_s": 15.9,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

@@ -1,0 +1,19 @@
+{
+  "phase": "U_imperative_followups",
+  "cell": "R_imperative_minimal",
+  "run_id": "9",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 211,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "input_tokens": 812,
+  "output_tokens": 232,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 17.4,
+  "wall_s": 18.3,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

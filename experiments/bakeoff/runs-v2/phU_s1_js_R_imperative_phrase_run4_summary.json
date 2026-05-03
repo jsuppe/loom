@@ -1,0 +1,19 @@
+{
+  "phase": "U_imperative_followups",
+  "cell": "R_imperative_phrase",
+  "run_id": "4",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 218,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "input_tokens": 819,
+  "output_tokens": 223,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 16.7,
+  "wall_s": 17.2,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\nAll attempts failed: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/retry.js:19:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/test_retry.js:19:20\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nAll attempts failed: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/retry.js:19:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phU_grade_s1_6l63sjbj/test_retry.js:34:5\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n"
+}

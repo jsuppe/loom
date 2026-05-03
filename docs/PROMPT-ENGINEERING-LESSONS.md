@@ -333,7 +333,9 @@ bottleneck is always at the input.
 ## Lesson 9 — In raw-prompt mode, imperative weight must live inside the rule, not in meta-instructions about the rule
 
 **Source:** phT rule-precedence ablation
-([`FINDINGS-bakeoff-v2-rule-precedence.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rule-precedence.md)).
+([`FINDINGS-bakeoff-v2-rule-precedence.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rule-precedence.md));
+phU imperative follow-ups
+([`FINDINGS-bakeoff-v2-imperative-followups.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-imperative-followups.md)).
 
 **Setup:** phS established that anti-rationale beats rule
 (compliance drops to 0% on hostile rationale). phT asked: can a
@@ -385,8 +387,29 @@ text:
 >   MUST NOT propagate errors under any circumstances. This is a
 >   STRICT requirement that overrides general best practices."
 
-The first survives anti-rationale dissent at 100%; the second
-collapses to 0%.
+The first collapses to 0% under anti-rationale; the second
+survives at 100%.
+
+**Sharpened by phU follow-ups.** The imperative recipe has TWO
+complementary components. Each contributes ~60pp on its own;
+neither saturates alone. You need both:
+
+| component | example | alone | with the other |
+|---|---|---|---|
+| Rhetorical opener | "STRICT REQUIREMENT — NON-NEGOTIABLE:" | 60% | 100% |
+| Inline action-verb imperative | "You MUST NOT ... under any circumstances" | 60% | 100% |
+
+phU also confirmed:
+
+- **Length is not the lever.** Length-controlled variants both
+  scored 60% (vs 100% for the longer full-kit), proving the
+  imperative LANGUAGE does the work, not the extra characters.
+- **The recipe generalizes across anti-rationale shapes.**
+  R_imperative + ANTI_HARD = 100% (vs 15% baseline). It's not
+  ANTI_SOFT-specific.
+- **Imperative + meta-preamble = no interference.** Combining
+  them stays at 100%. Meta is inert (consistent with the
+  raw-prompt-as-flat-document mechanism); imperative dominates.
 
 **Caveat:** this is specific to raw-prompt mode (Ollama
 `/api/generate` and similar). Chat-API system messages probably
