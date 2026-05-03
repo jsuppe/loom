@@ -1,0 +1,20 @@
+{
+  "phase": "L_crosssession_cpp_smoke",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "mech1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 439,
+  "output_tokens": 8217,
+  "model": "qwen3.5:latest",
+  "llm_elapsed_s": 58.1,
+  "wall_s": 58.3,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL_s1_cpp_nmf50xag",
+  "grade_stdout_tail": "m C:\\Users\\jonsu\\AppData\\Local\\Temp\\phL_grade_s1_di9xhuj5\\retry.hpp:4:\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:237:5: note: candidate: 'std::runtime_error::runtime_error(const std::runtime_error&)'\n  237 |     runtime_error(const runtime_error&) _GLIBCXX_NOTHROW;\n      |     ^~~~~~~~~~~~~\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:237:5: note:   candidate expects 1 argument, 0 provided\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:232:5: note: candidate: 'std::runtime_error::runtime_error(std::runtime_error&&)'\n  232 |     runtime_error(runtime_error&&) noexcept;\n      |     ^~~~~~~~~~~~~\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:232:5: note:   candidate expects 1 argument, 0 provided\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:230:5: note: candidate: 'std::runtime_error::runtime_error(const char*)'\n  230 |     runtime_error(const char*) _GLIBCXX_TXN_SAFE;\n      |     ^~~~~~~~~~~~~\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:230:5: note:   candidate expects 1 argument, 0 provided\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:226:5: note: candidate: 'std::runtime_error::runtime_error(const std::string&)'\n  226 |     runtime_error(const string& __arg) _GLIBCXX_TXN_SAFE;\n      |     ^~~~~~~~~~~~~\nC:/mingw64/lib/gcc/x86_64-w64-mingw32/14.2.0/include/c++/stdexcept:226:5: note:   candidate expects 1 argument, 0 provided\n"
+}

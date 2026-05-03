@@ -1,0 +1,59 @@
+{
+  "phase": "V_pyschema_extended_autodecompose",
+  "cell": "D3d",
+  "run_id": "v2_5",
+  "tasks_complete": 1,
+  "tasks_test_fail": 1,
+  "auto_task_titles": [
+    "Add `RegexField` class to `pyschema/fields/strings.py`.\nInherit from `StrField`, use `@dataclass`, and override `validate()`\nto apply regex pattern matching. Place after `UUIDField`.",
+    "Re-export `RegexField` from `pyschema/fields/__init__.py`.\nAdd to `__all__` list.",
+    "Re-export `RegexField` from `pyschema/__init__.py`.\nAdd to `__all__` list alphabetically after `Pattern`."
+  ],
+  "auto_task_files": [
+    [
+      "pyschema/fields/strings.py"
+    ],
+    [
+      "pyschema/fields/__init__.py"
+    ],
+    [
+      "pyschema/__init__.py"
+    ]
+  ],
+  "auto_task_deps": [
+    null,
+    null,
+    null
+  ],
+  "decompose_elapsed_s": 37.3,
+  "acceptance_passed": 5,
+  "acceptance_total": 5,
+  "acceptance_rate": 1.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": true,
+    "inherits_strfield": true,
+    "uses_dataclass": true,
+    "validate_calls_super": true
+  },
+  "idiom_score": 4,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": false,
+    "top_barrel_import": false,
+    "top_barrel_all": false,
+    "top_level_import_works": false
+  },
+  "wiring_score": 0,
+  "wiring_total": 4,
+  "import_works": false,
+  "exec_rc": 0,
+  "exec_duration_s": 52.7,
+  "wall_s": 53.4,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp__cdnwft3",
+  "exec_stdout_tail": "[exec] task TASK-6ef3712177c0  status=pending  title='Add `RegexField` class to `pyschema/fields/strings.py`.\\nInherit from `StrField`, use `@dataclass`, and override `validate()`\\nto apply regex pattern matching. Place after `UUIDField`.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp__cdnwft3  runner: pytest_replace (replace)\n[exec] prompt: 3869 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 10.8s  in=1047  out=577\n[exec] grading: 3/3\n[exec] result: {\"task_id\": \"TASK-6ef3712177c0\", \"outcome\": \"complete\", \"passed\": 3, \"total\": 3, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phV_autodecomp__cdnwft3\\\\pyschema\\\\fields\\\\strings.py\"}\n[exec] task TASK-80cca93d375d  status=pending  title='Re-export `RegexField` from `pyschema/__init__.py`.\\nAdd to `__all__` list alphabetically after `Pattern`.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp__cdnwft3  runner: pytest_replace (replace)\n[exec] prompt: 3200 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.6s  in=906  out=364\n[exec] grading: 0/2\n[exec] result: {\"task_id\": \"TASK-80cca93d375d\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 2, \"tail\": \"Traceback:\\nC:\\\\Program Files\\\\WindowsApps\\\\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\\\\Lib\\\\importlib\\\\__init__.py:88: in import_module\\n    return _bootstrap._gcd_import(name[level:], package, level)\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\ntests\\\\test_gate_t3.py:2: in <module>\\n    from pyschema import RegexField\\npyschema\\\\__init__.py:14: in <module>\\n    from .fields import (\\nE   ImportError: cannot import name 'RegexField' from 'pyschema.fields' (C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\loom_exec_68ctez9y\\\\pyschema\\\\fields\\\\__init__.py)\\n=========================== short test summary info ===========================\\nERROR tests/test_gate_t3.py\\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\\n============================== 1 error in 0.14s ===============================\\n\"}",
+  "grade_acceptance_tail": ".....                                                                    [100%]\n5 passed in 0.03s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.05s\n"
+}

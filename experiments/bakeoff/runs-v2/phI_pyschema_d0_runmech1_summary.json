@@ -1,0 +1,20 @@
+{
+  "phase": "I_pyschema_d0_greenfield",
+  "cell": "D0",
+  "run_id": "mech1",
+  "regression_passed": 0,
+  "regression_total": 1,
+  "regression_rate": 0.0,
+  "acceptance_passed": null,
+  "acceptance_total": null,
+  "spec_chars": 10891,
+  "contracts_initial": 5,
+  "opus_duration_s": 166.5,
+  "opus_cost_usd": 0.45078524999999997,
+  "exec_duration_s": 6.3,
+  "exec_rc": 0,
+  "wall_s": 176.6,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_fv6npr0k",
+  "exec_stdout_tail": "[exec] task TASK-8936bba399ba  status=pending  title='Implement pyschema/errors.py per the section labeled `### pyschema/errors.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_fv6npr0k  runner: pytest (append)\n[exec] prompt: 12119 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 1.9s  in=3175  out=172\n[exec] grading: 1/1\n[exec] result: {\"task_id\": \"TASK-8936bba399ba\", \"outcome\": \"complete\", \"passed\": 1, \"total\": 1, \"modified_file\": \"C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\phI_pyschema_d0_fv6npr0k\\\\pyschema\\\\errors.py\"}\n[exec] task TASK-224ede1b2e26  status=pending  title='Implement pyschema/coercion.py per the section labeled `### pyschema/coercion.py` in the spec'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_pyschema_d0_fv6npr0k  runner: pytest (append)\n[exec] prompt: 12129 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 2.8s  in=3185  out=335\n[exec] grading: 3/4\n[exec] result: {\"task_id\": \"TASK-224ede1b2e26\", \"outcome\": \"test_fail\", \"passed\": 3, \"total\": 4, \"tail\": \"collecting ... collected 4 items\\n\\ntests/test_gate_pyschema_coercion.py::test_coerce_int_accepts_int PASSED [ 25%]\\ntests/test_gate_pyschema_coercion.py::test_coerce_int_refuses_bool FAILED [ 50%]\\ntests/test_gate_pyschema_coercion.py::test_coerce_str_int PASSED         [ 75%]\\ntests/test_gate_pyschema_coercion.py::test_coerce_bool_yes PASSED        [100%]\\n\\n================================== FAILURES ===================================\\nE   NameError: name 'CoercionError' is not defined\\nC:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\loom_exec_y3l_7c3y\\\\pyschema\\\\coercion.py:8: NameError: name 'CoercionError' is not defined\\n=========================== short test summary info ===========================\\nFAILED tests/test_gate_pyschema_coercion.py::test_coerce_int_refuses_bool - N...\\n========================= 1 failed, 3 passed in 0.03s =========================\\n\"}",
+  "grade_regression_tail": "\n=================================== ERRORS ====================================\n___________________ ERROR collecting tests/test_pyschema.py ___________________\nImportError while importing test module 'C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_grade_test_pyschema_q32zgg3c\\tests\\test_pyschema.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_pyschema.py:10: in <module>\n    from pyschema import (\npyschema\\__init__.py:13: in <module>\n    from .field import BoolField, EmailField, Field, IntField, StrField\nE   ImportError: cannot import name 'BoolField' from 'pyschema.field' (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phI_grade_test_pyschema_q32zgg3c\\pyschema\\field.py)\n=========================== short test summary info ===========================\nERROR tests/test_pyschema.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.10s\n"
+}

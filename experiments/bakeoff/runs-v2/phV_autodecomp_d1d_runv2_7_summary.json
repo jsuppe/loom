@@ -1,0 +1,59 @@
+{
+  "phase": "V_pyschema_extended_autodecompose",
+  "cell": "D1d",
+  "run_id": "v2_7",
+  "tasks_complete": 0,
+  "tasks_test_fail": 1,
+  "auto_task_titles": [
+    "Add `RegexField` class to `pyschema/fields/strings.py`.\nInherit from `StrField`, use `@dataclass`, and override `validate()`\nto apply regex pattern matching. Place after `UUIDField`.",
+    "Re-export `RegexField` from `pyschema/fields/__init__.py`.\nAdd to `__all__` list after `UUIDField`.",
+    "Re-export `RegexField` from `pyschema/__init__.py`.\nAdd to `__all__` list alphabetically after `Pattern`."
+  ],
+  "auto_task_files": [
+    [
+      "pyschema/fields/strings.py"
+    ],
+    [
+      "pyschema/fields/__init__.py"
+    ],
+    [
+      "pyschema/__init__.py"
+    ]
+  ],
+  "auto_task_deps": [
+    null,
+    null,
+    null
+  ],
+  "decompose_elapsed_s": 34.6,
+  "acceptance_passed": 0,
+  "acceptance_total": 1,
+  "acceptance_rate": 0.0,
+  "regression_passed": 38,
+  "regression_total": 38,
+  "regression_rate": 1.0,
+  "idiom_checks": {
+    "file_placement": false,
+    "inherits_strfield": false,
+    "uses_dataclass": false,
+    "validate_calls_super": false
+  },
+  "idiom_score": 0,
+  "idiom_total": 4,
+  "wiring_checks": {
+    "fields_init_re_export": false,
+    "top_barrel_import": false,
+    "top_barrel_all": false,
+    "top_level_import_works": false
+  },
+  "wiring_score": 0,
+  "wiring_total": 4,
+  "import_works": false,
+  "exec_rc": 0,
+  "exec_duration_s": 45.3,
+  "wall_s": 46.1,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_bzx6d40y",
+  "exec_stdout_tail": "[exec] task TASK-076a6ffb990f  status=pending  title='Re-export `RegexField` from `pyschema/__init__.py`.\\nAdd to `__all__` list alphabetically after `Pattern`.'\n[exec] target_dir: C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_autodecomp_bzx6d40y  runner: pytest_replace (replace)\n[exec] prompt: 1951 chars\n[exec] claimed by qwen3.5:latest\n[exec] calling qwen3.5:latest...\n[exec] model: 9.2s  in=582  out=353\n[exec] grading: 0/2\n[exec] result: {\"task_id\": \"TASK-076a6ffb990f\", \"outcome\": \"test_fail\", \"passed\": 0, \"total\": 2, \"tail\": \"ImportError while importing test module 'C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\loom_exec_orbsx_83\\\\tests\\\\test_gate_t3.py'.\\nHint: make sure your test modules/packages have valid Python names.\\nTraceback:\\nC:\\\\Program Files\\\\WindowsApps\\\\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\\\\Lib\\\\importlib\\\\__init__.py:88: in import_module\\n    return _bootstrap._gcd_import(name[level:], package, level)\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\ntests\\\\test_gate_t3.py:2: in <module>\\n    from pyschema import RegexField\\nE   ImportError: cannot import name 'RegexField' from 'pyschema' (C:\\\\Users\\\\jonsu\\\\AppData\\\\Local\\\\Temp\\\\loom_exec_orbsx_83\\\\pyschema\\\\__init__.py)\\n=========================== short test summary info ===========================\\nERROR tests/test_gate_t3.py\\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\\n============================== 1 error in 0.13s ===============================\\n\"}",
+  "grade_acceptance_tail": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_regexfield.py __________________\nImportError while importing test module 'C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_grade_test_regexfield_s_bw_mjd\\tests\\test_regexfield.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_regexfield.py:11: in <module>\n    from pyschema.fields.strings import RegexField\nE   ImportError: cannot import name 'RegexField' from 'pyschema.fields.strings' (C:\\Users\\jonsu\\AppData\\Local\\Temp\\phV_grade_test_regexfield_s_bw_mjd\\pyschema\\fields\\strings.py)\n=========================== short test summary info ===========================\nERROR tests/test_regexfield.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.10s\n",
+  "grade_regression_tail": "......................................                                   [100%]\n38 passed in 0.05s\n"
+}

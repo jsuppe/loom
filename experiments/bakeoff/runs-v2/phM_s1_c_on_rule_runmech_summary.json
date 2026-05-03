@@ -1,0 +1,16 @@
+{
+  "phase": "M_crosssession_c_smoke",
+  "scenario": "S1",
+  "cell": "on-rule",
+  "run_id": "mech",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "no_code_extracted": true,
+  "input_tokens": 667,
+  "output_tokens": 32117,
+  "model": "qwen3.5:latest",
+  "response_tail": "",
+  "wall_s": 211.7
+}
