@@ -377,16 +377,20 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
 
 def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
     """Full traceability chain for a requirement: req → patterns → specs
-    → implementations → test.
+    → implementations → test, plus M12.4 rationale-link traversal
+    in both directions.
 
     Raises:
         LookupError: req_id not found.
 
     Result shape:
-        {id, domain, value, status, elaboration, rationale,
+        {id, domain, value, status, kind, elaboration, rationale,
+         rationale_links: [req_id],  # direct parents (M11.1)
+         rationale_ancestors: [{id, value, kind}],  # transitive parents (M12.4)
+         rationale_descendants: [{id, value, kind}],  # what derives from this (M12.4)
          patterns: [{id, name}],
          specifications: [{id, description, status, implementations: [{file, lines}]}],
-         direct_implementations: [{file, lines}],  # impls with no spec link
+         direct_implementations: [{file, lines}],
          test_spec: {description, verified} | None}
     """
     from .testspec import TestSpecStore
@@ -416,13 +420,23 @@ def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
             ],
         })
 
+    # M12.4 — traverse the rationale-link DAG in both directions
+    # so chain answers both "what did this build on?" (ancestors)
+    # and "what builds on this?" (descendants). Cycle-protected.
+    ancestors = _rationale_ancestors(store, req_id)
+    descendants = _rationale_descendants(store, req_id)
+
     return {
         "id": req_id,
         "domain": req.domain,
         "value": req.value,
         "status": req.status,
+        "kind": req.kind,  # M12.1
         "elaboration": req.elaboration,
         "rationale": req.rationale,
+        "rationale_links": list(req.rationale_links or []),  # M11.1 direct parents
+        "rationale_ancestors": ancestors,  # M12.4 transitive parents
+        "rationale_descendants": descendants,  # M12.4 children + transitive
         "patterns": [{"id": p.id, "name": p.name} for p in patterns],
         "specifications": spec_data,
         "direct_implementations": [
@@ -434,6 +448,88 @@ def chain(store: LoomStore, req_id: str) -> dict[str, Any]:
             if test else None
         ),
     }
+
+
+def _rationale_ancestors(
+    store: LoomStore, start_id: str, *, max_depth: int = 20,
+) -> list[dict[str, Any]]:
+    """Walk ``start_id``'s rationale_links transitively to find all
+    upstream requirements it derives from (directly or via a chain).
+    Returns a list of {id, value, kind, depth} sorted by depth then id,
+    with the starting req excluded. Cycle-protected via visited set,
+    depth-bounded for safety."""
+    visited: set[str] = {start_id}
+    out: list[dict[str, Any]] = []
+    frontier: list[tuple[str, int]] = [(start_id, 0)]
+    while frontier:
+        next_frontier: list[tuple[str, int]] = []
+        for cur, depth in frontier:
+            if depth >= max_depth:
+                continue
+            cur_req = store.get_requirement(cur)
+            if cur_req is None or not cur_req.rationale_links:
+                continue
+            for parent_id in cur_req.rationale_links:
+                if not parent_id or parent_id in visited:
+                    continue
+                visited.add(parent_id)
+                parent = store.get_requirement(parent_id)
+                if parent is None:
+                    continue
+                out.append({
+                    "id": parent_id,
+                    "value": parent.value,
+                    "kind": parent.kind,
+                    "depth": depth + 1,
+                })
+                next_frontier.append((parent_id, depth + 1))
+        frontier = next_frontier
+    return sorted(out, key=lambda d: (d["depth"], d["id"]))
+
+
+def _rationale_descendants(
+    store: LoomStore, target_id: str,
+) -> list[dict[str, Any]]:
+    """Find all reqs whose rationale_links transitively include
+    ``target_id`` — the children + grandchildren + ... of ``target_id``
+    in the rationale DAG. One full-store walk to find direct
+    children, then BFS expansion. Cycle-protected via visited set."""
+    # Direct children: scan all reqs for those linking to target_id.
+    direct_children: list[str] = []
+    all_reqs = store.list_requirements(include_superseded=True)
+    parent_to_children: dict[str, list[str]] = {}
+    for r in all_reqs:
+        for link in (r.rationale_links or []):
+            if not link:
+                continue
+            parent_to_children.setdefault(link, []).append(r.id)
+        if target_id in (r.rationale_links or []):
+            direct_children.append(r.id)
+
+    # BFS expand from direct children to grandchildren, etc.
+    visited: set[str] = {target_id}
+    out: list[dict[str, Any]] = []
+    frontier: list[tuple[str, int]] = [(c, 1) for c in direct_children]
+    while frontier:
+        next_frontier: list[tuple[str, int]] = []
+        for cur, depth in frontier:
+            if cur in visited:
+                continue
+            visited.add(cur)
+            r = store.get_requirement(cur)
+            if r is None:
+                continue
+            out.append({
+                "id": cur,
+                "value": r.value,
+                "kind": r.kind,
+                "depth": depth,
+            })
+            for child in parent_to_children.get(cur, []):
+                if child not in visited:
+                    next_frontier.append((child, depth + 1))
+        frontier = next_frontier
+    return sorted(out, key=lambda d: (d["depth"], d["id"]))
 
 
 def coverage(store: LoomStore) -> dict[str, Any]:

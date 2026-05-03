@@ -1861,11 +1861,35 @@ def cmd_chain(args):
     print(f"🔗 Traceability Chain — {req_id}")
     print()
 
-    print(f"📋 REQUIREMENT [{data['domain']}]")
+    # M12.1: surface kind tag if not the default
+    kind = data.get('kind', 'requirement')
+    kind_tag = f" <{kind}>" if kind != "requirement" else ""
+    print(f"📋 REQUIREMENT [{data['domain']}]{kind_tag}")
     print(f"   {data['value']}")
     if data['elaboration']:
         print(f"   📝 {data['elaboration'][:60]}...")
     print()
+
+    # M12.4: rationale linkage chain (ancestors and descendants)
+    ancestors = data.get('rationale_ancestors', [])
+    if ancestors:
+        print(f"⬆️  BUILDS ON ({len(ancestors)})")
+        for a in ancestors:
+            indent = "   " + ("  " * (a['depth'] - 1))
+            ak = a.get('kind', 'requirement')
+            akt = f" <{ak}>" if ak != "requirement" else ""
+            print(f"{indent}↳ {a['id']}{akt}: {a['value'][:70]}")
+        print()
+
+    descendants = data.get('rationale_descendants', [])
+    if descendants:
+        print(f"⬇️  DERIVED FROM THIS ({len(descendants)})")
+        for d in descendants:
+            indent = "   " + ("  " * (d['depth'] - 1))
+            dk = d.get('kind', 'requirement')
+            dkt = f" <{dk}>" if dk != "requirement" else ""
+            print(f"{indent}↳ {d['id']}{dkt}: {d['value'][:70]}")
+        print()
 
     patterns = data['patterns']
     if patterns:

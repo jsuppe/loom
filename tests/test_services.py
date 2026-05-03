@@ -190,7 +190,7 @@ class TestChain:
         _mk_req(store, "REQ-1", "behavior", "one", fake_embedding)
         direct = Implementation(
             id="IMPL-direct", file="src/a.py", lines="1-5",
-            content="a", content_hash="ha",
+            content="a", content_hash=generate_content_hash("a"),
             satisfies=[{"req_id": "REQ-1"}],
             timestamp="2026-01-01T00:00:00Z",
         )
@@ -199,6 +199,82 @@ class TestChain:
         assert len(data["direct_implementations"]) == 1
         assert data["direct_implementations"][0]["file"] == "src/a.py"
         assert data["specifications"] == []
+
+    # M12.4 — rationale-link DAG traversal
+
+    def test_rationale_chain_empty_when_no_links(self, store):
+        services.extract(store, domain="behavior", value="standalone", rationale="r")
+        # Find the req we just created.
+        all_reqs = list(store.list_requirements())
+        rid = all_reqs[0].id
+        data = services.chain(store, rid)
+        assert data["rationale_links"] == []
+        assert data["rationale_ancestors"] == []
+        assert data["rationale_descendants"] == []
+
+    def test_rationale_chain_walks_ancestors(self, store):
+        # A → B → C: C derives from B, B derives from A.
+        a = services.extract(store, domain="behavior", value="A: anchor", rationale="origin")
+        b = services.extract(
+            store, domain="behavior", value="B: builds on A",
+            rationale_links=[a["req_id"]],
+        )
+        c = services.extract(
+            store, domain="behavior", value="C: builds on B",
+            rationale_links=[b["req_id"]],
+        )
+        data = services.chain(store, c["req_id"])
+        # rationale_links is just direct parents
+        assert data["rationale_links"] == [b["req_id"]]
+        # ancestors walks transitively, sorted by depth
+        assert len(data["rationale_ancestors"]) == 2
+        assert data["rationale_ancestors"][0]["id"] == b["req_id"]
+        assert data["rationale_ancestors"][0]["depth"] == 1
+        assert data["rationale_ancestors"][1]["id"] == a["req_id"]
+        assert data["rationale_ancestors"][1]["depth"] == 2
+
+    def test_rationale_chain_walks_descendants(self, store):
+        # A has two children B and C; C has a child D.
+        a = services.extract(store, domain="behavior", value="A", rationale="r")
+        b = services.extract(
+            store, domain="behavior", value="B (child of A)",
+            rationale_links=[a["req_id"]],
+        )
+        c = services.extract(
+            store, domain="behavior", value="C (child of A)",
+            rationale_links=[a["req_id"]],
+        )
+        d = services.extract(
+            store, domain="behavior", value="D (child of C)",
+            rationale_links=[c["req_id"]],
+        )
+        data = services.chain(store, a["req_id"])
+        descendant_ids = {x["id"] for x in data["rationale_descendants"]}
+        assert descendant_ids == {b["req_id"], c["req_id"], d["req_id"]}
+        # D should be at depth 2 (grandchild)
+        d_entry = next(
+            x for x in data["rationale_descendants"] if x["id"] == d["req_id"]
+        )
+        assert d_entry["depth"] == 2
+
+    def test_rationale_chain_includes_kind_per_node(self, store):
+        a = services.extract(store, domain="behavior", value="anchor", rationale="r")
+        f = services.extract(
+            store, domain="behavior", value="finding builds on anchor",
+            rationale_links=[a["req_id"]], kind="finding",
+        )
+        data_a = services.chain(store, a["req_id"])
+        # The finding-kind descendant carries its kind.
+        assert any(
+            x["id"] == f["req_id"] and x["kind"] == "finding"
+            for x in data_a["rationale_descendants"]
+        )
+        # Reverse: chain on the finding shows the requirement-kind ancestor.
+        data_f = services.chain(store, f["req_id"])
+        assert any(
+            x["id"] == a["req_id"] and x["kind"] == "requirement"
+            for x in data_f["rationale_ancestors"]
+        )
 
 
 class TestCoverage:

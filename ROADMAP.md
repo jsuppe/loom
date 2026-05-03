@@ -37,10 +37,19 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       `METHODOLOGY.md` / `PROCESS-RULES.md`) and status enum (e.g.
       finding has `hypothesis|confirmed|falsified|refined|superseded`).
       Drift-detection target hint per kind. ~150 LoC.
-- [ ] **12.4 `loom chain` traverses rationale_links.** Extend
-      `services.chain` to include rationale_link traversal with cycle
-      protection. ~30 LoC. Currently the M11.1 dependency graph is
-      captured but not navigable via the chain command.
+- [x] **12.4 `loom chain` traverses rationale_links.** Extended
+      `services.chain` to walk the rationale-link DAG in both
+      directions: `rationale_ancestors` (transitive parents — what
+      this builds on) and `rationale_descendants` (transitive
+      children — what builds on this). Both cycle-protected via
+      visited set, depth-bounded at 20. Each node carries its
+      `kind` (M12.1) so the chain shows the kind tag for each link.
+      `loom chain` CLI gains "⬆️ BUILDS ON" and "⬇️ DERIVED FROM
+      THIS" sections with depth-indented tree rendering. Smoke-
+      tested on the dogfooded lessons store: `loom chain
+      REQ-ec36bd89` (L1_rationale) shows L0_meta as ancestor and
+      L7/L3/L8/L9 as direct descendants + L6 at depth 2 via L7.
+      7 new tests in TestChain (10 total).
 - [ ] **12.5 Kind-aware classifier (intake hook).** Extend the M11.5
       classifier prompt to return `kind` alongside `is_capturable`,
       route to kind-appropriate branches. Needs ~50-utterance
