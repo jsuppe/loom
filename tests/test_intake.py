@@ -126,6 +126,44 @@ class TestParsersAndHelpers:
         b = intake._predicted_req_id("behavior", "rate limit")
         assert a == b
 
+    # ---- M12.5: kind parsing ----
+
+    def test_parse_defaults_kind_to_requirement_when_missing(self):
+        text = ('{"is_requirement": true, "domain": "behavior", '
+                '"value": "X must Y", "rationale_excerpt": ""}')
+        out = intake.parse_classifier_output(text)
+        assert out["kind"] == "requirement"
+
+    def test_parse_preserves_valid_kind(self):
+        text = ('{"is_requirement": true, "kind": "finding", '
+                '"domain": "experimental", '
+                '"value": "Anti-rationale beats rule by 12pp", '
+                '"rationale_excerpt": "phS measured this."}')
+        out = intake.parse_classifier_output(text)
+        assert out["kind"] == "finding"
+
+    def test_parse_normalizes_kind_case(self):
+        text = ('{"is_requirement": true, "kind": "Process_Rule", '
+                '"domain": "operational", '
+                '"value": "Push to PR not main", "rationale_excerpt": ""}')
+        out = intake.parse_classifier_output(text)
+        assert out["kind"] == "process_rule"
+
+    def test_parse_falls_back_to_requirement_on_invalid_kind(self):
+        text = ('{"is_requirement": true, "kind": "security", '
+                '"domain": "behavior", '
+                '"value": "X must Y", "rationale_excerpt": ""}')
+        out = intake.parse_classifier_output(text)
+        # "security" isn't a valid kind — back-compat fallback.
+        assert out["kind"] == "requirement"
+
+    def test_classifier_prompt_mentions_all_five_kinds(self):
+        # Sanity check that the prompt actually defines each kind so
+        # the classifier has a chance to pick the right one.
+        for k in ("requirement", "finding", "methodology",
+                  "hypothesis", "process_rule"):
+            assert f'"{k}"' in intake.CLASSIFIER_PROMPT, k
+
 
 # ---------------------------------------------------------------------------
 # process_message — branch logic
@@ -367,6 +405,121 @@ class TestProcessMessage:
         assert last["branch"] == "noop"
         assert last["classifier_latency_ms"] == 42
 
+    # ---- M12.5: kind-aware routing ----
+
+    def test_finding_kind_persists_with_kind_finding(self, store, monkeypatch):
+        # A finding with a verbatim rationale excerpt should route
+        # through captured_with_rationale and persist with kind=finding,
+        # NOT auto-link (auto-link is requirement-only).
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "finding",
+            "domain": "experimental",
+            "value": "Anti-rationale beats rule on the S1 bench by 12pp",
+            "rationale_excerpt": "We measured this in phS with N=10.",
+        })
+        out = intake.process_message(store, "x")
+        assert out["branch"] == "captured_with_rationale"
+        assert out["kind"] == "finding"
+        req = store.get_requirement(out["req_id"])
+        assert req.kind == "finding"
+        assert req.rationale == "We measured this in phS with N=10."
+
+    def test_process_rule_persists_with_kind_process_rule(self, store, monkeypatch):
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "process_rule",
+            "domain": "operational",
+            "value": "All experimental findings must be retained in github",
+            "rationale_excerpt": "We don't want untracked artifacts.",
+        })
+        out = intake.process_message(store, "x")
+        assert out["branch"] == "captured_with_rationale"
+        assert out["kind"] == "process_rule"
+        req = store.get_requirement(out["req_id"])
+        assert req.kind == "process_rule"
+
+    def test_finding_skips_auto_link_even_with_high_score_candidate(
+        self, store, monkeypatch,
+    ):
+        # Auto-link is requirement-only. A finding with a high-score
+        # candidate must NOT auto-link — the derives_from semantic is
+        # requirement-to-requirement; findings need M12.6's evidences
+        # link instead.
+        parent = services.extract(
+            store, domain="behavior",
+            value="parent requirement", rationale="origin",
+        )
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "finding",
+            "domain": "experimental",
+            "value": "Empirical observation about the parent feature",
+            "rationale_excerpt": "we observed this in a smoke run.",
+        })
+        def fake_find(store_, text, *, limit, min_score):
+            return [{
+                "req_id": parent["req_id"], "domain": "behavior",
+                "value": "parent requirement",
+                "rationale": "origin", "rationale_links": [],
+                "score": 0.95,
+            }]
+        monkeypatch.setattr(services, "find_related_requirements", fake_find)
+
+        out = intake.process_message(store, "x")
+        assert out["branch"] == "captured_with_rationale"
+        assert out["kind"] == "finding"
+        # Persisted, but with no rationale_links (auto-link skipped
+        # for findings).
+        req = store.get_requirement(out["req_id"])
+        assert req.rationale_links == []
+
+    def test_finding_with_no_rationale_routes_to_rationale_needed(
+        self, store, monkeypatch,
+    ):
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "finding",
+            "domain": "experimental",
+            "value": "We saw a thing",
+            "rationale_excerpt": "",  # nothing to anchor it
+        })
+        out = intake.process_message(store, "x")
+        assert out["branch"] == "rationale_needed"
+        assert out["kind"] == "finding"
+        # Reminder text should reflect the kind, not say "requirement".
+        assert "finding" in out["reminder"].lower()
+
+    def test_kind_recorded_in_intake_log(self, store, monkeypatch):
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "methodology",
+            "domain": "experimental",
+            "value": "Use N=10 trials per condition for ablation smokes",
+            "rationale_excerpt": "Prior smokes had high variance at N=5.",
+        })
+        intake.process_message(store, "x")
+        lines = [
+            json.loads(l) for l in
+            intake._intake_log_path(store).read_text(encoding="utf-8").splitlines()
+            if l.strip()
+        ]
+        last = lines[-1]
+        assert last["kind"] == "methodology"
+        assert last["branch"] == "captured_with_rationale"
+
+    def test_domain_whitelist_does_not_block_non_requirement_kinds(
+        self, store, monkeypatch,
+    ):
+        # Findings legitimately use domains like "experimental" that
+        # aren't in AUTO_CAPTURE_DOMAINS. The whitelist should not
+        # downgrade them — they take a different path (no auto-link)
+        # so the guardrail shouldn't fire.
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "finding",
+            "domain": "experimental",  # not in whitelist
+            "value": "Some empirical finding",
+            "rationale_excerpt": "we measured it.",
+        })
+        out = intake.process_message(store, "x")
+        assert out["branch"] == "captured_with_rationale"
+        assert out["domain_whitelist_blocked"] is False
+
 
 # ---------------------------------------------------------------------------
 # intake_stats — M11.5 P3 observability surface
@@ -401,6 +554,33 @@ class TestIntakeStats:
         # captured = auto_link + captured_with_rationale
         assert out["captured"] == 3
         assert out["captured_pct"] == round(3 / 8 * 100, 1)
+
+    def test_by_kind_tallies_captured_kinds(self, store):
+        # M12.5: intake_stats reports captured-by-kind so users can
+        # see whether their findings are landing in FINDINGS.md or
+        # everything's still defaulting to requirement.
+        log_path = intake._intake_log_path(store)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        with log_path.open("w", encoding="utf-8") as f:
+            # 2 auto_link reqs, 1 captured finding, 1 captured rule,
+            # 1 propose (not counted), 1 noop (not counted)
+            for entry in [
+                {"branch": "auto_link", "kind": "requirement"},
+                {"branch": "auto_link", "kind": "requirement"},
+                {"branch": "captured_with_rationale", "kind": "finding"},
+                {"branch": "captured_with_rationale", "kind": "process_rule"},
+                {"branch": "propose", "kind": "requirement"},
+                {"branch": "noop"},
+            ]:
+                f.write(json.dumps({"ts": ts, **entry}) + "\n")
+        out = services.intake_stats(store)
+        assert out["by_kind"]["requirement"] == 2
+        assert out["by_kind"]["finding"] == 1
+        assert out["by_kind"]["process_rule"] == 1
+        # propose and noop don't contribute (nothing was persisted).
+        assert sum(out["by_kind"].values()) == 4
 
     def test_noop_breakdown(self, store):
         log_path = intake._intake_log_path(store)

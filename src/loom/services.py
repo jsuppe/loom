@@ -1873,6 +1873,7 @@ def intake_stats(
         "exists": False,
         "fires": 0,
         "by_branch": {},
+        "by_kind": {},  # M12.5
         "captured": 0,
         "captured_pct": 0.0,
         "noop_breakdown": {},
@@ -1904,6 +1905,7 @@ def intake_stats(
 
     fires = len(entries)
     by_branch: dict[str, int] = {}
+    by_kind: dict[str, int] = {}  # M12.5
     noop_breakdown: dict[str, int] = {}
     guardrails = {"softener": 0, "domain_blocked": 0, "budget_exceeded": 0}
     latencies: list[float] = []
@@ -1915,6 +1917,11 @@ def intake_stats(
         by_branch[branch] = by_branch.get(branch, 0) + 1
         if branch in ("auto_link", "captured_with_rationale"):
             captured += 1
+            # M12.5: only count kind for captured branches — for noop /
+            # propose / rationale_needed the kind is incidental and
+            # nothing got persisted, so it would inflate the breakdown.
+            k = e.get("kind") or "requirement"
+            by_kind[k] = by_kind.get(k, 0) + 1
         if branch == "noop":
             reason = e.get("reason") or "unknown"
             noop_breakdown[reason] = noop_breakdown.get(reason, 0) + 1
@@ -1950,6 +1957,7 @@ def intake_stats(
         "exists": True,
         "fires": fires,
         "by_branch": by_branch,
+        "by_kind": by_kind,  # M12.5
         "captured": captured,
         "captured_pct": round(captured / fires * 100.0, 1) if fires else 0.0,
         "noop_breakdown": noop_breakdown,

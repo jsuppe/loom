@@ -794,6 +794,13 @@ def cmd_intake_stats(args):
             data['by_branch'].items(), key=lambda kv: -kv[1],
         ):
             print(f"  {branch:<30} {n}")
+        if data.get('by_kind'):
+            print()
+            print("By kind (captured):")
+            for kind, n in sorted(
+                data['by_kind'].items(), key=lambda kv: -kv[1],
+            ):
+                print(f"  {kind:<30} {n}")
         if data['noop_breakdown']:
             print()
             print("Noop reasons:")
@@ -855,7 +862,11 @@ def cmd_intake(args):
             print("  (classifier returned no parsable JSON or errored)")
         return 0
 
-    print(f"🧵 Loom Intake — branch: {branch}")
+    kind_tag = outcome.get("kind", "requirement")
+    if kind_tag != "requirement":
+        print(f"🧵 Loom Intake — branch: {branch}  <{kind_tag}>")
+    else:
+        print(f"🧵 Loom Intake — branch: {branch}")
     print()
     if outcome["softener_triggered"]:
         print("  ⓘ softener language detected → propose forced")

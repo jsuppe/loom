@@ -110,37 +110,76 @@ def _has_softener(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 CLASSIFIER_PROMPT = """\
-You are a requirement-detection classifier for a software project.
-The user just sent a message in a chat about the project. Decide
-whether the message contains a SOFTWARE REQUIREMENT — a statement
-about how the system MUST or SHOULD behave, look, or be structured.
+You are a knowledge-capture classifier for a software project. The
+user just sent a message in a chat about the project. Decide
+whether the message contains a knowledge artifact worth recording
+in the project's loom store.
 
-NOT requirements:
+NOT to capture:
   - Questions ("can you...", "what does...", "how do I...")
   - Code edits or fixes ("fix the bug", "make this work")
   - Style preferences without behavior implications ("use 4 spaces")
   - Commentary on the agent's work ("looks good", "try again")
+  - Status updates or progress reports
 
-ARE requirements:
-  - "X must do Y when Z"
-  - "We should rate-limit endpoint X"
-  - "Users need to see Y before deleting"
-  - "Don't ever propagate errors from the retry loop"
+KINDS to capture (pick the BEST single match):
+
+  - "requirement" — how the SYSTEM must/should behave, look, or be
+    structured. Examples:
+      "X must do Y when Z"
+      "We should rate-limit endpoint X"
+      "Users need to see Y before deleting"
+      "Don't ever propagate errors from the retry loop"
+
+  - "finding" — an EMPIRICAL observation discovered through
+    experimentation or analysis ("we measured X", "we observed Y",
+    "the data shows Z"). Examples:
+      "Anti-rationale beats rule by 12pp on the S1 benchmark"
+      "JsIndexer adds +40pp lift when test files are included"
+      "qwen3.5 has 95% precision on the intake classifier task"
+
+  - "methodology" — a decision about HOW we measure, test, or
+    experiment (experimental design, evaluation protocol). Examples:
+      "Use N=10 trials per condition for ablation smokes"
+      "Always pair test files with implementation in the indexer context"
+      "Bake-off harnesses must include placebo conditions"
+
+  - "hypothesis" — a PREDICTION to be tested. Examples:
+      "We expect anti-rationale to underperform rule by ~15pp"
+      "Including JS test files should improve symbol lookup recall"
+
+  - "process_rule" — a rule about how WE (the team / the agent)
+    work on the project, NOT about the system itself. Examples:
+      "All experimental findings must be retained in github"
+      "Don't push directly to main"
+      "Always justify experimental design before running"
 
 Output JSON only, exactly one of:
 
   {{"is_requirement": false}}
 
   {{"is_requirement": true,
-    "domain": "behavior" | "ui" | "data" | "architecture" | "terminology",
-    "value": "<one-sentence requirement statement>",
+    "kind": "requirement" | "finding" | "methodology" | "hypothesis" | "process_rule",
+    "domain": "<short tag — e.g. behavior/ui/data/architecture/terminology for requirements; 'experimental'/'evaluation' for findings; 'operational'/'workflow' for process_rules>",
+    "value": "<one-sentence statement of the captured fact>",
     "rationale_excerpt": "<verbatim sentence from the message that explains WHY, or empty string if not present>"}}
+
+The "is_requirement" field stays as the YES/NO gate even for
+non-requirement kinds — it means "is this worth capturing", and
+"kind" disambiguates which kind. If unsure of the kind, default to
+"requirement".
 
 User message:
 \"\"\"
 {user_message}
 \"\"\"
 """
+
+# Valid kinds the classifier may emit. Mirrors services.VALID_KINDS
+# but kept local so this module doesn't import services at parse time.
+_VALID_KINDS = (
+    "requirement", "finding", "methodology", "hypothesis", "process_rule",
+)
 
 
 def _default_classifier_model() -> str:
@@ -199,6 +238,11 @@ def parse_classifier_output(content: str) -> Optional[dict]:
         return {"is_requirement": False}
     if not obj.get("domain") or not obj.get("value"):
         return None
+    # M12.5: validate/default kind. Older models that don't know the
+    # field, or invent a kind outside the enum, fall back to
+    # "requirement" (the M11.5 baseline behavior).
+    raw_kind = (obj.get("kind") or "requirement").strip().lower()
+    obj["kind"] = raw_kind if raw_kind in _VALID_KINDS else "requirement"
     return obj
 
 
@@ -296,28 +340,43 @@ def _predicted_req_id(domain: str, value: str) -> str:
     return f"REQ-{_h.sha256(f'{domain.strip().lower()}:{value.strip()}'.encode()).hexdigest()[:8]}"
 
 
+def _kind_noun(kind: str) -> str:
+    """Human-readable noun for the captured kind. Used in reminder
+    text so 'Loom captured this as a finding ...' reads naturally
+    instead of always saying 'requirement'."""
+    return {
+        "requirement": "requirement",
+        "finding": "finding",
+        "methodology": "methodology decision",
+        "hypothesis": "hypothesis",
+        "process_rule": "process rule",
+    }.get(kind, "requirement")
+
+
 def _format_reminder(branch: str, payload: dict) -> str:
     """Build the system-reminder text for a branch outcome. Kept
     under 500 chars per spec to fit cleanly in agent context."""
+    kind = payload.get("kind", "requirement")
+    noun = _kind_noun(kind)
     if branch == "duplicate":
         return (
             f"Loom recognized this as a duplicate of "
             f"{payload['req_id']} (already in the store). No new "
-            f"requirement captured. If the wording should be "
+            f"{noun} captured. If the wording should be "
             f"updated, use `loom refine {payload['req_id']}`."
         )
     if branch == "auto_link":
         links = ", ".join(payload["rationale_links"])
         return (
-            f"Loom captured this as {payload['req_id']} derived from "
-            f"{links}. If that's wrong, archive with "
+            f"Loom captured this {noun} as {payload['req_id']} derived "
+            f"from {links}. If that's wrong, archive with "
             f"`loom set-status {payload['req_id']} archived` and "
             f"re-extract."
         )
     if branch == "captured_with_rationale":
         return (
-            f"Loom captured this as {payload['req_id']} with the "
-            f"rationale you supplied. No related prior decisions "
+            f"Loom captured this {noun} as {payload['req_id']} with "
+            f"the rationale you supplied. No related prior decisions "
             f"found above the score threshold."
         )
     if branch == "propose":
@@ -326,7 +385,7 @@ def _format_reminder(branch: str, payload: dict) -> str:
             for c in payload["candidates"]
         ]
         return (
-            f"Loom thinks this might be a requirement. Possible "
+            f"Loom thinks this might be a {noun}. Possible "
             f"linkages:\n" + "\n".join(lines) + "\n"
             f"If one applies, run `loom extract --derives-from "
             f"REQ-X --rationale \"...\"`. If none, ask the user "
@@ -334,11 +393,11 @@ def _format_reminder(branch: str, payload: dict) -> str:
         )
     if branch == "rationale_needed":
         return (
-            f"Loom detected a requirement but found no rationale "
+            f"Loom detected a {noun} but found no rationale "
             f"or related prior decisions. Before editing, ask the "
             f"user *why* this is needed — what's the constraint, "
             f"deadline, or incident this addresses? Then run "
-            f"`loom extract --rationale \"...\"`."
+            f"`loom extract --kind {kind} --rationale \"...\"`."
         )
     return ""
 
@@ -382,6 +441,7 @@ def process_message(
         "req_id": None,
         "candidates": [],
         "classification": classification,
+        "kind": "requirement",  # M12.5: filled in once classifier ack'd
         "softener_triggered": False,
         "budget_exceeded": False,
         "domain_whitelist_blocked": False,
@@ -408,10 +468,26 @@ def process_message(
         })
         return outcome
 
+    # M12.5: capture the classifier's kind so downstream branches
+    # persist with the right per-kind file, and so the reminder
+    # text uses the matching noun ("Loom captured this finding ...").
+    kind = (classification.get("kind") or "requirement").strip().lower()
+    if kind not in _VALID_KINDS:
+        kind = "requirement"
+    outcome["kind"] = kind
+
     # Guardrails before deciding the branch.
     softener = _has_softener(classification["value"])
     domain = classification.get("domain", "")
-    domain_blocked = domain not in AUTO_CAPTURE_DOMAINS
+    # The domain whitelist was calibrated for software-requirement
+    # capture (behavior/data/architecture). Findings, methodology,
+    # hypotheses, and process-rules use different domain conventions
+    # (experimental/operational/etc), so the whitelist doesn't apply
+    # — and we already disable auto-link for those kinds, so this
+    # field stays advisory only.
+    domain_blocked = (
+        kind == "requirement" and domain not in AUTO_CAPTURE_DOMAINS
+    )
     budget_used = _today_auto_link_count(store)
     budget_exceeded = budget_used >= daily_budget
     outcome["softener_triggered"] = softener
@@ -446,7 +522,7 @@ def process_message(
         outcome["branch"] = "duplicate"
         outcome["req_id"] = predicted_id
         outcome["reminder"] = _format_reminder(
-            "duplicate", {"req_id": predicted_id},
+            "duplicate", {"req_id": predicted_id, "kind": kind},
         )
         _record(store, {
             "branch": "duplicate",
@@ -454,12 +530,21 @@ def process_message(
             "classifier_latency_ms": cls_latency,
             "candidates_top_score": candidates[0]["score"],
             "candidates_count": len(candidates),
+            "kind": kind,
         })
         return outcome
 
     # ---- Branch selection ----
+    # M12.5: auto-link is requirement-only. The rationale_links
+    # semantic ("derives from") is a requirement-to-requirement
+    # relation; a finding doesn't derive from a requirement, it
+    # *evidences* one (M12.6 will add that link type). For findings,
+    # methodology, hypothesis, process_rule we route through the
+    # captured-with-rationale / rationale-needed / propose paths
+    # without persisting unverified parent links.
     auto_link_eligible = (
-        candidates
+        kind == "requirement"
+        and candidates
         and candidates[0]["score"] >= AUTO_LINK_THRESHOLD
         and not softener
         and not domain_blocked
@@ -482,12 +567,13 @@ def process_message(
                 rationale_links=link_ids,
                 msg_id=msg_id,
                 session=session,
+                kind=kind,
             )
         except ValueError as e:
             # Extract validation rejected — fall back to propose so
             # the user can fix.
             outcome["branch"] = "propose"
-            payload = {"candidates": candidates}
+            payload = {"candidates": candidates, "kind": kind}
             outcome["reminder"] = (
                 f"Loom thought this should auto-link but extract "
                 f"rejected it: {e}. Candidates:\n"
@@ -500,6 +586,7 @@ def process_message(
                 "candidates_top_score": candidates[0]["score"]
                                           if candidates else None,
                 "candidates_count": len(candidates),
+                "kind": kind,
             })
             return outcome
 
@@ -509,6 +596,7 @@ def process_message(
         outcome["reminder"] = _format_reminder("auto_link", {
             "req_id": result["req_id"],
             "rationale_links": link_ids,
+            "kind": kind,
         })
         _record(store, {
             "branch": "auto_link",
@@ -521,12 +609,20 @@ def process_message(
                                 + ("+prose"
                                    if classification.get("rationale_excerpt")
                                    else ""),
+            "kind": kind,
         })
         return outcome
 
-    if candidates:
+    # M12.5: for non-requirement kinds, surface candidates in the
+    # propose reminder if any exist (so the user sees related context),
+    # but otherwise fall through to capture-with-rationale or
+    # rationale-needed. We do NOT skip the propose branch for
+    # requirements since M11.5's calibration assumes it.
+    if candidates and kind == "requirement":
         outcome["branch"] = "propose"
-        outcome["reminder"] = _format_reminder("propose", {"candidates": candidates})
+        outcome["reminder"] = _format_reminder(
+            "propose", {"candidates": candidates, "kind": kind},
+        )
         _record(store, {
             "branch": "propose",
             "classifier_latency_ms": cls_latency,
@@ -535,11 +631,12 @@ def process_message(
             "softener_triggered": softener,
             "domain_whitelist_blocked": domain_blocked,
             "budget_exceeded": budget_exceeded,
+            "kind": kind,
         })
         return outcome
 
-    # No candidates — branch on whether the classifier surfaced
-    # a verbatim rationale.
+    # No candidates (or non-requirement kind) — branch on whether
+    # the classifier surfaced a verbatim rationale.
     if classification.get("rationale_excerpt"):
         try:
             result = services.extract(
@@ -549,22 +646,24 @@ def process_message(
                 rationale=classification["rationale_excerpt"],
                 msg_id=msg_id,
                 session=session,
+                kind=kind,
             )
         except ValueError as e:
             outcome["branch"] = "noop"
             outcome["reminder"] = (
-                f"Loom detected a requirement but extract rejected "
-                f"it: {e}"
+                f"Loom detected a {_kind_noun(kind)} but extract "
+                f"rejected it: {e}"
             )
             _record(store, {
                 "branch": "noop", "reason": "extract_rejected",
-                "error": str(e),
+                "error": str(e), "kind": kind,
             })
             return outcome
         outcome["branch"] = "captured_with_rationale"
         outcome["req_id"] = result["req_id"]
         outcome["reminder"] = _format_reminder(
-            "captured_with_rationale", {"req_id": result["req_id"]},
+            "captured_with_rationale",
+            {"req_id": result["req_id"], "kind": kind},
         )
         _record(store, {
             "branch": "captured_with_rationale",
@@ -573,16 +672,18 @@ def process_message(
             "candidates_top_score": None,
             "candidates_count": 0,
             "rationale_source": "prose",
+            "kind": kind,
         })
         return outcome
 
     outcome["branch"] = "rationale_needed"
-    outcome["reminder"] = _format_reminder("rationale_needed", {})
+    outcome["reminder"] = _format_reminder("rationale_needed", {"kind": kind})
     _record(store, {
         "branch": "rationale_needed",
         "classifier_latency_ms": cls_latency,
         "candidates_top_score": None,
         "candidates_count": 0,
         "rationale_source": "needed",
+        "kind": kind,
     })
     return outcome

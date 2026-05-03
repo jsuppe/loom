@@ -64,11 +64,37 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       REQ-ec36bd89` (L1_rationale) shows L0_meta as ancestor and
       L7/L3/L8/L9 as direct descendants + L6 at depth 2 via L7.
       7 new tests in TestChain (10 total).
-- [ ] **12.5 Kind-aware classifier (intake hook).** Extend the M11.5
-      classifier prompt to return `kind` alongside `is_capturable`,
-      route to kind-appropriate branches. Needs ~50-utterance
-      hand-labeled extension to the M11.5 P0 dataset for the new
-      kinds. ~150 LoC.
+- [x] **12.5 Kind-aware classifier (intake hook).** Extended the
+      M11.5 classifier prompt with definitions and examples for all
+      five kinds (`requirement|finding|methodology|hypothesis|
+      process_rule`); the classifier now emits `kind` alongside
+      `is_requirement`. `parse_classifier_output` validates the
+      kind against `_VALID_KINDS` and falls back to `"requirement"`
+      on missing/invalid values, preserving M11.5 back-compat for
+      models that don't know the field. `process_message`:
+        * passes `kind` through both `services.extract` calls
+        * skips auto-link for non-requirement kinds (the
+          `derives_from` semantic is requirement-to-requirement;
+          findings need M12.6's `evidences` link instead)
+        * skips the propose branch for non-requirement kinds — they
+          flow straight through to capture-with-rationale or
+          rationale-needed
+        * relaxes the `AUTO_CAPTURE_DOMAINS` whitelist for
+          non-requirement kinds (findings legitimately use
+          domains like `experimental`/`operational`)
+        * propagates kind into the reminder text and intake-log
+          record (`"Loom captured this finding as REQ-..."`).
+      `services.intake_stats` gains a `by_kind` tally so users can
+      see whether captures are landing in the right per-kind file or
+      everything's still defaulting to requirement. `loom
+      intake-stats` human output adds a "By kind (captured)"
+      section. `loom intake` human output appends a `<kind>` tag
+      when non-default. 12 new tests (5 parser, 6 process_message,
+      1 intake_stats); all 30 pre-existing intake tests still pass
+      with no modifications. Hand-labeled dataset extension
+      deferred — the prompt is now structurally correct;
+      calibration can be collected from real fires via `loom
+      intake-stats --json` once the hook is registered.
 - [ ] **12.6 `evidences` link type alongside `satisfies`.**
       Distinguishes "this code IMPLEMENTS this requirement" from
       "this file EVIDENCES this finding." Drift detection treats them
