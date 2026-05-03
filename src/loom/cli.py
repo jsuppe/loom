@@ -170,18 +170,31 @@ def cmd_check(args):
     print(f"🧵 Loom Check — {args.file}")
     print()
     signals = data.get("drift_signals", {})
+    # M12.6: when this file evidences a finding/hypothesis, content
+    # drift means "the empirical claim should be re-evaluated", not
+    # "the implementation regressed". Reframe the message.
+    has_evidences = any(
+        r.get("link_type") == "evidences" for r in data["requirements"]
+    )
     if signals.get("content"):
-        print("⚠️  CONTENT DRIFT: file bytes differ from the linked snapshot.")
+        if has_evidences:
+            print("⚠️  EVIDENCE CHANGED: file bytes differ from the snapshot "
+                  "captured when this evidence was linked. Re-evaluate the "
+                  "linked finding(s)/hypothesis(es) before relying on them.")
+        else:
+            print("⚠️  CONTENT DRIFT: file bytes differ from the linked snapshot.")
     if signals.get("structural"):
         print("⚠️  STRUCTURAL DRIFT: symbol signature changed since link time.")
     if signals.get("content") or signals.get("structural"):
         print()
     for r in data["requirements"]:
+        link_type = r.get("link_type", "satisfies")
+        tag = " (evidences)" if link_type == "evidences" else ""
         if r["drifted"]:
-            print(f"⚠️  DRIFT: {r['req_id']} was superseded at {r['superseded_at']}")
+            print(f"⚠️  DRIFT: {r['req_id']}{tag} was superseded at {r['superseded_at']}")
             print(f"   Old: {r['value']}")
         else:
-            print(f"✓ {r['req_id']}: {r['value']}")
+            print(f"✓ {r['req_id']}{tag}: {r['value']}")
     if data["drift_detected"]:
         print()
         print("Drift detected. Review before modifying.")
@@ -426,6 +439,12 @@ def cmd_link(args):
             print(f"  {d['req_id']}: {d['value']}")
         req_ids = [d["req_id"] for d in detected]
 
+    # M12.6 — --evidences forces link_type="evidences" for all req
+    # links in this call (spec links are unaffected; specs are always
+    # the satisfies semantic). Without the flag, link() auto-detects
+    # per-req from kind (finding/hypothesis → evidences, else satisfies).
+    explicit_link_type = "evidences" if getattr(args, "evidences", False) else None
+
     try:
         result = services.link(
             store, file_arg,
@@ -434,6 +453,7 @@ def cmd_link(args):
             spec_ids=spec_ids,
             symbol=symbol,
             language=language,
+            link_type=explicit_link_type,
         )
     except (LookupError, ValueError) as e:
         print(str(e))
@@ -455,8 +475,19 @@ def cmd_link(args):
 
     n_specs = len(result["satisfies_specs"])
     n_reqs = len(result["satisfies"])
+    # M12.6: count how many of the req links were "evidences" so we
+    # can be clear about what kind of relation the user just created.
+    n_evidences = sum(
+        1 for s in result["satisfies"]
+        if s.get("link_type") == "evidences"
+    )
+    n_satisfies = n_reqs - n_evidences
     if n_specs:
         print(f"✓ Linked {args.file} to {n_specs} spec(s) and {n_reqs} requirement(s)")
+    elif n_evidences and n_satisfies:
+        print(f"✓ Linked {args.file} to {n_satisfies} satisfies + {n_evidences} evidences")
+    elif n_evidences:
+        print(f"✓ Linked {args.file} as evidence for {n_evidences} requirement(s)")
     else:
         print(f"✓ Linked {args.file} to {n_reqs} requirement(s)")
     return 0
@@ -1377,16 +1408,32 @@ def cmd_trace(args):
         print(f"   Run: loom link {target} --req REQ-xxx")
         return 0
 
-    print(f"📋 Implements ({len(reqs)} requirement(s)):")
-    print()
-    for r in reqs:
-        if r.get("orphan"):
-            print(f"   ❌ {r['id']} (not found - orphan link)")
-        else:
-            status = "⚠️ superseded" if r["superseded"] else "✓"
-            print(f"   {status} {r['id']} [{r['domain']}]")
-            print(f"      {r['value'][:70]}...")
+    # M12.6: split into "Implements" (satisfies) vs "Evidences"
+    # (evidences) so the user sees the relation type up front. A
+    # single file can play both roles for different reqs.
+    sat = [r for r in reqs if r.get("link_type", "satisfies") == "satisfies"]
+    ev = [r for r in reqs if r.get("link_type") == "evidences"]
+
+    def _print(label: str, items: list[dict]) -> None:
+        if not items:
+            return
+        print(f"{label} ({len(items)} requirement(s)):")
         print()
+        for r in items:
+            if r.get("orphan"):
+                print(f"   ❌ {r['id']} (not found - orphan link)")
+            else:
+                status = "⚠️ superseded" if r["superseded"] else "✓"
+                kind_tag = (
+                    f" <{r['kind']}>" if r.get("kind") and r["kind"] != "requirement"
+                    else ""
+                )
+                print(f"   {status} {r['id']}{kind_tag} [{r['domain']}]")
+                print(f"      {r['value'][:70]}...")
+            print()
+
+    _print("📋 Implements", sat)
+    _print("🔬 Evidences", ev)
 
     return 0
 
@@ -2250,7 +2297,13 @@ def main():
     p_link.add_argument("--language",
                         help="Language for the SemanticIndexer lookup when --symbol "
                              "is given (e.g. python, c++, rust).")
-    
+    p_link.add_argument("--evidences", action="store_true",
+                        help="Mark this link as evidence for a finding/hypothesis "
+                             "rather than implementation. Drift means the empirical "
+                             "claim should be re-evaluated, not that an implementation "
+                             "regressed (M12.6). Without this flag, link_type "
+                             "auto-selects from each req's kind.")
+
     # status
     p_status = sp("status", help="Show status")
     p_status.add_argument("--json", "-j", action="store_true", help="Output as JSON")

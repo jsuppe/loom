@@ -1166,6 +1166,163 @@ class TestLink:
         assert len(impls) == 1
         assert impls[0].id == result["impl_id"]
 
+    # ---- M12.6: link_type / evidences ----
+
+    def test_link_default_kind_requirement_is_satisfies(
+        self, store, fake_embedding, tmp_path,
+    ):
+        # kind=requirement (the default) → link_type defaults to satisfies.
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("def a(): pass\n")
+        result = services.link(store, str(f), req_ids=["REQ-a"])
+        sat = result["satisfies"][0]
+        assert sat["link_type"] == "satisfies"
+
+    def test_link_finding_kind_auto_selects_evidences(
+        self, store, tmp_path,
+    ):
+        # kind=finding → link_type defaults to evidences.
+        out = services.extract(
+            store, domain="experimental",
+            value="we measured a 12pp lift", rationale="phS",
+            kind="finding",
+        )
+        f = tmp_path / "phS.json"
+        f.write_text("{}")
+        result = services.link(store, str(f), req_ids=[out["req_id"]])
+        sat = result["satisfies"][0]
+        assert sat["link_type"] == "evidences"
+
+    def test_link_hypothesis_kind_auto_selects_evidences(
+        self, store, tmp_path,
+    ):
+        out = services.extract(
+            store, domain="experimental",
+            value="we expect anti-rationale to underperform",
+            rationale="prior", kind="hypothesis",
+        )
+        f = tmp_path / "design.md"
+        f.write_text("# design\n")
+        result = services.link(store, str(f), req_ids=[out["req_id"]])
+        assert result["satisfies"][0]["link_type"] == "evidences"
+
+    def test_link_methodology_kind_auto_selects_satisfies(
+        self, store, tmp_path,
+    ):
+        # methodology decisions are implemented (e.g. an N=10 harness
+        # IS the methodology) — defaults to satisfies, not evidences.
+        out = services.extract(
+            store, domain="experimental",
+            value="use N=10 trials per ablation", rationale="variance",
+            kind="methodology",
+        )
+        f = tmp_path / "harness.py"
+        f.write_text("N = 10\n")
+        result = services.link(store, str(f), req_ids=[out["req_id"]])
+        assert result["satisfies"][0]["link_type"] == "satisfies"
+
+    def test_link_explicit_evidences_overrides_kind_default(
+        self, store, fake_embedding, tmp_path,
+    ):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "smoke.json"
+        f.write_text("{}")
+        result = services.link(
+            store, str(f), req_ids=["REQ-x"], link_type="evidences",
+        )
+        sat = result["satisfies"][0]
+        assert sat["link_type"] == "evidences"
+        # Should warn — evidences against a requirement-kind is unusual.
+        assert any("evidences" in w for w in result["warnings"])
+
+    def test_link_explicit_satisfies_overrides_finding_default(
+        self, store, tmp_path,
+    ):
+        out = services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        f = tmp_path / "f.py"
+        f.write_text("x = 1\n")
+        result = services.link(
+            store, str(f), req_ids=[out["req_id"]], link_type="satisfies",
+        )
+        assert result["satisfies"][0]["link_type"] == "satisfies"
+
+    def test_link_invalid_link_type_raises(
+        self, store, fake_embedding, tmp_path,
+    ):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("x\n")
+        with pytest.raises(ValueError, match="link_type"):
+            services.link(
+                store, str(f), req_ids=["REQ-a"], link_type="bogus",
+            )
+
+    def test_check_surfaces_link_type_per_req(
+        self, store, tmp_path,
+    ):
+        # Link a file as evidence for a finding; check() should
+        # report link_type="evidences" so the CLI can render the
+        # differentiated drift message.
+        out = services.extract(
+            store, domain="experimental", value="finding F",
+            rationale="r", kind="finding",
+        )
+        f = tmp_path / "ev.json"
+        f.write_text("{}")
+        services.link(store, str(f), req_ids=[out["req_id"]])
+        data = services.check(store, str(f))
+        assert data["linked"] is True
+        r = data["requirements"][0]
+        assert r["link_type"] == "evidences"
+        assert r["kind"] == "finding"
+
+    def test_trace_file_surfaces_link_type(self, store, tmp_path):
+        out = services.extract(
+            store, domain="experimental", value="finding T",
+            rationale="r", kind="finding",
+        )
+        f = tmp_path / "t.json"
+        f.write_text("{}")
+        services.link(store, str(f), req_ids=[out["req_id"]])
+        data = services.trace(store, str(f))
+        assert data["type"] == "file"
+        r = data["requirements"][0]
+        assert r["link_type"] == "evidences"
+        assert r["kind"] == "finding"
+
+    def test_link_back_compat_old_entries_default_to_satisfies(
+        self, store, fake_embedding, tmp_path,
+    ):
+        # Simulate an old-shape entry (no link_type field) by writing
+        # an Implementation directly with a satisfies entry that
+        # omits link_type — services.check / trace must default to
+        # "satisfies" rather than crashing or returning None.
+        from loom.store import Implementation, generate_content_hash, generate_impl_id
+        _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
+        f = tmp_path / "legacy.py"
+        content = "legacy = True\n"
+        f.write_text(content)
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f),
+            lines="all",
+            content=content,
+            content_hash=generate_content_hash(content),
+            timestamp="2025-01-01T00:00:00Z",
+            satisfies=[{"req_id": "REQ-old", "req_version": "v1"}],  # no link_type
+        )
+        store.add_implementation(impl, fake_embedding)
+        # check
+        data = services.check(store, str(f))
+        assert data["requirements"][0]["link_type"] == "satisfies"
+        # trace (file branch)
+        td = services.trace(store, str(f))
+        assert td["requirements"][0]["link_type"] == "satisfies"
+
 
 class TestDetectRequirements:
     def test_missing_file_raises(self, store):

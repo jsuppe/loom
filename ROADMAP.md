@@ -95,11 +95,43 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       deferred — the prompt is now structurally correct;
       calibration can be collected from real fires via `loom
       intake-stats --json` once the hook is registered.
-- [ ] **12.6 `evidences` link type alongside `satisfies`.**
-      Distinguishes "this code IMPLEMENTS this requirement" from
-      "this file EVIDENCES this finding." Drift detection treats them
-      differently (`evidences` drift → re-evaluate finding's
-      confidence). CLI: `loom link <file> --evidences REQ-X`. ~70 LoC.
+- [x] **12.6 `evidences` link type alongside `satisfies`.**
+      Each entry in `Implementation.satisfies` now carries a
+      `link_type` of `"satisfies"` (this code IMPLEMENTS the
+      requirement) or `"evidences"` (this file SUPPORTS a
+      finding/hypothesis — drift means the empirical claim should
+      be re-evaluated, not that an implementation regressed).
+      `services.link()` gains a `link_type` parameter:
+        * Explicit value (`"satisfies"` | `"evidences"`) forces
+          the type for all req links in the call.
+        * `None` (default) auto-detects per-req from the
+          requirement's kind: `finding` / `hypothesis` →
+          `"evidences"`; everything else → `"satisfies"`.
+        * Spec-derived parent links are always `"satisfies"`
+          (specs ARE the implementation contract).
+        * Explicit `"evidences"` against a non-finding /
+          non-hypothesis req warns but proceeds (sometimes
+          intentional, e.g. evidencing a methodology).
+        * Invalid values raise `ValueError`.
+      `services.check()` surfaces `link_type` and `kind` per req
+      so the CLI can render the differentiated drift message.
+      `services.trace()` (file branch) splits results into
+      "Implements" vs "Evidences" sections. Back-compat: entries
+      written before M12.6 omit the field; readers default to
+      `"satisfies"` everywhere via `.get("link_type", "satisfies")`.
+      The `implementation_linked` event now includes `link_type`
+      so future metrics can break implementation vs. evidence
+      linking down separately. CLI: `loom link <file> --evidences`
+      flag; success line distinguishes "✓ Linked X to N satisfies
+      + M evidences"; `loom check` content-drift message
+      reframes for evidence files ("EVIDENCE CHANGED — re-evaluate
+      the finding"); `loom trace <file>` shows separate
+      "📋 Implements" and "🔬 Evidences" sections with
+      `<finding>`/`<hypothesis>` kind tags. 10 new tests in
+      TestLink (default-from-kind for requirement/finding/
+      hypothesis/methodology, explicit override both directions,
+      invalid value rejection, check + trace surfacing, old-shape
+      back-compat). All 472 pre-M12.6 tests still pass.
 
 ## Milestone 11: Rationale linkage (v1.x)
 

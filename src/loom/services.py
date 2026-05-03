@@ -347,14 +347,20 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
         meta["satisfies"] = _json.loads(meta.get("satisfies", "[]"))
         file_impls.append(meta)
 
-    all_reqs: set[str] = set()
+    # M12.6 — collect (req_id, link_type) per impl. If the same req
+    # is linked twice with different types across line ranges, prefer
+    # "evidences" since it implies a specific empirical claim — easier
+    # to undercount evidence than over-account it as implementation.
+    link_types: dict[str, str] = {}
     for meta in file_impls:
         for sat in meta.get("satisfies", []):
             if rid := sat.get("req_id"):
-                all_reqs.add(rid)
+                lt = sat.get("link_type", "satisfies")
+                if rid not in link_types or lt == "evidences":
+                    link_types[rid] = lt
 
     req_list: list[dict[str, Any]] = []
-    for rid in sorted(all_reqs):
+    for rid in sorted(link_types):
         r = store.get_requirement(rid)
         if r:
             store.touch_requirement(rid)  # M2.1
@@ -364,9 +370,14 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
                 "value": r.value,
                 "status": r.status,
                 "superseded": r.superseded_at is not None,
+                "kind": r.kind,
+                "link_type": link_types[rid],  # M12.6
             })
         else:
-            req_list.append({"id": rid, "orphan": True})
+            req_list.append({
+                "id": rid, "orphan": True,
+                "link_type": link_types[rid],  # M12.6
+            })
 
     return {
         "type": "file",
@@ -1498,6 +1509,13 @@ def check(
                 "drifted": drifted,
                 "superseded_at": req.superseded_at,
                 "rationale": req.rationale,
+                # M12.6 — surface kind + link_type so callers can pick
+                # the right drift message ("re-evaluate finding" for
+                # evidences vs "implementation drifted" for satisfies).
+                # link_type defaults to "satisfies" on entries written
+                # before M12.6.
+                "kind": req.kind,
+                "link_type": sat.get("link_type", "satisfies"),
             })
     drift_signals["superseded"] = superseded_drift
 
@@ -2392,6 +2410,7 @@ def link(
     spec_ids: list[str] | tuple[str, ...] = (),
     symbol: str | None = None,
     language: str | None = None,
+    link_type: str | None = None,
 ) -> dict[str, Any]:
     """Link a file (or line range, or resolved symbol) to requirements
     and/or specifications.
@@ -2413,9 +2432,21 @@ def link(
     Linking a requirement that has active specs is allowed but flagged
     in `warnings` (the CLI's "consider linking to a spec instead" UX).
 
+    M12.6: ``link_type`` distinguishes ``"satisfies"`` (this code
+    IMPLEMENTS the requirement — the default for `kind=requirement`,
+    `methodology`, `process_rule`) from ``"evidences"`` (this file
+    SUPPORTS a `kind=finding`/`hypothesis` — drift means the empirical
+    claim should be re-evaluated, not that an implementation
+    regressed). When ``link_type`` is None, each linked req's kind
+    auto-selects: ``finding``/``hypothesis`` → ``"evidences"``;
+    everything else → ``"satisfies"``. Callers can force a single
+    type by passing it explicitly. Spec links are always
+    ``"satisfies"`` (specs ARE the implementation contract).
+
     Returns:
         {linked: bool, impl_id, file, lines,
-         satisfies: [{req_id}], satisfies_specs: [str], warnings: [str]}
+         satisfies: [{req_id, req_version, link_type}],
+         satisfies_specs: [str], warnings: [str]}
 
     `linked` is False if all provided ids were invalid (or none were
     provided). In that case `impl_id` is `None`, `satisfies` and
@@ -2469,11 +2500,20 @@ def link(
     impl_id = generate_impl_id(file_path, lines or "all")
     content_hash = generate_content_hash(content)
 
+    # M12.6 — validate explicit link_type up front. Auto-detect (None)
+    # is resolved per-req below using each requirement's kind.
+    if link_type is not None and link_type not in ("satisfies", "evidences"):
+        raise ValueError(
+            f"link_type must be 'satisfies' or 'evidences', got {link_type!r}"
+        )
+
     satisfies: list[dict[str, str]] = []
     satisfies_specs: list[str] = []
     warnings: list[str] = []
 
-    # Resolve specs first so we can auto-link parent reqs.
+    # Resolve specs first so we can auto-link parent reqs. Spec-derived
+    # parent links are always "satisfies" — a spec is the HOW for a
+    # requirement, not evidence for a finding.
     for sid in spec_ids:
         spec = store.get_specification(sid)
         if not spec:
@@ -2486,6 +2526,7 @@ def link(
                 satisfies.append({
                     "req_id": spec.parent_req,
                     "req_version": parent.timestamp,
+                    "link_type": "satisfies",
                 })
 
     # Resolve direct req links.
@@ -2507,8 +2548,31 @@ def link(
                     f"prefer --spec: {spec_list}"
                 )
 
+        # M12.6 — pick link_type. Explicit > kind-based default.
+        if link_type is not None:
+            this_link_type = link_type
+        elif req.kind in ("finding", "hypothesis"):
+            this_link_type = "evidences"
+        else:
+            this_link_type = "satisfies"
+
+        # M12.6 — lint: explicit "evidences" against a non-finding /
+        # non-hypothesis req is allowed but warned. The user might be
+        # using it deliberately (e.g. evidencing a methodology decision)
+        # but more often it's a mistake.
+        if (link_type == "evidences"
+                and req.kind not in ("finding", "hypothesis")):
+            warnings.append(
+                f"{rid} is kind={req.kind!r}; --evidences is normally "
+                f"used for finding/hypothesis. Linking anyway."
+            )
+
         if not any(s["req_id"] == rid for s in satisfies):
-            satisfies.append({"req_id": rid, "req_version": req.timestamp})
+            satisfies.append({
+                "req_id": rid,
+                "req_version": req.timestamp,
+                "link_type": this_link_type,
+            })
 
     if not satisfies and not satisfies_specs:
         if not warnings:
@@ -2544,12 +2608,14 @@ def link(
 
     # M5.1: log per-link so `loom metrics` can report linking activity
     # over time. One event per (file, req) pair so the rate matches
-    # what the user did.
+    # what the user did. M12.6 stamps link_type so the metrics rollup
+    # can break implementation vs. evidence linking down separately.
     for s in satisfies:
         _record_event(
             store, "implementation_linked",
             file=file_path, lines=lines or "all",
             req_id=s["req_id"], impl_id=impl_id,
+            link_type=s.get("link_type", "satisfies"),
         )
 
     return {
