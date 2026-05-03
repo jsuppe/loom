@@ -540,8 +540,10 @@ class TestDoctor:
         assert data["checks"]["store"]["ok"] is True
         # Test coverage on empty store: 0/0 → 100%
         assert data["checks"]["test_coverage"]["coverage_pct"] == 100
-        # Domains check passes (no reqs, no custom domains)
-        assert data["checks"]["domains"]["custom"] == []
+        # Domains check passes (no reqs, no custom domains).
+        # M12.7: shape changed from "custom" (flat list) to
+        # "custom_by_kind" (dict keyed by kind).
+        assert data["checks"]["domains"]["custom_by_kind"] == {}
 
     def test_duplicate_specs_surfaced(self, store, fake_embedding):
         """doctor flags any req with >1 non-superseded spec."""
@@ -618,6 +620,63 @@ class TestDoctor:
         store.supersede_requirement("REQ-old")
         data = services.doctor(store)
         assert data["checks"]["drift"]["count"] == 1
+
+    # ---- M12.7: kind-aware doctor ----
+
+    def test_doctor_test_coverage_scopes_to_requirement_kind(self, store):
+        # 1 requirement (no spec) + 2 findings (no spec) + 1 process_rule.
+        # M12.7: only the requirement counts as "missing test spec".
+        services.extract(
+            store, domain="behavior", value="real req", rationale="r",
+        )
+        services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="experimental", value="another finding",
+            rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="operational", value="some rule",
+            rationale="r", kind="process_rule",
+        )
+        data = services.doctor(store)
+        tc = data["checks"]["test_coverage"]
+        assert tc["total"] == 1, "only kind=requirement counted"
+        assert tc["missing"] == 1
+        assert tc["scope"] == "kind=requirement"
+
+    def test_doctor_domain_check_is_per_kind(self, store):
+        # finding with domain=experimental should NOT trigger the
+        # "non-standard domains" warning (experimental IS standard
+        # for findings).
+        services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="operational", value="a rule",
+            rationale="r", kind="process_rule",
+        )
+        data = services.doctor(store)
+        # No "Non-standard domains" warning for the kind-appropriate domains.
+        assert not any("Non-standard domains" in w for w in data["warnings"])
+        assert data["checks"]["domains"]["custom_by_kind"] == {}
+
+    def test_doctor_domain_check_flags_truly_custom_per_kind(self, store):
+        # An invented domain on a finding (e.g. "lunar_phase") should
+        # still surface — but as a finding-kind warning, not generic.
+        services.extract(
+            store, domain="lunar_phase", value="some finding",
+            rationale="r", kind="finding",
+        )
+        data = services.doctor(store)
+        assert "lunar_phase" in str(data["warnings"])
+        assert "finding" in str(data["warnings"])
+        assert data["checks"]["domains"]["custom_by_kind"] == {
+            "finding": ["lunar_phase"],
+        }
 
 
 class TestExtract:
@@ -3147,6 +3206,65 @@ class TestMetrics:
         assert r["superseded"] == 1
         assert r["archived"] == 1
 
+    # ---- M12.7: per-kind metrics rollup ----
+
+    def test_metrics_by_kind_rollup(self, store):
+        # Mix kinds: 2 reqs, 1 finding (confirmed), 1 process_rule.
+        services.extract(store, domain="behavior", value="r1", rationale="r")
+        services.extract(store, domain="behavior", value="r2", rationale="r")
+        f = services.extract(
+            store, domain="experimental", value="finding 1",
+            rationale="r", kind="finding",
+        )
+        services.set_status(store, f["req_id"], "confirmed")
+        services.extract(
+            store, domain="operational", value="rule 1",
+            rationale="r", kind="process_rule",
+        )
+
+        m = services.metrics(store)
+        bk = m["requirements"]["by_kind"]
+        assert bk["requirement"]["total"] == 2
+        assert bk["finding"]["total"] == 1
+        assert bk["finding"]["active"] == 1
+        assert bk["finding"]["by_status"]["confirmed"] == 1
+        assert bk["process_rule"]["total"] == 1
+        # Coverage denominator is requirement-only (M12.7).
+        assert m["coverage"]["denominator"] == 2
+        assert m["coverage"]["scope"] == "kind=requirement"
+
+    def test_metrics_coverage_denominator_excludes_findings(
+        self, store, fake_embedding, tmp_path,
+    ):
+        from loom.store import generate_impl_id
+        # 1 requirement WITH impl + 2 findings WITHOUT impls.
+        _mk_req(store, "REQ-real", "behavior", "linked", fake_embedding)
+        services.extract(
+            store, domain="experimental", value="f1",
+            rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="experimental", value="f2",
+            rationale="r", kind="finding",
+        )
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
+            satisfies=[{"req_id": "REQ-real"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+
+        m = services.metrics(store)
+        # Pre-M12.7 this would have been 1/3 = 33.3%; post-M12.7 it's
+        # 1/1 = 100% because the 2 findings don't dilute the denominator.
+        assert m["coverage"]["with_impls"] == 1
+        assert m["coverage"]["denominator"] == 1
+        assert m["coverage"]["with_impls_pct"] == 100.0
+
     def test_coverage_with_impls(self, store, fake_embedding, tmp_path):
         from loom.store import generate_impl_id
         _mk_req(store, "REQ-A", "behavior", "linked", fake_embedding)
@@ -3345,6 +3463,54 @@ class TestHealthScore:
         assert h["components"]["rationale_coverage"] == 100.0
         assert h["components"]["non_drift"] == 100.0
         assert h["score"] == 40
+
+    # ---- M12.7: kind-aware coverage signals ----
+
+    def test_findings_dont_dilute_impl_coverage(
+        self, store, fake_embedding, tmp_path,
+    ):
+        from loom.store import generate_impl_id
+        # 1 requirement WITH impl + 3 findings WITHOUT impls.
+        # Pre-M12.7 this would have made impl_coverage = 25%; after
+        # M12.7 it's 100% because findings don't have impls.
+        _mk_req(store, "REQ-1", "behavior", "x", fake_embedding)
+        store.touch_requirement("REQ-1")
+        f = tmp_path / "f.py"
+        f.write_text("pass\n")
+        impl = Implementation(
+            id=generate_impl_id(str(f), "all"),
+            file=str(f), lines="all",
+            content="pass\n", content_hash=generate_content_hash("pass\n"),
+            satisfies=[{"req_id": "REQ-1"}],
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        store.add_implementation(impl, fake_embedding)
+        for i in range(3):
+            services.extract(
+                store, domain="experimental", value=f"finding {i}",
+                rationale="r", kind="finding",
+            )
+        h = services.health_score(store)
+        assert h["components"]["impl_coverage"] == 100.0
+        # active_requirement_kind reflects the requirement-only count.
+        assert h["active_requirement_kind"] == 1
+
+    def test_findings_only_store_impl_coverage_is_100(self, store):
+        # No requirement-kind reqs at all — impl_coverage and
+        # test_coverage should be 100 (no signal == no degradation),
+        # not 0 (which would penalize a research-only store).
+        services.extract(
+            store, domain="experimental", value="finding A",
+            rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="experimental", value="finding B",
+            rationale="r", kind="finding",
+        )
+        h = services.health_score(store)
+        assert h["components"]["impl_coverage"] == 100.0
+        assert h["components"]["test_coverage"] == 100.0
+        assert h["active_requirement_kind"] == 0
 
     def test_score_components_dict_has_5_keys(self, store):
         h = services.health_score(store)

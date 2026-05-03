@@ -844,11 +844,17 @@ def doctor(store: LoomStore) -> dict[str, Any]:
             f"{drift_count} implementation(s) linked to superseded requirements"
         )
 
-    # 5. Test spec coverage
+    # 5. Test spec coverage (M12.7: scope to kind=requirement only —
+    #    findings, methodology, hypothesis, process_rules don't have
+    #    test specs in the same sense; counting them as "missing"
+    #    produces a 0% coverage warning on stores rich in findings).
     try:
         spec_store = TestSpecStore(store.data_dir)
         specs = {s.req_id: s for s in spec_store.list_specs()}
-        active_reqs = store.list_requirements(include_superseded=False)
+        active_reqs = [
+            r for r in store.list_requirements(include_superseded=False)
+            if r.kind == "requirement"
+        ]
         missing_specs = [r for r in active_reqs if r.id not in specs]
         coverage_pct = (
             ((len(active_reqs) - len(missing_specs)) / len(active_reqs) * 100)
@@ -860,19 +866,29 @@ def doctor(store: LoomStore) -> dict[str, Any]:
             "missing": len(missing_specs),
             "missing_ids": [r.id for r in missing_specs[:5]],
             "coverage_pct": round(coverage_pct, 1),
+            "scope": "kind=requirement",  # make the M12.7 scoping visible
         }
     except Exception as e:
         checks["test_coverage"] = {"error": str(e)}
 
-    # 6. Domain consistency
-    valid_domains = {"terminology", "behavior", "ui", "data", "architecture"}
-    custom_domains: set[str] = set()
+    # 6. Domain consistency (M12.7: each kind has its own allowed set).
+    custom_domains_by_kind: dict[str, set[str]] = {}
     for r in store.list_requirements(include_superseded=True):
-        if r.domain not in valid_domains:
-            custom_domains.add(r.domain)
-    if custom_domains:
-        warnings.append(f"Non-standard domains: {', '.join(custom_domains)}")
-    checks["domains"] = {"custom": sorted(custom_domains)}
+        if r.domain not in valid_domains_for(r.kind):
+            custom_domains_by_kind.setdefault(r.kind, set()).add(r.domain)
+    if custom_domains_by_kind:
+        # Format like "behavior/ui (in requirements), legacy (in findings)"
+        # so the user knows which kind to fix.
+        per_kind = sorted(
+            f"{', '.join(sorted(domains))} (in {kind}s)"
+            for kind, domains in custom_domains_by_kind.items()
+        )
+        warnings.append(f"Non-standard domains: {'; '.join(per_kind)}")
+    checks["domains"] = {
+        "custom_by_kind": {
+            k: sorted(v) for k, v in custom_domains_by_kind.items()
+        },
+    }
 
     # Duplicate-spec check: any requirement with >1 non-superseded spec.
     # Agents generating specs after edit-confusion have been observed
@@ -2077,15 +2093,39 @@ def metrics(
     active = [r for r in all_reqs
               if r.superseded_at is None and r.status != "archived"]
 
+    # M12.7 — per-kind rollup. Per-kind {total, active, by_status}
+    # so users with mixed-kind stores can see whether their findings
+    # are getting captured / confirmed and how the kinds split.
+    # Coverage % numbers are scoped to kind=requirement (test specs
+    # and impls are requirement-shaped; findings/methodology/etc
+    # don't have them in the same sense).
+    by_kind: dict[str, dict[str, Any]] = {}
+    for r in all_reqs:
+        bucket = by_kind.setdefault(r.kind, {
+            "total": 0, "active": 0, "archived": 0, "superseded": 0,
+            "by_status": {},
+        })
+        bucket["total"] += 1
+        if r.superseded_at:
+            bucket["superseded"] += 1
+        elif r.status == "archived":
+            bucket["archived"] += 1
+        else:
+            bucket["active"] += 1
+        bucket["by_status"][r.status] = bucket["by_status"].get(r.status, 0) + 1
+
     spec_store = TestSpecStore(store.data_dir)
     with_impls = 0
     with_test_specs = 0
-    for req in active:
+    # M12.7: coverage denominators are kind=requirement only.
+    requirement_active = [r for r in active if r.kind == "requirement"]
+    for req in requirement_active:
         if store.get_implementations_for_requirement(req.id):
             with_impls += 1
         if spec_store.get_spec(req.id):
             with_test_specs += 1
     n_active = len(active)
+    n_requirement_active = len(requirement_active)
 
     def _pct(num: int, den: int) -> float:
         return round(100.0 * num / den, 1) if den else 0.0
@@ -2130,12 +2170,20 @@ def metrics(
             "active": n_active,
             "archived": len(archived),
             "superseded": len(superseded),
+            # M12.7: per-kind rollup. None of the existing keys above
+            # change shape; this is purely additive.
+            "by_kind": by_kind,
         },
         "coverage": {
             "with_impls": with_impls,
-            "with_impls_pct": _pct(with_impls, n_active),
+            "with_impls_pct": _pct(with_impls, n_requirement_active),
             "with_test_specs": with_test_specs,
-            "with_test_specs_pct": _pct(with_test_specs, n_active),
+            "with_test_specs_pct": _pct(with_test_specs, n_requirement_active),
+            # M12.7: make the scoping explicit. Both numerators and
+            # denominators are kind=requirement only — non-requirement
+            # kinds don't have impls/test specs in the same sense.
+            "scope": "kind=requirement",
+            "denominator": n_requirement_active,
         },
         "drift": {
             "events": len(drift_events),
@@ -2213,11 +2261,24 @@ def health_score(store: LoomStore) -> dict[str, Any]:
     from .testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
 
+    # M12.7 — impl_coverage and test_coverage are requirement-shaped
+    # signals. Findings/methodology/process_rules don't have impls or
+    # test specs in the same sense, so including them would penalize
+    # finding-rich stores. Scope to kind=requirement; if a project
+    # has zero requirement-kind reqs, those signals are 100 (no
+    # signal == no degradation).
+    requirement_active = [r for r in active if r.kind == "requirement"]
+    n_requirement = len(requirement_active)
     with_impls = sum(
-        1 for r in active if store.get_implementations_for_requirement(r.id)
+        1 for r in requirement_active
+        if store.get_implementations_for_requirement(r.id)
     )
-    with_tests = sum(1 for r in active if spec_store.get_spec(r.id))
+    with_tests = sum(
+        1 for r in requirement_active if spec_store.get_spec(r.id)
+    )
     # M11.3: rationale signal — prose OR linkage chain qualifies.
+    # This stays kind-agnostic: rationale matters for findings too
+    # (probably MORE so — a finding without evidence is just opinion).
     with_rationale = sum(
         1 for r in active
         if r.rationale or r.rationale_links
@@ -2245,8 +2306,17 @@ def health_score(store: LoomStore) -> dict[str, Any]:
         100.0 * clean / total_checks
     )
 
-    impl_pct = 100.0 * with_impls / n_active
-    test_pct = 100.0 * with_tests / n_active
+    # M12.7: impl/test coverage are kind=requirement-only signals.
+    # If a project has zero requirement-kind reqs (a research-only
+    # store of findings), those signals contribute 100 — no signal,
+    # no degradation. The rationale signal stays kind-agnostic; it
+    # applies to every captured artifact.
+    if n_requirement > 0:
+        impl_pct = 100.0 * with_impls / n_requirement
+        test_pct = 100.0 * with_tests / n_requirement
+    else:
+        impl_pct = 100.0
+        test_pct = 100.0
     fresh_pct = 100.0 * fresh / n_active
     rationale_pct = 100.0 * with_rationale / n_active
 
@@ -2264,6 +2334,9 @@ def health_score(store: LoomStore) -> dict[str, Any]:
             "rationale_coverage": round(rationale_pct, 1),
         },
         "active_requirements": n_active,
+        # M12.7: surface the kind-scoped denominator so CI can see
+        # what impl_coverage and test_coverage are computed against.
+        "active_requirement_kind": n_requirement,
     }
 
 
@@ -2706,6 +2779,33 @@ def valid_statuses_for(kind: str) -> tuple[str, ...]:
     `set_kind` validates kind against VALID_KINDS, but readers may
     encounter old-shape data with no kind set."""
     return VALID_STATUSES_BY_KIND.get(kind, VALID_STATUSES_BY_KIND["requirement"])
+
+
+# M12.7 — per-kind valid domains. The doctor's domain consistency
+# check used to flag any domain outside the requirement-kind set
+# (behavior/ui/data/architecture/terminology) as "non-standard",
+# which fired spurious warnings on findings (domain=experimental)
+# and process_rules (domain=operational). Now each kind has its
+# own allowed set; everything not listed falls through as
+# "custom" — still surfaced, but kind-aware so the most common
+# legitimate domains don't trigger.
+VALID_DOMAINS_BY_KIND: dict[str, set[str]] = {
+    "requirement": {"behavior", "ui", "data", "architecture", "terminology"},
+    "finding": {
+        "experimental", "evaluation", "behavior", "data", "architecture",
+    },
+    "methodology": {"experimental", "evaluation", "operational"},
+    "hypothesis": {"experimental", "evaluation"},
+    "process_rule": {"operational", "workflow", "behavior"},
+}
+
+
+def valid_domains_for(kind: str) -> set[str]:
+    """Return the per-kind allowed domain set (M12.7). Falls back
+    to the requirement set for unknown kinds (defensive)."""
+    return VALID_DOMAINS_BY_KIND.get(
+        kind, VALID_DOMAINS_BY_KIND["requirement"],
+    )
 
 
 def sync(

@@ -166,6 +166,59 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       hypothesis/methodology, explicit override both directions,
       invalid value rejection, check + trace surfacing, old-shape
       back-compat). All 472 pre-M12.6 tests still pass.
+- [x] **12.7 Kind-aware doctor / metrics / health-score.**
+      Closes the dogfooding-surfaced gap where doctor flagged
+      legitimate finding/process_rule domains as "non-standard"
+      and metrics' coverage % counted findings as "missing test
+      specs," producing 0% coverage warnings on stores rich in
+      findings. Three changes:
+        * `valid_domains_for(kind)` / `VALID_DOMAINS_BY_KIND` —
+          per-kind allowed domain sets. `requirement` keeps its
+          M0 set (behavior/ui/data/architecture/terminology);
+          `finding` adds experimental/evaluation; `methodology`
+          and `hypothesis` are experimental/evaluation;
+          `process_rule` is operational/workflow/behavior.
+          Doctor's domain check now buckets unknowns by kind:
+          "Non-standard domains in findings: lunar_phase"
+          instead of one global list. Result shape: `domains.
+          custom_by_kind: {kind: [domains]}`.
+        * Doctor's test-coverage check scopes to
+          `kind=requirement` only and exposes
+          `test_coverage.scope = "kind=requirement"` so the user
+          knows what the percentage is computed against.
+          Findings/methodology/process_rules don't have test
+          specs in the same sense; they no longer count as
+          "missing."
+        * `services.metrics` adds `requirements.by_kind` (per-
+          kind {total, active, archived, superseded, by_status}
+          rollup) and exposes `coverage.scope` +
+          `coverage.denominator` so the percentage's basis is
+          transparent. Coverage numerators + denominators are
+          requirement-only; pre-M12.7 they were diluted by
+          findings.
+        * `services.health_score`: `impl_coverage` and
+          `test_coverage` are kind=requirement-only signals.
+          Empty-requirement-set stores get 100 on those signals
+          (no signal == no degradation), so a research-only
+          store of findings isn't scored 0/100. New
+          `active_requirement_kind` field surfaces the scoped
+          denominator.
+      CLI: `loom doctor` per-kind domain warnings + scope tag on
+      coverage. `loom metrics` "By kind" section + scope tag on
+      coverage line. `loom health-score` unchanged shape; just
+      stops being misleading on mixed-kind stores.
+      Empirical impact on the dogfooded loom store (8 findings,
+      2 process_rules, 10 requirements):
+        coverage 47.1% → 88.9% (denominator went 17 → 9)
+        health-score ~50 → 74
+        spurious "Non-standard domains: experimental, operational"
+          warning replaced with the two real per-kind issues
+          ("operational in findings", "data in process_rules")
+      that user can fix via set-kind / domain reclassification.
+      9 new tests (3 doctor, 2 metrics, 2 health-score, +
+      1 fixture-update for the M12.7 domains shape change).
+      All pre-M12.7 tests still pass with one shape-update for
+      `domains.custom` → `domains.custom_by_kind`.
 
 ## Milestone 11: Rationale linkage (v1.x)
 

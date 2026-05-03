@@ -317,10 +317,27 @@ def cmd_metrics(args):
     r = data["requirements"]
     print(f"Requirements:  {r['total']} total — "
           f"{r['active']} active, {r['archived']} archived, {r['superseded']} superseded")
+    # M12.7: per-kind rollup. Suppress when only requirement-kind
+    # exists (don't clutter the default-mode output).
+    by_kind = r.get("by_kind") or {}
+    non_default = {k: v for k, v in by_kind.items() if k != "requirement"}
+    if non_default or len(by_kind) > 1:
+        print("By kind:")
+        for kind in sorted(by_kind):
+            b = by_kind[kind]
+            print(f"  {kind:<14} {b['total']:>3} total  "
+                  f"({b['active']} active, {b['archived']} archived, "
+                  f"{b['superseded']} superseded)")
     c = data["coverage"]
-    print(f"Coverage:      {c['with_impls']}/{r['active']} have linked code "
+    # M12.7: coverage denominator is requirement-only. Surface that
+    # explicitly so the user doesn't think findings are missing
+    # specs they don't need.
+    denom = c.get("denominator", r["active"])
+    scope = c.get("scope", "kind=requirement")
+    print(f"Coverage:      {c['with_impls']}/{denom} have linked code "
           f"({c['with_impls_pct']}%); "
-          f"{c['with_test_specs']}/{r['active']} have test specs ({c['with_test_specs_pct']}%)")
+          f"{c['with_test_specs']}/{denom} have test specs ({c['with_test_specs_pct']}%)"
+          f"  [{scope}]")
     d = data["drift"]
     if d["events"] or d["clean_checks"]:
         print(f"Drift:         {d['events']} events on {d['files_affected']} file(s) "
@@ -1294,25 +1311,31 @@ def cmd_doctor(args):
     else:
         print(f"  ⚠️  {n} implementation(s) need review (linked to superseded reqs)")
 
-    # 5. Test coverage
+    # 5. Test coverage (M12.7: scope is kind=requirement only)
     print("Checking test coverage...")
     tc = checks.get("test_coverage", {})
+    scope = tc.get("scope", "kind=requirement")
     if "error" in tc:
         print(f"  ⚠️  Could not check test specs: {tc['error']}")
+    elif tc.get("total", 0) == 0:
+        print(f"  ✅ No requirement-kind reqs in store — coverage check N/A")
     elif tc.get("missing", 0) == 0:
-        print(f"  ✅ 100% test spec coverage")
+        print(f"  ✅ 100% test spec coverage [{scope}]")
     else:
-        print(f"  ⚠️  {tc['missing']} requirement(s) missing test specs ({tc['coverage_pct']:.0f}% coverage)")
+        print(f"  ⚠️  {tc['missing']}/{tc['total']} requirement(s) missing test specs "
+              f"({tc['coverage_pct']:.0f}% coverage) [{scope}]")
         for rid in tc.get("missing_ids", []):
             print(f"      - {rid}")
 
-    # 6. Domains
+    # 6. Domains (M12.7: per-kind allowed sets)
     print("Checking domains...")
-    custom = checks["domains"]["custom"]
-    if custom:
-        print(f"  ⚠️  Non-standard domains: {', '.join(custom)}")
+    custom_by_kind = checks["domains"].get("custom_by_kind") or {}
+    if custom_by_kind:
+        for kind in sorted(custom_by_kind):
+            domains = ", ".join(custom_by_kind[kind])
+            print(f"  ⚠️  Non-standard domains in {kind}s: {domains}")
     else:
-        print("  ✅ All domains are standard")
+        print("  ✅ All domains are standard for their kind")
 
     # 7. Duplicate non-superseded specs per requirement
     dup_specs = checks.get("duplicate_specs", {})
