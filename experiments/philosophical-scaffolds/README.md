@@ -458,6 +458,338 @@ Loom's validators.
 
 ---
 
+## Operationalizing the integration: Loom-side build plan
+
+*Added 2026-05-03 by the agent on the `jsuppe/sdr-graph-memory`
+side as a follow-up to the handoff section above. The handoff
+section answered "what does Driftgraph offer?" — this section
+answers "what does Loom need to build to consume it?", in
+phased deliverables a single agent can pick up as a work
+package.*
+
+### Status as of this write-up
+
+Driftgraph's Phase 13 ships the substrate:
+
+- `POST /warrants` HTTP endpoint live on `127.0.0.1:8080` (HMAC-
+  SHA256 via `X-Hub-Signature-256`, secret in
+  `LOOM_WEBHOOK_SECRET`)
+- `GET /health` for connection sanity checks
+- `:Episode` accepts `kind="warrant"` alongside `chat` /
+  `authoritative`; tier isolation already filters warrants from
+  contradicting chat or repo claims
+- `:Claim` carries `validator_id` / `validator_score` /
+  `validation_metadata` properties when Loom supplies them
+- New `/warrants` Discord slash command surfacing the
+  validator-admitted subset's quality + per-validator breakdown
+- `/quality` now scores 6 dimensions including `logically_complete`
+  (`validator_id` set AND `validator_score >= 0.7`)
+- `/why` chain rendering shows `_validated by <id> (score X.XX)`
+  per step where applicable
+- Per-project opt-in via `loom_enabled: true` in
+  `projects.yaml`. Sparkeye is opted in by default
+- End-to-end smoke-tested with curl: a valid POST → 201 with
+  `episode_id` + `claim_ids`; the warrant lands in Neo4j with
+  `kind="warrant"` and is queryable via `/warrants`
+
+**There is nothing left to build on the Driftgraph side for
+the v0 integration.** Everything in the build plan below is
+Loom-side.
+
+### Why this is sequenced as four phases
+
+The temptation is to build the full philosophical apparatus
+(Toulmin + falsifiability + Hegelian + …) before exercising
+the wire. Resist it. Each unbuilt piece is risk. The four
+phases below front-load the wire test (cheapest, highest
+information value) so failures show up before philosophical
+investment.
+
+If Phase L1 reveals the contract is wrong or the latency budget
+is impossible, no Toulmin work is wasted. If Phase L2's first
+real validator produces garbage when run against existing
+`loom extract` rationales, that's data about whether Toulmin is
+actually a useful structure for software-spec rationale (a
+finding worth publishing on its own).
+
+### Phase L1 — Wire test (smallest viable, ~1–2 hours)
+
+**Goal:** prove the wire works end-to-end. Ship a Python module
+that posts a hand-supplied "validated warrant" to the Driftgraph
+endpoint and verify it lands.
+
+**Build:**
+
+1. New `loom/warrants.py` (~30 lines) with one function and one
+   CLI entrypoint:
+
+   ```python
+   # loom/warrants.py
+   import hmac, hashlib, json
+   import requests
+
+   def push_warrant(secret: str, endpoint: str, payload: dict) -> dict:
+       body = json.dumps(payload).encode("utf-8")
+       sig = "sha256=" + hmac.new(
+           secret.encode("utf-8"), body, hashlib.sha256
+       ).hexdigest()
+       r = requests.post(
+           endpoint,
+           data=body,
+           headers={
+               "Content-Type": "application/json",
+               "X-Hub-Signature-256": sig,
+           },
+           timeout=15,
+       )
+       r.raise_for_status()
+       return r.json()
+
+   def push_retraction(secret: str, endpoint: str, project: str,
+                       claim_id: str, reason: str = "") -> dict:
+       return push_warrant(secret, endpoint, {
+           "project": project,
+           "validator_id": "loom-retraction",
+           "validator_score": 0.0,
+           "retraction_target_claim_id": claim_id,
+           "rationale": reason,
+       })
+   ```
+
+2. **Trivial validator (Toulmin@v0):** a regex/heuristic
+   "validator" that just checks the rationale has shape — at
+   least 50 chars, contains "because" or "given" or "since",
+   doesn't end mid-word. NO LLM. Output: `{passes: bool,
+   score: float, validator_id: "toulmin@v0", reason: str}`. Goal
+   is to have *something* that produces the payload shape;
+   real validation lands in Phase L2.
+
+3. **CLI:** `python -m loom warrant push --project sparkeye
+   --rationale "..." [--source-claim req-123]`. Calls the
+   trivial validator, then `push_warrant` if it passes.
+
+4. **Config:** `LOOM_WEBHOOK_SECRET` env var on Loom side
+   (matching what Driftgraph has) +
+   `LOOM_DRIFTGRAPH_ENDPOINT=http://127.0.0.1:8080/warrants`.
+
+**Acceptance:**
+
+- `python -m loom warrant push --project sparkeye --rationale
+  "We picked Pixel 8 because the wide lens is non-negotiable
+  and on-device LLM rules out GoPro."` returns
+  `{"episode_id": "ep_...", "claim_ids": [...]}`.
+- The bot's `/warrants` slash command in `#sparkeye-demo`
+  shows the new claim with `validator_id: toulmin@v0`.
+- Bad rationale (`--rationale "lol idk"`) fails the trivial
+  validator locally and never POSTs.
+
+**Verification you can run BEFORE writing any code:**
+
+```bash
+# 1. Substrate health check
+curl http://127.0.0.1:8080/health
+# expected: {"ok": true, "service": "driftgraph-warrants"}
+
+# 2. End-to-end with curl (proves the wire is live)
+SECRET="$LOOM_WEBHOOK_SECRET"
+BODY='{"project":"sparkeye","validator_id":"manual@v0","validator_score":0.9,"claim_text":"Manual smoke","rationale":"posted by curl from loom dev's machine."}'
+SIG="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
+curl -X POST http://127.0.0.1:8080/warrants \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: $SIG" \
+  -d "$BODY"
+# expected: 201 with {"episode_id": "...", "claim_ids": [...]}
+
+# 3. Confirm in Discord
+# (run /warrants in #sparkeye-demo on the Magi server — should show your claim)
+```
+
+If those three steps work, Phase L1's coding job is just
+wrapping #2 in Python. If they don't work, the substrate is
+broken and Loom-side coding is premature — flag the
+`jsuppe/sdr-graph-memory` agent before proceeding.
+
+### Phase L2 — First real validator (Toulmin@v1, ~half day)
+
+**Goal:** replace the trivial heuristic Toulmin@v0 with an
+LLM-driven extraction that produces the full Toulmin shape
+(claim / data / warrant / qualifier / rebuttal).
+
+**Build:**
+
+1. Toulmin prompt template that takes a free-form rationale +
+   optionally the claim it justifies, and emits structured
+   JSON:
+   ```json
+   {
+     "claim": "...",
+     "data": "...",
+     "warrant": "...",
+     "qualifier": "...",
+     "rebuttal": "..."
+   }
+   ```
+2. Validator wrapper: if the LLM returns all five fields with
+   non-empty `claim` + `data` + `warrant`, it passes (score
+   based on completeness — 1.0 for all five, 0.6 if missing
+   qualifier, 0.4 if missing rebuttal, fail if missing the
+   first three).
+3. The `validator_metadata` POSTed to Driftgraph includes the
+   five extracted fields. This is what `/why` and audit queries
+   in Driftgraph will surface as the audit trail.
+4. Pick the proving ground: `loom extract` rationale validation
+   is the doc's recommended starting point. Run Toulmin@v1 on
+   each rationale Loom extracts; warrants that pass go to
+   Driftgraph.
+
+**Acceptance:**
+
+- Run on 20 existing Loom rationale strings (sample from
+  whatever your existing extraction has produced). Expected
+  distribution: 30–60% pass. If 0% pass, the prompt is too
+  strict; if 95%+ pass, it's not catching anything. Tune the
+  prompt until you see meaningful separation.
+- A passing Toulmin@v1 warrant lands in Driftgraph with
+  `validator_id="toulmin@v1"` and `validator_metadata`
+  containing the five Toulmin fields.
+- Driftgraph's `/why` for a topic that has a Toulmin-validated
+  warrant shows the validator annotation in the chain.
+
+**Open question for this phase:** what's the right default
+score? Toulmin completeness alone doesn't measure rightness.
+Consider: pass-with-low-score (e.g. 0.4 if all five fields
+exist but the rebuttal is "n/a") vs hard-fail. The
+`logically_complete` Driftgraph dimension uses 0.7 as the cut;
+calibrate Toulmin@v1 scores so genuinely-good warrants clear
+that bar and weak ones don't.
+
+### Phase L3 — Multi-validator + retraction (~half day)
+
+**Goal:** prove the system handles more than one validator
+and that retraction works.
+
+**Build:**
+
+1. Add a second validator. Falsifiability is the natural pick
+   — it composes with Toulmin (Toulmin extracts shape; falsifi-
+   ability checks "is there a real falsifier?"). Two validators
+   means each warrant gets multiple `validator_id` entries
+   (each is its own Driftgraph claim/episode) OR a composite
+   validator that runs both and returns a combined score.
+   Recommend the former for v0 — separate claims per validator
+   keeps the audit trail clean.
+2. Retraction trigger. When does Loom retract? Three options:
+   - Re-run validators on every commit that touches the
+     underlying rationale (most aggressive)
+   - Re-run on demand via a CLI command
+   - Re-run on a schedule (nightly)
+   For v0, recommend the CLI-triggered re-run. Operator runs
+   `loom warrant revalidate --project sparkeye` periodically.
+3. If a previously-passing warrant fails on re-validation, call
+   `push_retraction(claim_id)`. Driftgraph handles the
+   foundation-drift cascade.
+
+**Acceptance:**
+
+- A warrant passes Toulmin@v1 AND Falsifiability@v1, lands as
+  two separate claims in Driftgraph (different `validator_id`).
+- `/warrants` in Driftgraph shows both validators in the
+  per-validator breakdown.
+- Retracting one of them via `push_retraction` invalidates the
+  corresponding claim; if it had `BECAUSE_OF` dependents, the
+  amber 🪨 foundation-drift alert fires next time a query
+  walks past.
+
+### Phase L4 — Productionize (~variable)
+
+Out of scope for the prototype, but worth listing:
+
+- **Network failures.** Phase L1's `requests.post` will raise
+  on connection errors. Add a retry loop with exponential
+  backoff + a dead-letter file for warrants that fail to push
+  after retries. Loom should be able to re-push from the
+  dead-letter on demand.
+- **Idempotency.** Driftgraph generates `episode_id` server-
+  side, so duplicate POSTs from a retry create duplicate
+  warrants. Add a client-side hash of `(project, claim_text,
+  validator_id, rationale)` and dedupe before pushing — the
+  same rationale shouldn't validate twice in the same week.
+- **Observability.** Log every push attempt, success, failure.
+  If Loom is running in Jon's CI / dev env, dump logs where
+  he'll see them.
+- **Secret rotation.** The HMAC secret currently lives in two
+  places (`.env` files on each side). Rotate together, never
+  in production without coordination.
+- **Strong secret.** Both sides should generate via
+  `python -c "import secrets; print(secrets.token_hex(32))"`
+  and avoid the test value (`test-secret-phase13-…`) for any
+  real run.
+
+### Open questions for the loom dev (decide before Phase L1)
+
+These affect the integration shape and are easier to answer
+than to refactor.
+
+1. **Hosting.** Is Loom running on the same machine as the
+   Driftgraph bot (Jon's Windows machine)? If yes, the
+   `127.0.0.1:8080` default is fine. If Loom moves to a server
+   or runs in CI, the bot needs `WARRANTS_BIND=0.0.0.0` (or a
+   tunnel) and HTTPS termination — neither of which is in
+   place yet.
+2. **Validator latency.** Phase L2's Toulmin call adds 5–15s
+   per LLM pass. If Loom runs validators inside `loom extract`
+   synchronously, every extract gets 5–15s slower. Acceptable?
+   Or async via an in-process queue + background worker?
+3. **Retraction policy.** Phase L3 punts on this with "CLI on
+   demand." What's the longer-term policy — retrigger on every
+   commit, schedule-based, only manual?
+4. **Validator versioning.** `validator_id="toulmin@v1"` bakes
+   the version into the identifier. When Toulmin@v2 ships, do
+   old v1 warrants get re-validated against v2 (and possibly
+   retracted), or do v1 warrants stay v1 forever and only new
+   ones use v2? Recommend the former for trust, but it's a
+   non-trivial migration.
+
+### What's parked / out of scope for this build plan
+
+- Real philosophical scaffolds beyond Toulmin (Hegelian
+  dialectic, Popperian falsifiability beyond the falsifier
+  field, Kantian universalizability, etc.). Wait until
+  Toulmin@v1 proves the loop works on real data.
+- Multi-tenant Loom (one client / one project for now —
+  sparkeye).
+- Driftgraph-side schema changes. None needed; Phase 13 is
+  complete.
+- Bidirectional flow (Driftgraph → Loom). Currently Loom pushes;
+  Driftgraph never pushes back. If Loom needs to know about
+  graph state changes (e.g., a chat utterance superseded a
+  warrant), it polls or queries Driftgraph directly. Bidirec-
+  tional was never proposed in the original ratchet doc.
+
+### What "done" looks like for the next loom-dev session
+
+The minimum signal that Phase 13 integration works
+end-to-end:
+
+1. Run the curl smoke test in "Verification you can run BEFORE
+   writing any code" (above). Confirm 201 + claim shows up in
+   `/warrants`.
+2. Build Phase L1 (the Python client + trivial validator + CLI).
+3. Push three real Loom rationales through it. Confirm:
+   - `/warrants` in Discord shows them
+   - Driftgraph `/quality` reflects them in `logically_complete`
+   - One of them, when `loom warrant push` is re-run with
+     identical args, doesn't double-write (or does — file an
+     issue if so; deduping is Phase L4).
+4. Commit + open a PR with the work, tagging this doc.
+
+The loom dev should NOT block on Phase L2+ before opening that
+first PR. Phase L1's signal — does the wire work with real
+Loom data? — is what determines whether Phase L2's investment
+is justified.
+
+---
+
 ## Open design choices (still up for grabs)
 
 - **Scope.** Narrow (one scaffold × one Loom task, bake-off vs. plain
@@ -533,22 +865,27 @@ between them.
 ## What "done" looks like for the next step
 
 This is no longer a pure thinking doc — it's a research-program
-proposal. Possible next steps in priority order:
+proposal AND a build plan. Possible next steps in priority order:
 
 1. ~~Read sdr-graph-memory's README and architecture. Fill in the
    integration section above with concrete design.~~ *Done
-   2026-05-03 by the agent on the Driftgraph side.* Direction of
-   integration: Loom calls Driftgraph as the substrate; the schema
-   extensions Driftgraph needs are tracked as Phase 13 in its
-   roadmap.
-2. **Write a 2-page protocol doc** for the first scaffold-task pairing.
-   Best initial candidate: Toulmin schema × `loom extract` rationale,
-   since it directly tests the ratchet's value-add.
-3. **Build a minimal harness** modeled on `experiments/gaps/` or
-   `experiments/pilot/`. Single scaffold, single proxy, baseline-vs-
-   scaffolded.
-4. **Run the harness, write a FINDINGS doc, decide whether to expand
-   the typology or kill the program.**
+   2026-05-03.* Direction of integration: Loom calls Driftgraph as
+   the substrate; Driftgraph's Phase 13 (now shipped) provides the
+   `POST /warrants` endpoint, validator-metadata `:Claim` properties,
+   `kind="warrant"` Episode kind, and the `/warrants` slash command.
+2. **Run the smoke test** in *Operationalizing the integration → Phase L1 → Verification you can run BEFORE writing any code*. Three curl calls. Confirms the substrate is reachable from your dev machine before any Loom-side code is written.
+3. **Build Phase L1 (~1–2 hours):** the `loom/warrants.py` HTTP client + a trivial heuristic Toulmin@v0 + `loom warrant push` CLI. Push three real Loom rationales through it. The wire-test proves the contract before philosophical investment.
+4. **Build Phase L2 (~half day):** Toulmin@v1 — replace the heuristic with an LLM-driven extraction emitting the five Toulmin fields. Run on existing `loom extract` output to produce a fire-rate signal.
+5. **Optionally Phase L3 + L4** depending on what L2 reveals. See the build plan above for scoping.
+
+The original "write a 2-page protocol doc" / "build a minimal
+harness" / "run the harness, write FINDINGS" sequence still applies
+*on top of* the integration above — Phases L1–L4 just deliver the
+substrate the harness measures with. The harness compares plain
+Loom-extract rationale vs Toulmin-validated rationale on a chosen
+proxy (contradiction rate, counterfactual reversibility, etc.) —
+and Driftgraph's `/quality` per-validator breakdown becomes one of
+the read-out metrics.
 
 ## Conversation arc (handoff aid)
 
