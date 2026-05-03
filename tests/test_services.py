@@ -1440,6 +1440,122 @@ class TestSetStatus:
         assert result == {"req_id": "REQ-x", "status": "implemented"}
         assert store.get_requirement("REQ-x").status == "implemented"
 
+    # ---- M12.2b: per-kind lifecycle states ----
+
+    def test_finding_accepts_confirmed_status(self, store):
+        out = services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        result = services.set_status(store, out["req_id"], "confirmed")
+        assert result["status"] == "confirmed"
+        assert store.get_requirement(out["req_id"]).status == "confirmed"
+
+    def test_finding_rejects_implemented_status(self, store):
+        # "implemented" is the requirement-kind enum; not valid for findings.
+        out = services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        with pytest.raises(ValueError, match="finding"):
+            services.set_status(store, out["req_id"], "implemented")
+
+    def test_methodology_accepts_adopted_status(self, store):
+        out = services.extract(
+            store, domain="experimental", value="use N=10 trials",
+            rationale="prior variance", kind="methodology",
+        )
+        services.set_status(store, out["req_id"], "adopted")
+        assert store.get_requirement(out["req_id"]).status == "adopted"
+
+    def test_hypothesis_accepts_falsified_status(self, store):
+        out = services.extract(
+            store, domain="experimental", value="prediction P",
+            rationale="prior result", kind="hypothesis",
+        )
+        services.set_status(store, out["req_id"], "falsified")
+        assert store.get_requirement(out["req_id"]).status == "falsified"
+
+    def test_process_rule_accepts_active_status(self, store):
+        out = services.extract(
+            store, domain="operational",
+            value="all findings retained in github",
+            rationale="audit trail", kind="process_rule",
+        )
+        services.set_status(store, out["req_id"], "active")
+        assert store.get_requirement(out["req_id"]).status == "active"
+
+    def test_universal_archived_accepted_for_all_kinds(self, store):
+        # archived/superseded/rationale_needed work across kinds.
+        for kind, value in [
+            ("finding", "f1"), ("methodology", "m1"),
+            ("hypothesis", "h1"), ("process_rule", "p1"),
+        ]:
+            out = services.extract(
+                store, domain="experimental", value=value,
+                rationale="r", kind=kind,
+            )
+            services.set_status(store, out["req_id"], "archived")
+            assert store.get_requirement(out["req_id"]).status == "archived"
+
+    def test_invalid_status_message_includes_kind(self, store):
+        out = services.extract(
+            store, domain="experimental", value="some finding",
+            rationale="r", kind="finding",
+        )
+        try:
+            services.set_status(store, out["req_id"], "in_progress")
+        except ValueError as e:
+            msg = str(e)
+            assert "finding" in msg
+            assert "preliminary" in msg or "confirmed" in msg
+        else:
+            raise AssertionError("expected ValueError")
+
+    def test_valid_statuses_for_helper(self):
+        # Public helper: VALID_STATUSES_BY_KIND is the truth source.
+        assert "preliminary" in services.valid_statuses_for("finding")
+        assert "implemented" not in services.valid_statuses_for("finding")
+        assert "implemented" in services.valid_statuses_for("requirement")
+        assert "adopted" in services.valid_statuses_for("methodology")
+        assert "active" in services.valid_statuses_for("process_rule")
+        # Unknown kind falls back to requirement enum (defensive).
+        assert services.valid_statuses_for("zzz") == services.VALID_STATUSES
+
+    def test_extract_initial_status_is_kind_appropriate(self, store):
+        # M12.2b: when rationale IS provided, the initial status
+        # should reflect the kind, not always "pending".
+        f = services.extract(
+            store, domain="experimental", value="finding x",
+            rationale="r", kind="finding",
+        )
+        assert store.get_requirement(f["req_id"]).status == "preliminary"
+
+        h = services.extract(
+            store, domain="experimental", value="hypothesis x",
+            rationale="r", kind="hypothesis",
+        )
+        assert store.get_requirement(h["req_id"]).status == "proposed"
+
+        m = services.extract(
+            store, domain="experimental", value="methodology x",
+            rationale="r", kind="methodology",
+        )
+        assert store.get_requirement(m["req_id"]).status == "proposed"
+
+        # Requirement-kind keeps "pending" — back-compat.
+        r = services.extract(
+            store, domain="behavior", value="req x", rationale="r",
+        )
+        assert store.get_requirement(r["req_id"]).status == "pending"
+
+    def test_extract_without_rationale_still_uses_rationale_needed(self, store):
+        # Universal rationale_needed marker — kind doesn't change this.
+        f = services.extract(
+            store, domain="experimental", value="finding y", kind="finding",
+        )
+        assert store.get_requirement(f["req_id"]).status == "rationale_needed"
+
 
 class TestRefine:
     def test_unknown_req_raises_lookup(self, store):

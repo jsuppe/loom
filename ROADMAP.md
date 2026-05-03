@@ -48,9 +48,43 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       METHODOLOGY.md all emitted with kind-appropriate framing.
       9 new tests (4 in TestDocGeneration, 3 in TestSync, +
       reuses 2 existing kind round-trip tests). Per-kind
-      lifecycle states + drift-target hints deferred as
-      M12.2b — current shape uses the existing
-      `VALID_STATUSES` for all kinds.
+      lifecycle states deferred as M12.2b (now done).
+- [x] **12.2b Per-kind lifecycle states.** Each kind gets its
+      own status enum (`VALID_STATUSES_BY_KIND`) reflecting its
+      domain lifecycle, plus three universal terminal/debt
+      states (`superseded`, `archived`, `rationale_needed`)
+      accepted across all kinds:
+        * `requirement` — pending → in_progress → implemented
+          → verified  (preserved verbatim from M0)
+        * `finding` — preliminary → confirmed | falsified |
+          refined  (empirical-claim lifecycle)
+        * `methodology` — proposed → adopted → deprecated
+        * `hypothesis` — proposed → testing → confirmed |
+          falsified
+        * `process_rule` — proposed → active → deprecated
+      `valid_statuses_for(kind)` is the public lookup;
+      `services.set_status` and `services.refine` validate
+      against the kind's enum (loading the req first to know
+      its kind) with error messages that name the kind and
+      list valid statuses. `store.set_requirement_status`
+      gains the same per-kind validation (mirrored literal,
+      synced to the services constant). `services.extract`
+      uses `DEFAULT_STATUS_BY_KIND` for the initial status
+      when rationale is provided — findings start
+      `preliminary`, methodology/hypothesis/process_rule
+      start `proposed`, requirements still start `pending`.
+      When rationale is missing, all kinds still default to
+      the universal `rationale_needed` debt marker. CLI
+      `set-status` help text enumerates per-kind options.
+      10 new tests in TestSetStatus (per-kind acceptance,
+      cross-kind rejection, universal-state acceptance,
+      kind-aware error message, helper, kind-aware initial
+      status, rationale_needed universality).
+      Drift-target hints per kind (the original M12.2b
+      sub-item) are out of scope here — M12.6's evidences
+      semantic already differentiates the most important
+      drift surface (finding evidence vs. requirement
+      implementation).
 - [x] **12.4 `loom chain` traverses rationale_links.** Extended
       `services.chain` to walk the rationale-link DAG in both
       directions: `rationale_ancestors` (transitive parents — what

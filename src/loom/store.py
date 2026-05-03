@@ -705,14 +705,31 @@ class LoomStore:
         return req
     
     def set_requirement_status(self, req_id: str, status: str) -> bool:
-        """Update requirement status. Synchronized with
-        ``services.VALID_STATUSES`` (kept as a literal here to avoid
-        importing from the service layer)."""
-        valid_statuses = [
-            "pending", "in_progress", "implemented", "verified",
-            "superseded", "archived", "rationale_needed",
-        ]
-        if status not in valid_statuses:
+        """Update requirement status. M12.2b: validates against the
+        per-kind enum. Synchronized with
+        ``services.VALID_STATUSES_BY_KIND`` (kept as a literal here
+        to avoid importing from the service layer)."""
+        # Three universal terminal/debt states accepted across all kinds.
+        universal = {"superseded", "archived", "rationale_needed"}
+        # Per-kind enums, mirrored from services.VALID_STATUSES_BY_KIND.
+        per_kind: Dict[str, set] = {
+            "requirement": {
+                "pending", "in_progress", "implemented", "verified",
+            } | universal,
+            "finding": {
+                "preliminary", "confirmed", "falsified", "refined",
+            } | universal,
+            "methodology": {"proposed", "adopted", "deprecated"} | universal,
+            "hypothesis": {
+                "proposed", "testing", "confirmed", "falsified",
+            } | universal,
+            "process_rule": {"proposed", "active", "deprecated"} | universal,
+        }
+        existing = self.get_requirement(req_id)
+        if existing is None:
+            return False
+        valid = per_kind.get(existing.kind, per_kind["requirement"])
+        if status not in valid:
             return False
 
         req = self.update_requirement(req_id, {"status": status})

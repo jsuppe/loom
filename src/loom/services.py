@@ -1262,8 +1262,14 @@ def extract(
 
     # M11.1: status defaults to rationale_needed when no rationale source
     # was provided. Visible debt > silent thin requirement.
+    # M12.2b: when rationale IS provided, use the kind-appropriate
+    # default ("preliminary" for findings, "proposed" for hypotheses /
+    # methodology / process_rule, "pending" for requirements).
     has_rationale_source = bool(rationale) or bool(cleaned_links)
-    initial_status = "pending" if has_rationale_source else "rationale_needed"
+    if has_rationale_source:
+        initial_status = DEFAULT_STATUS_BY_KIND.get(kind, "pending")
+    else:
+        initial_status = "rationale_needed"
 
     req = Requirement(
         id=req_id,
@@ -2647,6 +2653,60 @@ VALID_KINDS = (
     "requirement", "finding", "methodology", "hypothesis", "process_rule",
 )
 
+# M12.2b — per-kind lifecycle states. The "requirement" enum equals
+# VALID_STATUSES (preserved verbatim for back-compat with existing
+# stores). Other kinds get domain-appropriate states:
+#   finding:      empirical-claim lifecycle
+#                 (preliminary → confirmed | falsified | refined)
+#   methodology:  procedural-decision lifecycle
+#                 (proposed → adopted → deprecated)
+#   hypothesis:   pre-experiment-claim lifecycle
+#                 (proposed → testing → confirmed | falsified)
+#   process_rule: workflow-rule lifecycle
+#                 (proposed → active → deprecated)
+# Three states are universal across all kinds:
+#   superseded         — replaced by a later capture (M0)
+#   archived           — soft-deleted, recoverable (M2.3)
+#   rationale_needed   — visible debt for missing rationale (M11.1)
+VALID_STATUSES_BY_KIND: dict[str, tuple[str, ...]] = {
+    "requirement": VALID_STATUSES,
+    "finding": (
+        "preliminary", "confirmed", "falsified", "refined",
+        "superseded", "archived", "rationale_needed",
+    ),
+    "methodology": (
+        "proposed", "adopted", "deprecated",
+        "superseded", "archived", "rationale_needed",
+    ),
+    "hypothesis": (
+        "proposed", "testing", "confirmed", "falsified",
+        "superseded", "archived", "rationale_needed",
+    ),
+    "process_rule": (
+        "proposed", "active", "deprecated",
+        "superseded", "archived", "rationale_needed",
+    ),
+}
+
+# Default initial status per kind when rationale IS provided. When
+# rationale is missing, services.extract() forces "rationale_needed"
+# regardless of kind (universal debt marker).
+DEFAULT_STATUS_BY_KIND: dict[str, str] = {
+    "requirement": "pending",
+    "finding": "preliminary",
+    "methodology": "proposed",
+    "hypothesis": "proposed",
+    "process_rule": "proposed",
+}
+
+
+def valid_statuses_for(kind: str) -> tuple[str, ...]:
+    """Return the per-kind status enum (M12.2b). Falls back to the
+    `requirement` enum for unknown kinds — defensive, since
+    `set_kind` validates kind against VALID_KINDS, but readers may
+    encounter old-shape data with no kind set."""
+    return VALID_STATUSES_BY_KIND.get(kind, VALID_STATUSES_BY_KIND["requirement"])
+
 
 def sync(
     store: LoomStore,
@@ -2745,19 +2805,34 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
 
 
 def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
-    """Set a requirement's implementation status.
+    """Set a requirement's lifecycle status (M12.2b: per-kind enum).
+
+    The valid status set depends on the requirement's `kind`
+    (M12.1) — see `VALID_STATUSES_BY_KIND`. For example, a
+    finding accepts `confirmed`/`falsified`/`refined`; a
+    methodology accepts `proposed`/`adopted`/`deprecated`.
+    Three states are universal across all kinds: `superseded`,
+    `archived`, `rationale_needed`.
 
     Returns: {req_id, status}.
 
     Raises:
-        ValueError: status not in VALID_STATUSES.
+        ValueError: status not valid for the req's kind.
         LookupError: req_id not found.
     """
-    if status not in VALID_STATUSES:
+    req = store.get_requirement(req_id)
+    if req is None:
+        raise LookupError(f"Requirement {req_id} not found")
+    valid = valid_statuses_for(req.kind)
+    if status not in valid:
         raise ValueError(
-            f"Invalid status: {status}. Valid: {', '.join(VALID_STATUSES)}"
+            f"Invalid status {status!r} for kind={req.kind!r}. "
+            f"Valid: {', '.join(valid)}"
         )
-    if not store.set_requirement_status(req_id, status):
+    # Bypass store.set_requirement_status's hard-coded enum (which
+    # only knows the requirement-kind statuses) and update directly.
+    # The validation above is the kind-aware check.
+    if store.update_requirement(req_id, {"status": status}) is None:
         raise LookupError(f"Requirement {req_id} not found")
     return {"req_id": req_id, "status": status}
 
@@ -2975,13 +3050,18 @@ def refine(
     """
     if not elaboration or not elaboration.strip():
         raise ValueError("elaboration is required")
-    if status is not None and status not in VALID_STATUSES:
-        raise ValueError(
-            f"Invalid status: {status}. Valid: {', '.join(VALID_STATUSES)}"
-        )
 
-    if store.get_requirement(req_id) is None:
+    # M12.2b — load the req first so status validation knows the kind.
+    existing = store.get_requirement(req_id)
+    if existing is None:
         raise LookupError(f"Requirement {req_id} not found")
+    if status is not None:
+        valid = valid_statuses_for(existing.kind)
+        if status not in valid:
+            raise ValueError(
+                f"Invalid status {status!r} for kind={existing.kind!r}. "
+                f"Valid: {', '.join(valid)}"
+            )
 
     updates: dict[str, Any] = {"elaboration": elaboration.strip()}
     if acceptance_criteria:

@@ -2440,9 +2440,20 @@ def main():
     p_refine.add_argument("--status", "-s", help="Set status (pending, in_progress, implemented, verified)")
     
     # set-status
-    p_set_status = sp("set-status", help="Set requirement implementation status")
+    p_set_status = sp("set-status", help="Set requirement lifecycle status")
     p_set_status.add_argument("req_id", help="Requirement ID")
-    p_set_status.add_argument("status", help="Status: pending, in_progress, implemented, verified, superseded")
+    p_set_status.add_argument(
+        "status",
+        help=(
+            "Lifecycle status — valid set depends on the req's kind "
+            "(M12.2b). requirement: pending|in_progress|implemented|"
+            "verified. finding: preliminary|confirmed|falsified|"
+            "refined. methodology/process_rule: proposed|adopted|"
+            "deprecated (or active for process_rule). hypothesis: "
+            "proposed|testing|confirmed|falsified. All kinds also "
+            "accept superseded|archived|rationale_needed."
+        ),
+    )
     
     # incomplete (list requirements needing refinement)
     p_incomplete = sp("incomplete", help="List requirements needing refinement")
