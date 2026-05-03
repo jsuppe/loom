@@ -41,3 +41,6 @@ experiments/bakeoff/runs/
 # Per-benchmark Dart tool cache
 experiments/bakeoff/benchmarks/**/.dart_tool/
 experiments/bakeoff/benchmarks/**/pubspec.lock
+
+# LaTeX build artifacts (no .tex source committed)
+paper/
