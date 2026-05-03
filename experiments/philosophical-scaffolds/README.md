@@ -574,6 +574,11 @@ endpoint and verify it lands.
 
 **Acceptance:**
 
+**Phase L1 is NOT measured by fire rate.** The fire-rate /
+pass-rate signal lives in Phase L2 once a real LLM-driven
+validator exists. L1 is a per-call wire test — pass/fail per
+request, not a statistical rate. The acceptance is binary:
+
 - `python -m loom warrant push --project sparkeye --rationale
   "We picked Pixel 8 because the wide lens is non-negotiable
   and on-device LLM rules out GoPro."` returns
@@ -582,6 +587,8 @@ endpoint and verify it lands.
   shows the new claim with `validator_id: toulmin@v0`.
 - Bad rationale (`--rationale "lol idk"`) fails the trivial
   validator locally and never POSTs.
+- A `push_retraction` call against a previously-pushed claim_id
+  returns 200 and shows the claim as invalidated in `/warrants`.
 
 **Verification you can run BEFORE writing any code:**
 
@@ -642,26 +649,92 @@ LLM-driven extraction that produces the full Toulmin shape
    each rationale Loom extracts; warrants that pass go to
    Driftgraph.
 
-**Acceptance:**
+**Acceptance — three cuts you tune against:**
 
-- Run on 20 existing Loom rationale strings (sample from
-  whatever your existing extraction has produced). Expected
-  distribution: 30–60% pass. If 0% pass, the prompt is too
-  strict; if 95%+ pass, it's not catching anything. Tune the
-  prompt until you see meaningful separation.
-- A passing Toulmin@v1 warrant lands in Driftgraph with
-  `validator_id="toulmin@v1"` and `validator_metadata`
-  containing the five Toulmin fields.
-- Driftgraph's `/why` for a topic that has a Toulmin-validated
-  warrant shows the validator annotation in the chain.
+Phase L2 is "done" when **all three** of the following hold.
+None of them is a single number; they're complementary signals.
 
-**Open question for this phase:** what's the right default
-score? Toulmin completeness alone doesn't measure rightness.
-Consider: pass-with-low-score (e.g. 0.4 if all five fields
-exist but the rebuttal is "n/a") vs hard-fail. The
-`logically_complete` Driftgraph dimension uses 0.7 as the cut;
-calibrate Toulmin@v1 scores so genuinely-good warrants clear
-that bar and weak ones don't.
+**Cut 1 — Coverage band: 30–60% pass on a 20-rationale sample.**
+
+Sample 20 existing Loom rationale strings (whatever your existing
+extraction has produced — random sample, not curated). Run
+Toulmin@v1 on each. Count how many pass.
+
+- < 30% pass → prompt is over-strict, rejecting things a human
+  reviewer would accept. Loosen.
+- 30–60% pass → prompt is doing real work. The 30–60% band is
+  empirical: it's the range where you've separated "real warrants"
+  from "thin assertions" rather than rubber-stamping or rubber-
+  rejecting everything.
+- \> 60% pass → prompt is too permissive. Tighten.
+
+The band is the broad target. Inside it, look at the *score*
+distribution: bimodal (most claims either ~0.9 or ~0.2) means the
+validator is confidently discriminating. Clustered around 0.5 with
+low confidence everywhere means it isn't.
+
+**Cut 2 — Zero false positives on a 5-rationale canary set.**
+
+Hand-curate 5 obviously-bad rationales as a hard-fail probe:
+
+1. `"we picked X because we wanted to"`
+2. `"TBD"`
+3. `"this is the right call"`
+4. A single-sentence non-justification (e.g., `"because reasons"`)
+5. A rationale that names no prior facts and gives no reasoning
+   (e.g., `"after thinking about it we should use Postgres"`)
+
+Toulmin@v1 must reject **all 5**. A single false positive means
+the prompt admits things that aren't warrants, and the substrate
+becomes unreliable. Tune until 0/5 admit. Add to the canary set
+over time as you find new failure modes.
+
+**Cut 3 — Downstream Driftgraph alignment (informative, optional).**
+
+Push all 20 rationales through (passing AND failing) into Drift-
+graph as separate `kind="warrant"` claims. Run `/quality` and
+look at the per-validator breakdown. Then in cypher-shell:
+
+```cypher
+MATCH (c:Claim {validator_id: "toulmin@v1"})
+WHERE c.invalidated_at IS NULL
+WITH c, c.validator_score AS s,
+     COUNT { (c)-[:BECAUSE_OF]->() } AS n_grd,
+     COUNT { (c)<-[:BECAUSE_OF]-() } AS n_lnk
+RETURN
+  CASE WHEN s >= 0.7 THEN "passing" ELSE "failing" END AS band,
+  count(c) AS n,
+  avg(toFloat(n_grd > 0)) AS pct_grounded,
+  avg(toFloat(n_lnk > 0)) AS pct_linked
+```
+
+If the passing subset's `pct_grounded` and `pct_linked` are
+materially higher than the failing subset's, Toulmin@v1's
+selectivity aligns with the graph's other quality signals — good
+evidence the validator is catching real structure. If the two
+subsets score the same, Toulmin@v1 is selecting on a different
+axis from what the graph captures. **Either finding is publishable
+on its own** — don't gate Phase L2 completion on this; record
+the result and continue.
+
+**Phase L2 done-checklist:**
+
+- [ ] Tuned Toulmin@v1 prompt hits 30–60% pass on 20 real rationales
+- [ ] 0/5 false positives on the canary set
+- [ ] At least 6–12 `validator_id="toulmin@v1"` claims live in
+      Driftgraph (sparkeye), browsable via `/warrants`
+- [ ] (Bonus, optional) Cut 3 downstream alignment check run, result
+      logged regardless of direction
+
+**Open question for this phase:** what's the right default score?
+Toulmin completeness alone doesn't measure rightness. Consider:
+pass-with-low-score (e.g. 0.4 if all five fields exist but the
+rebuttal is "n/a") vs hard-fail. The `logically_complete`
+Driftgraph dimension uses 0.7 as the cut; calibrate Toulmin@v1
+scores so genuinely-good warrants clear that bar and weak ones
+don't. The Cut 3 query above is also useful for picking the right
+threshold — sweep `s >= X` and find the X that maximizes the
+gap in `pct_grounded` between passing and failing.
 
 ### Phase L3 — Multi-validator + retraction (~half day)
 
