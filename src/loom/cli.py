@@ -24,8 +24,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # Force UTF-8 on stdout/stderr so emoji etc. don't crash on Windows cp1252
-# when the CLI is piped or redirected (FINDINGS-wild F5).
-for _stream in (sys.stdout, sys.stderr):
+# when the CLI is piped or redirected (FINDINGS-wild F5). Stdin is included
+# (M12.3): without it, `loom extract` reads value text via stdin in the
+# system locale (CP1252 on Windows), corrupting non-ASCII characters
+# (em-dash, en-dash, smart quotes, etc.). The corruption silently changes
+# the deterministic req_id hash and breaks downstream `loom link --req`.
+# Surfaced during the M11 dogfooding pass.
+for _stream in (sys.stdout, sys.stderr, sys.stdin):
     if hasattr(_stream, "reconfigure"):
         try:
             _stream.reconfigure(encoding="utf-8")
