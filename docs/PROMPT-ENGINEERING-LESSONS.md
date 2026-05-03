@@ -31,12 +31,14 @@ says: invest in better steering before more horsepower.
 
 ---
 
-## Lesson 1 — Rationale is load-bearing, especially the framing-defuser
+## Lesson 1 — Rationale is load-bearing, polarity-sensitive, and the framing-defuser is its core
 
 **Source:** M8.1 D-smoke
 ([`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md));
 M10.3 phQ3-phQ7 series; phR rhetorical ablation
-([`FINDINGS-bakeoff-v2-rhetorical-ablation.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rhetorical-ablation.md)).
+([`FINDINGS-bakeoff-v2-rhetorical-ablation.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rhetorical-ablation.md));
+phS anti-rationale ablation
+([`FINDINGS-bakeoff-v2-anti-rationale.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-anti-rationale.md)).
 
 The first signal came from M8.1: same data in the store, but D2
 (stored, undelivered) scored **0% compliance** and D3 (stored AND
@@ -84,6 +86,39 @@ guideline: ask "if a future agent reads this rule, what would
 they mistakenly conclude they should do?" Then write the sentence
 that defuses that misreading. That sentence is worth more than
 five sentences of mechanism, cost, or history.
+
+**Sharpened again by phS (anti-rationale, M11+).** Rationale
+operates on a polarity axis, not a presence/absence axis:
+
+| rationale shape | compliance |
+|---|---|
+| **Pro-rule** (the original V_full) | **100%** |
+| Length-matched filler that paraphrases the rule (placebo) | 30% |
+| No rationale at all (rule alone) | 0-20% |
+| **Anti-rule** (direct contradiction) | **15%** |
+| **Equivocal** (rule "may be wrong", "treat as provisional") | **0%** |
+
+Two new findings from this:
+
+1. **The model treats rationale as more authoritative than the
+   rule when they conflict.** Anti-rule rationale doesn't just
+   match the no-rationale baseline — it drops *below* placebo.
+   The rule says "do X," the rationale says "we're moving away
+   from X," and the model moves away from X.
+
+2. **Equivocation is worse than direct contradiction.** A
+   rationale that says "rule X is the legacy convention; we're
+   migrating to Y" preserves rule-in-force-now and gets some
+   compliance (15%). A rationale that says "treat the rule as
+   provisional" or "consider whether it still applies" dissolves
+   the rule's authority entirely (0%).
+
+**Practical safety warning for Loom users.** If you write rationale
+that questions or equivocates about the rule, the model will
+likely override the rule. **Silence is better than ambivalence.**
+If you don't have a clear pro-rule reason yet, leave rationale
+empty (status will fall to `rationale_needed`, which is debt but
+not active sabotage) rather than write a "this might be wrong" hedge.
 
 ---
 
