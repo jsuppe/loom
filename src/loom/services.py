@@ -2579,17 +2579,23 @@ def sync(
     output_dir: str,
     public: bool = False,
 ) -> dict[str, Any]:
-    """Regenerate REQUIREMENTS.md and TEST_SPEC.md.
+    """Regenerate REQUIREMENTS.md, TEST_SPEC.md, and any kind-specific
+    docs (M12.2: FINDINGS.md, METHODOLOGY.md, etc) for kinds with
+    at least one entry in the store.
 
     Returns:
-        {requirements_path, test_spec_path, public, private_excluded}
+        {requirements_path, test_spec_path, kind_paths,
+         public, private_excluded}
 
     `public=True` filters out IDs listed in PRIVATE.md (and any test
     specs marked private). `private_excluded` is the count of req IDs
     that were filtered out, even when `public=False` (informational).
     """
     from pathlib import Path
-    from .docs import generate_requirements_doc, generate_test_spec_doc
+    from .docs import (
+        generate_requirements_doc, generate_test_spec_doc,
+        KIND_DOC_CONFIG,
+    )
     from .testspec import TestSpecStore
 
     out = Path(output_dir)
@@ -2601,12 +2607,32 @@ def sync(
         if spec.private:
             private_ids.add(spec.req_id)
 
-    req_path = generate_requirements_doc(store, out, private_ids, public)
+    # REQUIREMENTS.md — only emits reqs of kind="requirement" (M12.2).
+    # Test spec doc is kind-agnostic (it reads from the test-spec store).
+    req_path = generate_requirements_doc(
+        store, out, private_ids, public, kind="requirement",
+    )
     test_path = generate_test_spec_doc(store, out, specs, private_ids, public)
+
+    # M12.2 — emit a per-kind file for each non-empty non-default kind.
+    # Counts only kinds that have at least one active req.
+    all_reqs = store.list_requirements(include_superseded=False)
+    kinds_present = {r.kind for r in all_reqs}
+    kind_paths: dict[str, str] = {}
+    for kind in KIND_DOC_CONFIG:
+        if kind == "requirement":
+            continue  # already emitted above
+        if kind not in kinds_present:
+            continue  # don't emit empty per-kind files
+        path = generate_requirements_doc(
+            store, out, private_ids, public, kind=kind,
+        )
+        kind_paths[kind] = str(path)
 
     return {
         "requirements_path": str(req_path),
         "test_spec_path": str(test_path),
+        "kind_paths": kind_paths,  # M12.2
         "public": public,
         "private_excluded": len(private_ids),
     }

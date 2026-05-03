@@ -692,6 +692,111 @@ class TestDocGeneration:
         assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
         assert "Derives from" not in content
 
+    # M12.2 — per-kind doc emission
+
+    def test_finding_kind_renders_to_findings_md(self, temp_store, sample_embedding):
+        """A kind=finding requirement should render to FINDINGS.md
+        with finding-appropriate intro text and noun pluralization."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        finding = Requirement(
+            id="REQ-finding-1", domain="behavior",
+            value="Rationale is load-bearing on contrarian specs.",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="phQ3-phQ7 series",
+            kind="finding",
+        )
+        temp_store.add_requirement(finding, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            path = generate_requirements_doc(
+                temp_store, Path(out_dir), kind="finding",
+            )
+            assert path.name == "FINDINGS.md"
+            content = path.read_text(encoding="utf-8")
+        assert "# Findings" in content
+        assert "Empirical observations" in content
+        assert "Active Findings:" in content
+        assert "REQ-finding-1" in content
+
+    def test_methodology_kind_renders_to_methodology_md(self, temp_store, sample_embedding):
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        m = Requirement(
+            id="REQ-meth-1", domain="architecture",
+            value="Use phQ6 conditions for ablation studies.",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="wider headroom for ablation",
+            kind="methodology",
+        )
+        temp_store.add_requirement(m, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            path = generate_requirements_doc(
+                temp_store, Path(out_dir), kind="methodology",
+            )
+            assert path.name == "METHODOLOGY.md"
+            content = path.read_text(encoding="utf-8")
+        assert "# Methodology Decisions" in content
+        assert "Procedural decisions" in content
+        assert "Active Methodology decisions:" in content
+
+    def test_kind_filter_excludes_other_kinds(self, temp_store, sample_embedding):
+        """A REQUIREMENTS.md render must NOT include kind=finding rows."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        req = Requirement(
+            id="REQ-real", domain="behavior", value="real requirement",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r",
+        )
+        finding = Requirement(
+            id="REQ-finding", domain="behavior", value="research finding",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r", kind="finding",
+        )
+        temp_store.add_requirement(req, sample_embedding)
+        temp_store.add_requirement(finding, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir), kind="requirement",
+            ).read_text(encoding="utf-8")
+        # Requirement appears, finding does not.
+        assert "REQ-real" in content
+        assert "REQ-finding" not in content
+        assert "research finding" not in content
+
+    def test_non_requirement_kind_omits_traceability_matrix(self, temp_store, sample_embedding):
+        """Findings/methodology don't have specs/impls in the
+        implementation sense, so the matrix should be skipped."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        f = Requirement(
+            id="REQ-f", domain="behavior", value="finding",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r", kind="finding",
+        )
+        temp_store.add_requirement(f, sample_embedding)
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir), kind="finding",
+            ).read_text(encoding="utf-8")
+        assert "Traceability Matrix" not in content
+
 
 class TestSpecificationTestFile:
     def test_defaults_to_empty_string(self):

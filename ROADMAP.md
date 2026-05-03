@@ -32,11 +32,25 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       `loom list --kind finding` filter, kind tag surfaced in
       human-readable list output (`<finding>` etc, hidden when default).
       10 new tests in `TestExtract`. Foundation for M12.2/12.5/12.6.
-- [ ] **12.2 Per-kind renderers + lifecycle states.** Each kind gets
-      its own rendered output (`REQUIREMENTS.md` / `FINDINGS.md` /
-      `METHODOLOGY.md` / `PROCESS-RULES.md`) and status enum (e.g.
-      finding has `hypothesis|confirmed|falsified|refined|superseded`).
-      Drift-detection target hint per kind. ~150 LoC.
+- [x] **12.2 Per-kind renderers (filenames + framing).**
+      `KIND_DOC_CONFIG` maps each kind to filename, title, intro
+      text, and noun pluralization. `generate_requirements_doc`
+      gains a `kind` parameter (default `"requirement"` for
+      back-compat); the renderer filters to that kind, picks the
+      kind-aware filename, and uses the kind-aware intro. The
+      traceability matrix is skipped for non-requirement kinds
+      (findings/methodology don't have specs/impls in the
+      implementation sense). `services.sync` walks all 5 configured
+      kinds; emits files only for kinds with at least one entry
+      (no empty `PROCESS-RULES.md` if there are no process rules).
+      Result shape gains `kind_paths` dict. Smoke-tested against a
+      mixed-kind store: REQUIREMENTS.md / FINDINGS.md /
+      METHODOLOGY.md all emitted with kind-appropriate framing.
+      9 new tests (4 in TestDocGeneration, 3 in TestSync, +
+      reuses 2 existing kind round-trip tests). Per-kind
+      lifecycle states + drift-target hints deferred as
+      M12.2b — current shape uses the existing
+      `VALID_STATUSES` for all kinds.
 - [x] **12.4 `loom chain` traverses rationale_links.** Extended
       `services.chain` to walk the rationale-link DAG in both
       directions: `rationale_ancestors` (transitive parents — what

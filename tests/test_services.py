@@ -1196,6 +1196,54 @@ class TestSync:
         result = services.sync(store, str(tmp_path), public=True)
         assert result["public"] is True
 
+    def test_kind_paths_empty_when_no_non_default_kinds(self, store, tmp_path):
+        # Plain requirement-only store → kind_paths should be empty
+        # (REQUIREMENTS.md still emits, but no FINDINGS.md etc).
+        services.extract(
+            store, domain="behavior", value="just a req", rationale="r",
+        )
+        result = services.sync(store, str(tmp_path))
+        assert result["kind_paths"] == {}
+        from pathlib import Path
+        assert (Path(tmp_path) / "REQUIREMENTS.md").exists()
+        assert not (Path(tmp_path) / "FINDINGS.md").exists()
+
+    def test_kind_paths_emits_findings_md(self, store, tmp_path):
+        # Adding a kind=finding req should produce FINDINGS.md.
+        services.extract(
+            store, domain="behavior", value="finding example",
+            rationale="r", kind="finding",
+        )
+        result = services.sync(store, str(tmp_path))
+        from pathlib import Path
+        assert "finding" in result["kind_paths"]
+        findings_path = Path(result["kind_paths"]["finding"])
+        assert findings_path.name == "FINDINGS.md"
+        assert findings_path.exists()
+        content = findings_path.read_text(encoding="utf-8")
+        assert "# Findings" in content
+        assert "finding example" in content
+
+    def test_kind_paths_emits_all_non_default_kinds_with_entries(self, store, tmp_path):
+        services.extract(store, domain="behavior", value="req", rationale="r")
+        services.extract(
+            store, domain="behavior", value="find", rationale="r", kind="finding",
+        )
+        services.extract(
+            store, domain="architecture", value="meth", rationale="r",
+            kind="methodology",
+        )
+        services.extract(
+            store, domain="behavior", value="hyp", rationale="r",
+            kind="hypothesis",
+        )
+        result = services.sync(store, str(tmp_path))
+        assert set(result["kind_paths"]) == {"finding", "methodology", "hypothesis"}
+        # process_rule was NOT extracted → no PROCESS-RULES.md.
+        assert "process_rule" not in result["kind_paths"]
+        from pathlib import Path
+        assert not (Path(tmp_path) / "PROCESS-RULES.md").exists()
+
 
 class TestSupersede:
     def test_unknown_req_raises(self, store):
