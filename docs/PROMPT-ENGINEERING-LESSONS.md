@@ -330,6 +330,72 @@ bottleneck is always at the input.
 
 ---
 
+## Lesson 9 — In raw-prompt mode, imperative weight must live inside the rule, not in meta-instructions about the rule
+
+**Source:** phT rule-precedence ablation
+([`FINDINGS-bakeoff-v2-rule-precedence.md`](../experiments/bakeoff/FINDINGS-bakeoff-v2-rule-precedence.md)).
+
+**Setup:** phS established that anti-rationale beats rule
+(compliance drops to 0% on hostile rationale). phT asked: can a
+rule be written so it pre-empts the rationale?
+
+Five intervention layers tested, all paired with the same
+ANTI_SOFT rationale:
+
+| layer | intervention | compliance |
+|---|---|---|
+| (control) | standard rule | 0% |
+| A: structure | rule restated AFTER rationale | 20% |
+| B: text | inline "this rule takes precedence" | 20% |
+| **B: text** | **absolute imperative wording** ("MUST NOT under any circumstances", "STRICT requirement that overrides general best practices") | **100%** |
+| C: meta | top-of-prompt "Value: is authoritative, Rationale: is informational only" preamble | **0%** |
+
+The two surprises:
+
+1. **Absolute imperative wording inside the rule restored
+   compliance to 100%.** Same semantic content as the standard
+   rule, just rewritten with maximum imperative emphasis. From
+   0% to 100% with no other changes.
+2. **Meta-instructions about authority hierarchy DIDN'T WORK.**
+   The preamble that explained "the Value: line is authoritative;
+   ignore the Rationale: when they conflict" was completely
+   ignored. 0% compliance — same as no intervention.
+
+**The mechanism:** the model treats raw prompts as flat documents.
+There's no privileged "instructions about instructions" layer.
+Imperative-coded tokens carry weight when they sit in the rule's
+own text. Imperative-coded tokens that sit in a *meta*
+description of the rule don't carry weight.
+
+This has direct implications beyond Loom: **for raw `/api/generate`
+prompts, system-prompt-style authority needs to be woven INTO the
+content it governs, not stated separately.** Chat-API users get
+this for free via system messages; raw-prompt users have to
+embed.
+
+**Practical recipe.** When a rule MUST be followed (security,
+compliance, contractual), write it with imperative weight in the
+text:
+
+> ❌ Standard: "Constraint: catch and swallow errors. Do NOT
+>   propagate."
+>
+> ✅ Imperative: "ABSOLUTE REQUIREMENT — NON-NEGOTIABLE: catch
+>   and swallow errors thrown by doFetch on every attempt. You
+>   MUST NOT propagate errors under any circumstances. This is a
+>   STRICT requirement that overrides general best practices."
+
+The first survives anti-rationale dissent at 100%; the second
+collapses to 0%.
+
+**Caveat:** this is specific to raw-prompt mode (Ollama
+`/api/generate` and similar). Chat-API system messages probably
+work differently — likely R_meta_preamble would be effective
+there because the API treats system messages as authoritative.
+Untested at the time of writing.
+
+---
+
 ## How these connect
 
 If you trace the dependencies:
