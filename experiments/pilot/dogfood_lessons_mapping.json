@@ -1,0 +1,12 @@
+{
+  "L0_meta": "REQ-73a0d7de",
+  "L1_rationale": "REQ-ec36bd89",
+  "L7_context_amplifies": "REQ-65f50316",
+  "L6_test_refs": "REQ-2a621c40",
+  "L3_placebo": "REQ-8eb5fca7",
+  "L9_imperative_in_rule": "REQ-92b4c153",
+  "L8_capture_at_source": "REQ-a521b281",
+  "L2_bigger_not_better": "REQ-aaa595ca",
+  "L4_guardrails": "REQ-44283927",
+  "L5_schema_advisory": "REQ-d9e6ba58"
+}
