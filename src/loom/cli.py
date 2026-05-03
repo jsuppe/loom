@@ -1557,6 +1557,87 @@ def cmd_set_kind(args):
     return 0
 
 
+def cmd_warrant(args):
+    """Push or retract a warrant against the Driftgraph substrate (M13).
+
+    Subcommand selected by ``args.warrant_action``:
+      push    — validate a Loom requirement's rationale and POST as
+                a warrant to Driftgraph's /warrants endpoint
+      retract — POST a retraction for a previously-pushed claim_id
+    """
+    from loom import warrants
+
+    if args.warrant_action == "push":
+        store = LoomStore(args.project)
+        req = store.get_requirement(args.req_id)
+        if req is None:
+            print(f"❌ Requirement {args.req_id} not found")
+            return 1
+        rationale = (req.rationale or "").strip()
+        if not rationale:
+            print(f"❌ {args.req_id} has no rationale to validate "
+                  f"(status={req.status}). Add one with `loom refine` "
+                  f"or re-extract with --rationale.")
+            return 1
+        # Phase L1: Toulmin@v0 heuristic. Phase L2 will switch to v1.
+        validator_name = (
+            getattr(args, "validator", None) or
+            os.environ.get("LOOM_WARRANT_VALIDATOR", "toulmin@v0")
+        )
+        if validator_name == "toulmin@v0":
+            result = warrants.toulmin_v0(rationale)
+        else:
+            print(f"❌ unknown validator: {validator_name}")
+            return 1
+        # Surface the validator's verdict before the network call.
+        verdict = "✓ PASS" if result.passes else "✗ FAIL"
+        print(f"{verdict}  {result.validator_id}  score={result.score}  "
+              f"({result.reason})")
+        if not result.passes:
+            print(f"   Validator rejected — not pushing to Driftgraph.")
+            return 2  # 2 = validator-rejected (vs 1 = error)
+        if getattr(args, "dry_run", False):
+            print(f"   [dry-run] would push payload:")
+            payload = result.to_payload(
+                project=args.project_tag or args.project,
+                claim_text=req.value,
+                rationale=rationale,
+            )
+            print(json.dumps(payload, indent=2))
+            return 0
+        try:
+            response = warrants.push_warrant(result.to_payload(
+                project=args.project_tag or args.project,
+                claim_text=req.value,
+                rationale=rationale,
+            ))
+        except (warrants.WarrantPushError, ValueError) as e:
+            print(f"❌ Driftgraph push failed: {e}")
+            return 1
+        print(f"   episode_id: {response.get('episode_id')}")
+        for cid in response.get("claim_ids", []):
+            print(f"   claim_id:   {cid}")
+        return 0
+
+    if args.warrant_action == "retract":
+        try:
+            response = warrants.push_retraction(
+                project=args.project_tag or args.project,
+                claim_id=args.claim_id,
+                reason=args.reason or "",
+            )
+        except (warrants.WarrantPushError, ValueError) as e:
+            print(f"❌ Retraction failed: {e}")
+            return 1
+        print(f"✅ Retracted {response.get('retracted_claim_id')}  "
+              f"(supersedes_edges_written="
+              f"{response.get('supersedes_edges_written')})")
+        return 0
+
+    print("❌ Unknown warrant action — try `loom warrant push` or `loom warrant retract`")
+    return 1
+
+
 def cmd_incomplete(args):
     """List requirements that need refinement."""
     store = LoomStore(args.project)
@@ -2500,6 +2581,48 @@ def main():
              "finding/process-rule as a generic requirement.",
     )
 
+    # warrant — Driftgraph integration (M13)
+    p_warrant = sp(
+        "warrant",
+        help="Push or retract a warrant against the Driftgraph substrate (M13)",
+    )
+    p_warrant_sub = p_warrant.add_subparsers(dest="warrant_action", required=True)
+
+    p_warrant_push = p_warrant_sub.add_parser(
+        "push",
+        help="Validate a requirement's rationale and POST to Driftgraph /warrants",
+    )
+    p_warrant_push.add_argument("req_id", help="Requirement ID to push")
+    p_warrant_push.add_argument(
+        "--validator", default=None,
+        help="Validator to run (default: toulmin@v0; env: LOOM_WARRANT_VALIDATOR)",
+    )
+    p_warrant_push.add_argument(
+        "--project-tag", default=None,
+        help="Project tag sent to Driftgraph (default: this loom project name). "
+             "Useful when the loom project name and the Driftgraph project "
+             "tag differ — e.g. loom captures for sparkeye go under "
+             "project='sparkeye' on Driftgraph.",
+    )
+    p_warrant_push.add_argument(
+        "--dry-run", action="store_true",
+        help="Run the validator and print the payload without POSTing.",
+    )
+
+    p_warrant_retract = p_warrant_sub.add_parser(
+        "retract",
+        help="POST a retraction for a previously-pushed claim_id",
+    )
+    p_warrant_retract.add_argument("claim_id", help="Driftgraph claim ID (clm_...)")
+    p_warrant_retract.add_argument(
+        "--project-tag", default=None,
+        help="Project tag (default: this loom project name)",
+    )
+    p_warrant_retract.add_argument(
+        "--reason", default="",
+        help="Free-form retraction reason recorded with the SUPERSEDES edge",
+    )
+
     # incomplete (list requirements needing refinement)
     p_incomplete = sp("incomplete", help="List requirements needing refinement")
     
@@ -2796,6 +2919,7 @@ def main():
         "refine": cmd_refine,
         "set-status": cmd_set_status,
         "set-kind": cmd_set_kind,
+        "warrant": cmd_warrant,
         "incomplete": cmd_incomplete,
         "spec": cmd_spec_add,
         "specs": cmd_spec_list,
