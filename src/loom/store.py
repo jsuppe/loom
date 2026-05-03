@@ -227,6 +227,14 @@ class Requirement:
     # touches this requirement (query, check, link, trace, chain).
     # `loom stale` ranks requirements by how cold this timestamp is.
     last_referenced: Optional[str] = None
+    # M12.1: typological generalization. Distinguishes captured
+    # requirements ("X must do Y") from findings ("we observed X"),
+    # methodology decisions, hypotheses, and process rules. Default
+    # "requirement" preserves all existing data and behavior. The
+    # field unlocks per-kind renderers (M12.2), kind-aware classifier
+    # routing (M12.5), and the `evidences` link type (M12.6).
+    # See docs/DESIGN-research-mode.md for the full taxonomy.
+    kind: str = "requirement"
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -250,6 +258,7 @@ class Requirement:
         d.setdefault('test_spec_id', None)
         d.setdefault('conversation_context', None)
         d.setdefault('last_referenced', None)
+        d.setdefault('kind', 'requirement')  # M12.1 (back-compat)
         return cls(**d)
     
     def is_complete(self) -> bool:

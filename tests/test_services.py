@@ -710,6 +710,101 @@ class TestExtract:
                 rationale_links=[self_id],
             )
 
+    # M12.1 — kind field tests
+
+    def test_default_kind_is_requirement(self, store):
+        result = services.extract(
+            store, domain="behavior", value="default-kind test", rationale="r",
+        )
+        assert result["kind"] == "requirement"
+        req = store.get_requirement(result["req_id"])
+        assert req.kind == "requirement"
+
+    def test_kind_finding_persisted(self, store):
+        result = services.extract(
+            store, domain="behavior", value="finding-kind test",
+            rationale="r", kind="finding",
+        )
+        assert result["kind"] == "finding"
+        req = store.get_requirement(result["req_id"])
+        assert req.kind == "finding"
+
+    def test_kind_round_trips_through_store(self, store):
+        for k in ("methodology", "hypothesis", "process_rule"):
+            result = services.extract(
+                store, domain="behavior",
+                value=f"{k} value", rationale="r", kind=k,
+            )
+            req = store.get_requirement(result["req_id"])
+            assert req.kind == k, f"kind {k} failed to round-trip"
+
+    def test_invalid_kind_raises(self, store):
+        with pytest.raises(ValueError, match="Invalid kind"):
+            services.extract(
+                store, domain="behavior", value="bad kind",
+                rationale="r", kind="not_a_real_kind",
+            )
+
+    def test_kind_normalized_to_lowercase(self, store):
+        result = services.extract(
+            store, domain="behavior", value="case test",
+            rationale="r", kind="FINDING",
+        )
+        assert result["kind"] == "finding"
+
+    def test_existing_reqs_default_to_requirement_kind_on_load(self, store, fake_embedding):
+        # Hand-construct a Requirement WITHOUT kind to simulate a
+        # pre-M12.1 store. The setdefault in from_dict should assign
+        # kind="requirement" on load.
+        from loom.store import Requirement
+        # Build via from_dict to exercise the setdefault path.
+        d = {
+            "id": "REQ-legacy",
+            "domain": "behavior",
+            "value": "legacy req from before M12.1",
+            "source_msg_id": "m", "source_session": "s",
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        req = Requirement.from_dict(d)
+        assert req.kind == "requirement"
+
+    def test_list_filter_by_kind(self, store):
+        services.extract(store, domain="behavior", value="r1", rationale="r")
+        services.extract(store, domain="behavior", value="f1", rationale="r", kind="finding")
+        services.extract(store, domain="behavior", value="m1", rationale="r", kind="methodology")
+
+        all_reqs = services.list_requirements(store)
+        assert len(all_reqs) == 3
+
+        only_findings = services.list_requirements(store, kind="finding")
+        assert len(only_findings) == 1
+        assert only_findings[0]["text"] == "f1"
+        assert only_findings[0]["kind"] == "finding"
+
+        only_methodology = services.list_requirements(store, kind="methodology")
+        assert len(only_methodology) == 1
+        assert only_methodology[0]["text"] == "m1"
+
+    def test_set_kind_reclassifies(self, store):
+        result = services.extract(
+            store, domain="behavior", value="reclassify test", rationale="r",
+        )
+        assert result["kind"] == "requirement"
+        services.set_kind(store, result["req_id"], "finding")
+        req = store.get_requirement(result["req_id"])
+        assert req.kind == "finding"
+
+    def test_set_kind_invalid_raises(self, store):
+        result = services.extract(
+            store, domain="behavior", value="set-kind validation", rationale="r",
+        )
+        with pytest.raises(ValueError, match="Invalid kind"):
+            services.set_kind(store, result["req_id"], "garbage")
+
+    def test_set_kind_unknown_req_raises(self, store):
+        with pytest.raises(LookupError):
+            services.set_kind(store, "REQ-doesnotexist", "finding")
+
 
 class TestFindRelatedRequirements:
     """M11.1 — semantic candidate retrieval for rationale linkage."""

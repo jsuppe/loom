@@ -230,6 +230,7 @@ def list_requirements(
     store: LoomStore,
     include_superseded: bool = False,
     include_archived: bool = False,
+    kind: str | None = None,
 ) -> list[dict[str, Any]]:
     """List requirements with their spec/test-spec state.
 
@@ -239,6 +240,11 @@ def list_requirements(
     Archived requirements (M2.3) are excluded by default — pass
     `include_archived=True` to surface them. Superseded requirements
     follow the same opt-in pattern via `include_superseded`.
+
+    M12.1: ``kind`` filter restricts the result to a single typological
+    kind (``requirement``, ``finding``, ``methodology``, ``hypothesis``,
+    ``process_rule``). None means "all kinds" (current default
+    behavior).
     """
     from .testspec import TestSpecStore
     spec_store = TestSpecStore(store.data_dir)
@@ -248,12 +254,15 @@ def list_requirements(
     for req in reqs:
         if not include_archived and req.status == "archived":
             continue
+        if kind is not None and req.kind != kind:
+            continue
         spec = spec_store.get_spec(req.id)
         out.append({
             "id": req.id,
             "domain": req.domain,
             "text": req.value,
             "status": req.status,
+            "kind": req.kind,  # M12.1
             "elaboration": req.elaboration,
             "rationale": req.rationale,
             "acceptance_criteria": req.acceptance_criteria or [],
@@ -1094,6 +1103,7 @@ def extract(
     session: str = "cli",
     rationale: str | None = None,
     rationale_links: list[str] | None = None,
+    kind: str = "requirement",
 ) -> dict[str, Any]:
     """Add a single requirement.
 
@@ -1126,6 +1136,12 @@ def extract(
 
     domain = domain.strip().lower()
     value = value.strip()
+    # M12.1: validate kind early so callers fail fast on typos.
+    kind = (kind or "requirement").strip().lower()
+    if kind not in VALID_KINDS:
+        raise ValueError(
+            f"Invalid kind: {kind!r}. Valid: {', '.join(VALID_KINDS)}"
+        )
     timestamp = datetime.now(timezone.utc).isoformat()
     req_id = f"REQ-{_hashlib.sha256(f'{domain}:{value}'.encode()).hexdigest()[:8]}"
 
@@ -1152,6 +1168,7 @@ def extract(
         rationale=rationale,
         rationale_links=cleaned_links,
         status=initial_status,
+        kind=kind,
     )
 
     # Conflict check is best-effort. Done before adding so the conflict
@@ -1190,6 +1207,7 @@ def extract(
         # can break "rationale-grounded vs not" down by source kind.
         has_rationale_links=bool(cleaned_links),
         status=req.status,
+        kind=kind,  # M12.1
     )
     for c in conflicts_out:
         _record_event(
@@ -1204,6 +1222,7 @@ def extract(
         "value": value,
         "status": req.status,  # M11.1
         "rationale_links": list(cleaned_links or []),  # M11.1
+        "kind": req.kind,  # M12.1
         "conflicts": conflicts_out,
     }
 
@@ -2446,6 +2465,18 @@ VALID_STATUSES = (
     "rationale_needed",  # M11.1: visible debt for reqs without rationale or links
 )
 
+# M12.1: orthogonal to status. Tells you what *kind* of captured
+# thing this is. Default "requirement" preserves existing semantics.
+# Use cases per kind:
+#   requirement   — imperative directive ("X must do Y") — drift target: code
+#   finding       — observed result ("we measured Y when X") — drift target: experimental harness + summary
+#   methodology   — procedural decision ("use phQ6 conditions") — drift target: future research code
+#   hypothesis    — pre-experiment claim awaiting test — drift target: corresponding finding
+#   process_rule  — workflow rule ("commit findings to git") — drift target: git/CI state
+VALID_KINDS = (
+    "requirement", "finding", "methodology", "hypothesis", "process_rule",
+)
+
 
 def sync(
     store: LoomStore,
@@ -2533,6 +2564,31 @@ def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
     if not store.set_requirement_status(req_id, status):
         raise LookupError(f"Requirement {req_id} not found")
     return {"req_id": req_id, "status": status}
+
+
+def set_kind(store: LoomStore, req_id: str, kind: str) -> dict[str, Any]:
+    """Reclassify a requirement's typological kind (M12.1).
+
+    Useful when a captured item was initially classified as
+    ``requirement`` (the default) but is actually a ``finding`` or
+    ``methodology`` decision. Doesn't change the value, rationale,
+    or any other state — only the ``kind`` field.
+
+    Returns: {req_id, kind}.
+
+    Raises:
+        ValueError: kind not in VALID_KINDS.
+        LookupError: req_id not found.
+    """
+    kind = (kind or "").strip().lower()
+    if kind not in VALID_KINDS:
+        raise ValueError(
+            f"Invalid kind: {kind!r}. Valid: {', '.join(VALID_KINDS)}"
+        )
+    updated = store.update_requirement(req_id, {"kind": kind})
+    if updated is None:
+        raise LookupError(f"Requirement {req_id} not found")
+    return {"req_id": req_id, "kind": kind}
 
 
 def audit_rationale(store: LoomStore) -> dict[str, Any]:

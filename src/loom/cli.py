@@ -118,6 +118,7 @@ def cmd_extract(args):
                 session=args.session or "cli",
                 rationale=getattr(args, 'rationale', None),
                 rationale_links=rationale_links or None,
+                kind=getattr(args, 'kind', 'requirement'),
             )
         except ValueError as e:
             print(f"✗ extract rejected: {e}")
@@ -523,6 +524,7 @@ def cmd_list(args):
         store,
         include_superseded=args.all,
         include_archived=getattr(args, "include_archived", False) or args.all,
+        kind=getattr(args, "kind", None),
     )
 
     if args.json:
@@ -547,7 +549,10 @@ def cmd_list(args):
             status_parts.append("needs refinement")
 
         status = f" ({', '.join(status_parts)})" if status_parts else ""
-        print(f"{r['id']} [{r['domain']}]{status}")
+        # M12.1: surface the kind tag when it's not the default.
+        kind = r.get('kind', 'requirement')
+        kind_tag = f" <{kind}>" if kind != "requirement" else ""
+        print(f"{r['id']} [{r['domain']}]{kind_tag}{status}")
         print(f"  {r['text']}")
         if r['elaboration']:
             print(f"  📝 {r['elaboration'][:60]}...")
@@ -2171,6 +2176,15 @@ def main():
              "Used as a structured citation chain alongside or instead "
              "of --rationale.",
     )
+    p_extract.add_argument(
+        "--kind", default="requirement",
+        choices=("requirement", "finding", "methodology",
+                 "hypothesis", "process_rule"),
+        help="Typological kind (M12.1). Default 'requirement' (the "
+             "current behavior). Use 'finding' for empirical observations, "
+             "'methodology' for procedural decisions, 'hypothesis' for "
+             "pre-experiment claims, 'process_rule' for workflow rules.",
+    )
     
     # check
     p_check = sp("check", help="Check for drift")
@@ -2215,6 +2229,12 @@ def main():
     # list
     p_list = sp("list", help="List requirements")
     p_list.add_argument("--all", "-a", action="store_true", help="Include superseded + archived")
+    p_list.add_argument(
+        "--kind",
+        choices=("requirement", "finding", "methodology",
+                 "hypothesis", "process_rule"),
+        help="Filter by typological kind (M12.1). Omit to show all kinds.",
+    )
     p_list.add_argument("--include-archived", action="store_true",
                         help="Include archived (default: hidden)")
     p_list.add_argument("--json", "-j", action="store_true", help="Output as JSON (for API)")

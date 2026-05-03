@@ -1,5 +1,57 @@
 # Loom Roadmap
 
+## Milestone 12: Research mode (v1.x)
+
+**Motivation.** Loom was designed for software-development workflows
+(capture imperative requirements, link to code, detect drift). The
+M10/M11 work doing prompt-engineering research surfaced a different
+shape: capturing findings, methodology decisions, hypotheses, and
+process rules. Dogfooding the M11 capture mechanism on the 9
+prompt-engineering lessons surfaced 7 friction points spec'd in
+[`docs/DESIGN-research-mode.md`](docs/DESIGN-research-mode.md).
+
+### 12.1 Tasks
+
+- [x] **12.3 stdin encoding fix.** Real bug: `loom extract` reading
+      value text via stdin used the system locale (CP1252 on Windows),
+      corrupting non-ASCII characters. An em-dash entered as 3 UTF-8
+      bytes got read back as 3 separate CP1252 characters. Symptom:
+      deterministic req_id silently changed, breaking downstream
+      `loom link --req`. Fix: extend the existing stdout/stderr UTF-8
+      reconfigure block to include stdin. 3 regression tests in
+      `tests/test_cli_encoding.py`. Verified em-dash round-trip:
+      predicted req_id matches stored req_id post-fix. (commit `10fc67d`)
+- [x] **12.1 `Requirement.kind` field.** Typological generalization
+      adding an optional `kind` field with values
+      `requirement|finding|methodology|hypothesis|process_rule`.
+      Default `"requirement"` preserves all existing data and behavior
+      via `setdefault` in `from_dict`. New `VALID_KINDS` constant in
+      `services.py` mirrors `VALID_STATUSES`. `services.extract` gains
+      a `kind=` parameter with validation; new `services.set_kind`
+      reclassifies an existing req. CLI: `loom extract --kind finding`,
+      `loom list --kind finding` filter, kind tag surfaced in
+      human-readable list output (`<finding>` etc, hidden when default).
+      10 new tests in `TestExtract`. Foundation for M12.2/12.5/12.6.
+- [ ] **12.2 Per-kind renderers + lifecycle states.** Each kind gets
+      its own rendered output (`REQUIREMENTS.md` / `FINDINGS.md` /
+      `METHODOLOGY.md` / `PROCESS-RULES.md`) and status enum (e.g.
+      finding has `hypothesis|confirmed|falsified|refined|superseded`).
+      Drift-detection target hint per kind. ~150 LoC.
+- [ ] **12.4 `loom chain` traverses rationale_links.** Extend
+      `services.chain` to include rationale_link traversal with cycle
+      protection. ~30 LoC. Currently the M11.1 dependency graph is
+      captured but not navigable via the chain command.
+- [ ] **12.5 Kind-aware classifier (intake hook).** Extend the M11.5
+      classifier prompt to return `kind` alongside `is_capturable`,
+      route to kind-appropriate branches. Needs ~50-utterance
+      hand-labeled extension to the M11.5 P0 dataset for the new
+      kinds. ~150 LoC.
+- [ ] **12.6 `evidences` link type alongside `satisfies`.**
+      Distinguishes "this code IMPLEMENTS this requirement" from
+      "this file EVIDENCES this finding." Drift detection treats them
+      differently (`evidences` drift → re-evaluate finding's
+      confidence). CLI: `loom link <file> --evidences REQ-X`. ~70 LoC.
+
 ## Milestone 11: Rationale linkage (v1.x)
 
 **Motivation.** The full M10 series (phQ3 / phQ4 / phQ5 / phQ7) showed
