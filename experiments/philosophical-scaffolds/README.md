@@ -568,9 +568,59 @@ endpoint and verify it lands.
    --rationale "..." [--source-claim req-123]`. Calls the
    trivial validator, then `push_warrant` if it passes.
 
-4. **Config:** `LOOM_WEBHOOK_SECRET` env var on Loom side
-   (matching what Driftgraph has) +
-   `LOOM_DRIFTGRAPH_ENDPOINT=http://127.0.0.1:8080/warrants`.
+4. **Config — shared secret + endpoint URL.**
+
+   The HMAC secret is stored at a canonical filesystem path that
+   both Driftgraph and Loom read on Jon's machine:
+
+   - **Path:** `C:\Users\jonsu\.driftgraph\loom-webhook-secret`
+     (Windows). On Linux/macOS dev machines the convention would
+     be `~/.driftgraph/loom-webhook-secret`.
+   - **Format:** the file contains the secret as plain text, no
+     trailing newline. 64 hex chars (32 bytes) generated via
+     `python -c "import secrets; print(secrets.token_hex(32))"`.
+   - **Driftgraph reads it indirectly** via the
+     `LOOM_WEBHOOK_SECRET` env var in
+     `<grag>/product/discord_demo/.env`, which currently mirrors
+     the file's contents. When rotated, both copies must be
+     updated together. (For v0 this manual mirror is fine; if
+     rotation becomes a hot path, Driftgraph can grow a small
+     loader that reads the file directly.)
+   - **Loom should also read this file** rather than asking Jon
+     to paste the secret into Loom's config. Recommended Loom-side
+     pattern:
+
+     ```python
+     # in loom/warrants.py
+     import os, pathlib
+
+     def _load_secret() -> str:
+         p = pathlib.Path.home() / ".driftgraph" / "loom-webhook-secret"
+         if p.exists():
+             return p.read_text(encoding="utf-8").strip()
+         # Fallback to env var so CI / non-Jon machines can override
+         return os.environ.get("LOOM_WEBHOOK_SECRET", "")
+     ```
+
+     The home-directory path is the source of truth on the dev
+     machine; the env var is the override knob for any machine
+     where the file isn't available (CI, containers, second dev
+     setups). Both fall through gracefully — empty string when
+     neither is set, which the wrapper should treat as "Loom
+     warrants integration disabled."
+
+   - **Endpoint URL:** the bot listens on `127.0.0.1:8080` by
+     default. Loom should default to
+     `http://127.0.0.1:8080/warrants` and accept an override via
+     `LOOM_DRIFTGRAPH_ENDPOINT` env var for non-default deployments.
+
+   - **Sanity check before any code:** on the dev machine, run
+     `Get-Content $env:USERPROFILE\.driftgraph\loom-webhook-secret`
+     (Windows) or `cat ~/.driftgraph/loom-webhook-secret`
+     (Linux/macOS). It should print a 64-char hex string. If the
+     file is missing on the loom dev's machine, flag back — the
+     `jsuppe/sdr-graph-memory` agent needs to either re-share the
+     secret or coordinate regeneration.
 
 **Acceptance:**
 
@@ -598,8 +648,10 @@ curl http://127.0.0.1:8080/health
 # expected: {"ok": true, "service": "driftgraph-warrants"}
 
 # 2. End-to-end with curl (proves the wire is live)
-SECRET="$LOOM_WEBHOOK_SECRET"
-BODY='{"project":"sparkeye","validator_id":"manual@v0","validator_score":0.9,"claim_text":"Manual smoke","rationale":"posted by curl from loom dev's machine."}'
+#    Read the secret from the canonical shared path.
+SECRET=$(cat ~/.driftgraph/loom-webhook-secret)   # Linux/macOS
+# Windows: SECRET=$(cat $env:USERPROFILE\.driftgraph\loom-webhook-secret)
+BODY='{"project":"sparkeye","validator_id":"manual@v0","validator_score":0.9,"claim_text":"Manual smoke","rationale":"posted by curl from loom dev'\''s machine."}'
 SIG="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
 curl -X POST http://127.0.0.1:8080/warrants \
   -H "Content-Type: application/json" \
