@@ -34,6 +34,7 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 
@@ -411,3 +412,159 @@ def toulmin_v1(rationale: str, *, model: str | None = None,
         reason=str(parsed.get("reason", "")),
         parts=parsed.get("parts", {}) or {},
     )
+
+
+# ---------------------------------------------------------------------------
+# Warrants log — claim_id tracking (Phase L3a)
+# ---------------------------------------------------------------------------
+#
+# After every successful push_warrant or push_retraction, we append a
+# JSONL record so:
+#   - `loom warrant retract --req REQ-id` can look up the most recent
+#     claim_ids to retract
+#   - `loom supersede` can auto-cascade retractions when
+#     LOOM_WARRANTS_AUTO_RETRACT=1
+#   - future `loom warrant stats` (Phase L4) can roll up push activity
+#
+# JSONL chosen over a SQLite table for the same reasons as
+# .loom-events.jsonl: append-only, no schema migration, callable from
+# anywhere without a store object. Lives at <data_dir>/.warrants-log.jsonl.
+
+WARRANTS_LOG_FILENAME = ".warrants-log.jsonl"
+
+
+def warrants_log_path(data_dir: pathlib.Path) -> pathlib.Path:
+    """The per-project warrants log location."""
+    return pathlib.Path(data_dir) / WARRANTS_LOG_FILENAME
+
+
+def record_push(
+    data_dir: pathlib.Path, *,
+    req_id: str,
+    validator_id: str,
+    score: float,
+    project_tag: str,
+    response: dict,
+    endpoint_url: str,
+) -> None:
+    """Append a push record to the warrants log. Best-effort —
+    failure to log must never break the warrant push itself."""
+    rec = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": "warrant_pushed",
+        "req_id": req_id,
+        "validator_id": validator_id,
+        "score": score,
+        "project_tag": project_tag,
+        "endpoint": endpoint_url,
+        "episode_id": response.get("episode_id"),
+        "claim_ids": response.get("claim_ids", []),
+        "edges_written": response.get("edges_written"),
+    }
+    try:
+        path = warrants_log_path(data_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def record_retraction(
+    data_dir: pathlib.Path, *,
+    claim_id: str,
+    project_tag: str,
+    reason: str,
+    response: dict,
+    endpoint_url: str,
+    triggered_by_req_id: str | None = None,
+) -> None:
+    """Append a retraction record. ``triggered_by_req_id`` is set
+    when the retraction came from `--req` lookup or the supersede
+    cascade — None for manual claim_id retractions."""
+    rec = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": "warrant_retracted",
+        "claim_id": claim_id,
+        "project_tag": project_tag,
+        "reason": reason,
+        "endpoint": endpoint_url,
+        "retracted_claim_id": response.get("retracted_claim_id"),
+        "supersedes_edges_written": response.get("supersedes_edges_written"),
+        "triggered_by_req_id": triggered_by_req_id,
+    }
+    try:
+        path = warrants_log_path(data_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def lookup_latest_push_for_req(
+    data_dir: pathlib.Path, req_id: str,
+) -> Optional[dict]:
+    """Return the most recent ``warrant_pushed`` record for
+    ``req_id`` (full record, not just claim_ids), or None if
+    nothing's been pushed for this req. Lets callers recover the
+    `project_tag` that was used at push time so retractions go to
+    the correct project namespace (M13.L3c bug fix — without this,
+    the supersede cascade would default to the loom project name
+    and Driftgraph would reject with HTTP 404 'project unknown')."""
+    path = warrants_log_path(data_dir)
+    if not path.exists():
+        return None
+    latest: Optional[dict] = None
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if (rec.get("event") == "warrant_pushed"
+                    and rec.get("req_id") == req_id):
+                latest = rec
+    except OSError:
+        return None
+    return latest
+
+
+def lookup_active_claims_for_req(
+    data_dir: pathlib.Path, req_id: str,
+) -> list[str]:
+    """Return claim_ids most recently pushed for ``req_id`` that
+    have not been retracted. "Active" means: appears in the most
+    recent push record for this req_id, AND no later retraction
+    record references it.
+
+    Empty list = no live warrants for this req. Most callers
+    (L3b, L3c) treat this as no-op rather than error."""
+    path = warrants_log_path(data_dir)
+    if not path.exists():
+        return []
+    pushed: list[str] = []
+    retracted: set[str] = set()
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("event") == "warrant_pushed" and rec.get("req_id") == req_id:
+                # Latest push wins — replace, not append.
+                pushed = list(rec.get("claim_ids") or [])
+            elif rec.get("event") == "warrant_retracted":
+                if cid := rec.get("retracted_claim_id"):
+                    retracted.add(cid)
+                elif cid := rec.get("claim_id"):
+                    retracted.add(cid)
+    except OSError:
+        return []
+    return [cid for cid in pushed if cid not in retracted]

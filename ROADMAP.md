@@ -59,11 +59,53 @@ the gatekeeper, Driftgraph is the warehouse.
       `warrants_l2_summary.md`. 2 new tests in
       `TestToulminV1Canary` (canary dataset exists, validator
       rejects 0/5).
-- [ ] **13.L3 Multi-validator + retraction trigger.** Add
-      Falsifiability@v1 alongside Toulmin@v1; wire automatic
-      retraction trigger via the existing `push_retraction` (e.g.
-      `loom supersede` → cascade). Driftgraph's foundation-drift
-      cascade handles the dependent-flagging.
+- [x] **13.L3a Claim-id tracking** (warrants log JSONL sidecar).
+      `<data_dir>/.warrants-log.jsonl` records every `push_warrant`
+      and `push_retraction` call; `record_push` /
+      `record_retraction` are best-effort (logging failures never
+      break the network call). `lookup_active_claims_for_req`
+      returns the most-recent-push claim_ids minus anything later
+      retracted. `lookup_latest_push_for_req` returns the full
+      record so callers can recover the `project_tag` used at push
+      time (without this the L3c cascade defaulted to the loom
+      project name and Driftgraph rejected with HTTP 404 'project
+      unknown' — surfaced + fixed during dogfooding). 8 new tests
+      in `TestWarrantsLog`.
+- [x] **13.L3b `loom warrant retract --req REQ-id`.** Looks up
+      every active claim for the req via the warrants log,
+      retracts each, persists each retraction. Pulls
+      `project_tag` from the original push record automatically.
+      Smoke: pushed REQ-2a621c40 (11 claims), retracted by `--req`,
+      11/11 succeeded; subsequent lookup returns empty.
+- [x] **13.L3c `loom supersede` auto-cascade** (opt-in via
+      `LOOM_WARRANTS_AUTO_RETRACT=1`). When the env flag is set
+      and the superseded req has active Driftgraph claims, each
+      gets retracted as a side-effect. Failures are warnings,
+      never fatal — the supersede is what the user asked for.
+      Smoke: pushed REQ-a521b281 (4 claims), `LOOM_WARRANTS_AUTO_
+      RETRACT=1 loom supersede REQ-a521b281` triggered cascade,
+      4/4 retracted with the right project_tag from the push
+      record. Without the env flag the supersede runs untouched
+      (verified). Behind the env flag rather than always-on
+      because v0 wants explicit opt-in for cross-system
+      side-effects.
+- [ ] **13.L3d Falsifiability@v1.** Second LLM-driven validator.
+      Different prompt: "what observation would falsify this
+      claim?" Passes if the rationale identifies a falsifier.
+      Same canary structure as Toulmin@v1 (5 unfalsifiable
+      rationales must reject 0/5). Independent of the retraction
+      work; can ship in parallel.
+- [ ] **13.L3e End-to-end retraction → foundation-drift demo.**
+      The signal the Driftgraph dev wants: push parent + child
+      warrants where child's rationale references parent's
+      claim_id (creating BECAUSE_OF edge); retract parent;
+      verify amber 🪨 foundation-drift indicator appears in
+      `/why <topic>`. Captures as `experiments/pilot/
+      warrants_l3_retraction_demo.py`.
+- [ ] **13.L4 Productionize.** Network failure handling
+      (retries, circuit-breaker), idempotency (claim_id dedup),
+      secret rotation, observability (per-validator latency
+      percentiles, push-success rate via `loom warrant stats`).
 - [ ] **13.L4 Productionize.** Network failure handling
       (retries, circuit-breaker), idempotency (claim_id dedup),
       secret rotation, observability (per-validator latency

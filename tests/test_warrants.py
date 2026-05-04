@@ -273,6 +273,126 @@ class TestLoadSecret:
 # ---------------------------------------------------------------------------
 
 
+class TestWarrantsLog:
+    """L3a — claim_id tracking via .warrants-log.jsonl sidecar."""
+
+    def test_record_push_writes_jsonl(self, tmp_path):
+        warrants.record_push(
+            tmp_path,
+            req_id="REQ-x", validator_id="toulmin@v1",
+            score=0.75, project_tag="sparkeye",
+            response={"episode_id": "ep_1",
+                      "claim_ids": ["clm_a", "clm_b"],
+                      "edges_written": 0},
+            endpoint_url="http://x/warrants",
+        )
+        log = tmp_path / warrants.WARRANTS_LOG_FILENAME
+        assert log.exists()
+        rec = json.loads(log.read_text(encoding="utf-8").strip())
+        assert rec["event"] == "warrant_pushed"
+        assert rec["req_id"] == "REQ-x"
+        assert rec["validator_id"] == "toulmin@v1"
+        assert rec["score"] == 0.75
+        assert rec["claim_ids"] == ["clm_a", "clm_b"]
+        assert rec["episode_id"] == "ep_1"
+
+    def test_record_retraction_writes_jsonl(self, tmp_path):
+        warrants.record_retraction(
+            tmp_path,
+            claim_id="clm_a", project_tag="sparkeye",
+            reason="superseded by R2",
+            response={"retracted_claim_id": "clm_a",
+                      "supersedes_edges_written": 1},
+            endpoint_url="http://x/warrants",
+            triggered_by_req_id="REQ-x",
+        )
+        log = tmp_path / warrants.WARRANTS_LOG_FILENAME
+        rec = json.loads(log.read_text(encoding="utf-8").strip())
+        assert rec["event"] == "warrant_retracted"
+        assert rec["claim_id"] == "clm_a"
+        assert rec["retracted_claim_id"] == "clm_a"
+        assert rec["triggered_by_req_id"] == "REQ-x"
+
+    def test_lookup_returns_latest_push_minus_retracted(self, tmp_path):
+        # Two pushes for the same REQ; second is "current". Then
+        # retract one of the second-push's claim_ids. Lookup should
+        # return only the surviving claim from push #2.
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v1", score=0.8,
+            project_tag="p",
+            response={"episode_id": "ep1", "claim_ids": ["clm_old1", "clm_old2"]},
+            endpoint_url="http://x",
+        )
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v1", score=0.9,
+            project_tag="p",
+            response={"episode_id": "ep2", "claim_ids": ["clm_new1", "clm_new2"]},
+            endpoint_url="http://x",
+        )
+        warrants.record_retraction(
+            tmp_path, claim_id="clm_new1", project_tag="p", reason="",
+            response={"retracted_claim_id": "clm_new1",
+                      "supersedes_edges_written": 1},
+            endpoint_url="http://x",
+        )
+        active = warrants.lookup_active_claims_for_req(tmp_path, "REQ-x")
+        # Latest push wins → clm_new1, clm_new2. Then clm_new1 retracted
+        # → only clm_new2 remains.
+        assert active == ["clm_new2"]
+
+    def test_lookup_unknown_req_returns_empty(self, tmp_path):
+        assert warrants.lookup_active_claims_for_req(tmp_path, "REQ-ghost") == []
+
+    def test_lookup_no_log_file_returns_empty(self, tmp_path):
+        # No log = no pushes = no active claims. Must not raise.
+        assert warrants.lookup_active_claims_for_req(tmp_path / "missing", "REQ-x") == []
+
+    def test_lookup_latest_push_returns_most_recent_record(self, tmp_path):
+        # Two pushes for the same REQ with different project_tags;
+        # the latest must win — including its project_tag (M13.L3c
+        # bug fix; earlier attempt would lose this and HTTP 404 on
+        # the cascade).
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v1", score=0.8,
+            project_tag="old-project",
+            response={"episode_id": "ep1", "claim_ids": ["clm_1"]},
+            endpoint_url="http://x",
+        )
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v1", score=0.9,
+            project_tag="new-project",
+            response={"episode_id": "ep2", "claim_ids": ["clm_2"]},
+            endpoint_url="http://x",
+        )
+        latest = warrants.lookup_latest_push_for_req(tmp_path, "REQ-x")
+        assert latest is not None
+        assert latest["project_tag"] == "new-project"
+        assert latest["claim_ids"] == ["clm_2"]
+        assert latest["episode_id"] == "ep2"
+
+    def test_lookup_latest_push_returns_none_when_no_pushes(self, tmp_path):
+        # Empty log → None (caller treats as "no warrants for this req").
+        assert warrants.lookup_latest_push_for_req(tmp_path, "REQ-x") is None
+        # Missing log file → None (no crash).
+        assert warrants.lookup_latest_push_for_req(
+            tmp_path / "missing", "REQ-x",
+        ) is None
+
+    def test_record_push_failure_is_silent(self, tmp_path, monkeypatch):
+        # If the disk is full / unwritable, we must not crash the
+        # push pipeline. Simulate by pointing data_dir at a path we
+        # can't create (a file masquerading as a directory).
+        bad = tmp_path / "blocker"
+        bad.write_text("not a dir")
+        # No exception should propagate.
+        warrants.record_push(
+            bad / "subdir", req_id="REQ-x", validator_id="v1", score=1.0,
+            project_tag="p",
+            response={"episode_id": "ep", "claim_ids": []},
+            endpoint_url="http://x",
+        )
+
+
 class TestToulminV1Canary:
     """Phase L2 acceptance: the LLM-driven Toulmin@v1 validator must
     reject all 5 of the curated bad rationales in

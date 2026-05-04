@@ -701,7 +701,14 @@ def cmd_conflicts(args):
 
 
 def cmd_supersede(args):
-    """Supersede an existing requirement."""
+    """Supersede an existing requirement.
+
+    M13.L3c — when LOOM_WARRANTS_AUTO_RETRACT=1 is set in the env,
+    any active Driftgraph claim_ids associated with this req (per
+    the warrants log) are automatically retracted as a
+    side-effect of the supersede. Failures are warnings, never
+    fatal — the supersede itself is what the user asked for.
+    """
     store = LoomStore(args.project)
 
     print(f"🧵 Loom Supersede — {args.req_id}")
@@ -717,6 +724,52 @@ def cmd_supersede(args):
         return 1
 
     print(f"✓ Superseded: {result['value']}")
+
+    # L3c — auto-cascade retraction to Driftgraph (opt-in via env).
+    if os.environ.get("LOOM_WARRANTS_AUTO_RETRACT") == "1":
+        from loom import warrants
+        active = warrants.lookup_active_claims_for_req(
+            store.data_dir, args.req_id,
+        )
+        if active:
+            print()
+            print(f"🔬 Cascading {len(active)} retraction(s) to Driftgraph "
+                  f"(LOOM_WARRANTS_AUTO_RETRACT=1)…")
+            # Pull the project_tag from the original push record so
+            # retractions land in the same Driftgraph namespace the
+            # warrant was pushed under (might differ from args.project,
+            # e.g. loom project "loom" pushes warrants under
+            # project_tag="sparkeye").
+            latest_push = warrants.lookup_latest_push_for_req(
+                store.data_dir, args.req_id,
+            )
+            project_tag = (
+                (latest_push or {}).get("project_tag")
+                or getattr(args, "project_tag", None)
+                or args.project
+            )
+            for cid in active:
+                try:
+                    response = warrants.push_retraction(
+                        project=project_tag, claim_id=cid,
+                        reason=f"loom supersede {args.req_id}",
+                    )
+                except (warrants.WarrantPushError, ValueError) as e:
+                    # Non-fatal: the local supersede is what the user
+                    # asked for. Surface but don't roll back.
+                    print(f"   ⚠️  Failed to retract {cid}: {e}")
+                    continue
+                warrants.record_retraction(
+                    store.data_dir,
+                    claim_id=cid, project_tag=project_tag,
+                    reason=f"loom supersede {args.req_id}",
+                    response=response,
+                    endpoint_url=warrants.endpoint(),
+                    triggered_by_req_id=args.req_id,
+                )
+                print(f"   ✓ Retracted {response.get('retracted_claim_id')} "
+                      f"(supersedes_edges_written="
+                      f"{response.get('supersedes_edges_written')})")
 
     affected = result["affected_tests"]
     if affected:
@@ -1616,25 +1669,78 @@ def cmd_warrant(args):
         except (warrants.WarrantPushError, ValueError) as e:
             print(f"❌ Driftgraph push failed: {e}")
             return 1
+        # L3a: persist claim_ids so retract --req and the supersede
+        # cascade can find them later.
+        warrants.record_push(
+            store.data_dir,
+            req_id=args.req_id,
+            validator_id=result.validator_id,
+            score=result.score,
+            project_tag=args.project_tag or args.project,
+            response=response,
+            endpoint_url=warrants.endpoint(),
+        )
         print(f"   episode_id: {response.get('episode_id')}")
         for cid in response.get("claim_ids", []):
             print(f"   claim_id:   {cid}")
         return 0
 
     if args.warrant_action == "retract":
-        try:
-            response = warrants.push_retraction(
-                project=args.project_tag or args.project,
-                claim_id=args.claim_id,
-                reason=args.reason or "",
+        store = LoomStore(args.project)
+        # L3b: retract by REQ-id resolves to all currently-active
+        # claim_ids for that req from the warrants log. Pull the
+        # project_tag from the push record so we hit the right
+        # Driftgraph namespace (M13.L3c bug fix).
+        if getattr(args, "req", None):
+            claim_ids = warrants.lookup_active_claims_for_req(
+                store.data_dir, args.req,
             )
-        except (warrants.WarrantPushError, ValueError) as e:
-            print(f"❌ Retraction failed: {e}")
+            if not claim_ids:
+                print(f"❌ No active claims for {args.req} — has it ever "
+                      f"been pushed? Check `cat "
+                      f"{warrants.warrants_log_path(store.data_dir)}`")
+                return 1
+            latest_push = warrants.lookup_latest_push_for_req(
+                store.data_dir, args.req,
+            )
+            project_tag = (
+                args.project_tag
+                or (latest_push or {}).get("project_tag")
+                or args.project
+            )
+            triggered = args.req
+        elif getattr(args, "claim_id", None):
+            claim_ids = [args.claim_id]
+            project_tag = args.project_tag or args.project
+            triggered = None
+        else:
+            print("❌ provide either <claim_id> positional or --req REQ-id")
             return 1
-        print(f"✅ Retracted {response.get('retracted_claim_id')}  "
-              f"(supersedes_edges_written="
-              f"{response.get('supersedes_edges_written')})")
-        return 0
+
+        any_failed = False
+        for cid in claim_ids:
+            try:
+                response = warrants.push_retraction(
+                    project=project_tag, claim_id=cid,
+                    reason=args.reason or "",
+                )
+            except (warrants.WarrantPushError, ValueError) as e:
+                print(f"❌ Retraction of {cid} failed: {e}")
+                any_failed = True
+                continue
+            warrants.record_retraction(
+                store.data_dir,
+                claim_id=cid,
+                project_tag=project_tag,
+                reason=args.reason or "",
+                response=response,
+                endpoint_url=warrants.endpoint(),
+                triggered_by_req_id=triggered,
+            )
+            print(f"✅ Retracted {response.get('retracted_claim_id')}  "
+                  f"(supersedes_edges_written="
+                  f"{response.get('supersedes_edges_written')})")
+        return 1 if any_failed else 0
 
     print("❌ Unknown warrant action — try `loom warrant push` or `loom warrant retract`")
     return 1
@@ -2613,9 +2719,20 @@ def main():
 
     p_warrant_retract = p_warrant_sub.add_parser(
         "retract",
-        help="POST a retraction for a previously-pushed claim_id",
+        help="POST a retraction for a previously-pushed claim_id "
+             "(or all active claims for a REQ-id, via --req)",
     )
-    p_warrant_retract.add_argument("claim_id", help="Driftgraph claim ID (clm_...)")
+    p_warrant_retract.add_argument(
+        "claim_id", nargs="?", default=None,
+        help="Driftgraph claim ID (clm_...). Omit when using --req.",
+    )
+    p_warrant_retract.add_argument(
+        "--req", default=None,
+        help="REQ-id whose active claims should be retracted. "
+             "Looks them up from the warrants log "
+             "(<data_dir>/.warrants-log.jsonl) and retracts each. "
+             "Mutually exclusive with the positional claim_id.",
+    )
     p_warrant_retract.add_argument(
         "--project-tag", default=None,
         help="Project tag (default: this loom project name)",
