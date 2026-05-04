@@ -797,6 +797,79 @@ class TestDocGeneration:
             ).read_text(encoding="utf-8")
         assert "Traceability Matrix" not in content
 
+    def test_archived_items_excluded_from_per_kind_doc(
+        self, temp_store, sample_embedding,
+    ):
+        """M12.7b regression: archived items leaked into per-kind
+        docs because store.list_requirements only filters by
+        superseded_at, not by status=='archived'. The doc generator
+        must filter these out — they showed up in PROCESS-RULES.md
+        as Active when they shouldn't have."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_requirements_doc
+
+        active = Requirement(
+            id="REQ-active-rule", domain="operational",
+            value="active process rule",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r", kind="process_rule", status="active",
+        )
+        archived = Requirement(
+            id="REQ-archived-rule", domain="operational",
+            value="archived rule should not render",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r", kind="process_rule", status="archived",
+        )
+        temp_store.add_requirement(active, sample_embedding)
+        temp_store.add_requirement(archived, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            content = generate_requirements_doc(
+                temp_store, Path(out_dir), kind="process_rule",
+            ).read_text(encoding="utf-8")
+        assert "REQ-active-rule" in content
+        # Archived must not appear in body OR inflate the active count.
+        assert "REQ-archived-rule" not in content
+        assert "archived rule should not render" not in content
+        assert "**Active Process rules:** 1" in content
+
+    def test_archived_items_excluded_from_test_spec_doc(
+        self, temp_store, sample_embedding,
+    ):
+        """Same archived-leak fix in generate_test_spec_doc."""
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+        from loom.docs import generate_test_spec_doc
+
+        active = Requirement(
+            id="REQ-live", domain="behavior", value="live req",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r",
+        )
+        dead = Requirement(
+            id="REQ-dead", domain="behavior",
+            value="archived req should not appear",
+            source_msg_id="m", source_session="s",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            rationale="r", status="archived",
+        )
+        temp_store.add_requirement(active, sample_embedding)
+        temp_store.add_requirement(dead, sample_embedding)
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            path = generate_test_spec_doc(
+                temp_store, Path(out_dir), specs={},
+            )
+            content = path.read_text(encoding="utf-8")
+        assert "REQ-live" in content
+        assert "REQ-dead" not in content
+        # Coverage line should reflect 1 req, not 2.
+        assert "0/1 requirements have test specs" in content
+
 
 class TestSpecificationTestFile:
     def test_defaults_to_empty_string(self):

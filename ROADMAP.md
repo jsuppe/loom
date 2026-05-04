@@ -219,6 +219,23 @@ prompt-engineering lessons surfaced 7 friction points spec'd in
       1 fixture-update for the M12.7 domains shape change).
       All pre-M12.7 tests still pass with one shape-update for
       `domains.custom` → `domains.custom_by_kind`.
+- [x] **12.7b Per-kind doc generator skips archived items.**
+      `docs.generate_requirements_doc` and `generate_test_spec_doc`
+      called the low-level `store.list_requirements
+      (include_superseded=False)` which only filters by
+      `superseded_at`. Archived items (status=="archived") leaked
+      through, surfacing as `**Active <kind>:** N+1` with the
+      archived item rendered in the body — surfaced via
+      dogfooding when REQ-94590539 (the misclassified handoff
+      I'd just archived) showed up in PROCESS-RULES.md as
+      "Active Process rules: 3" instead of 2. Two-line fix
+      (each generator gets a `r.status != "archived"` filter).
+      `services.list_requirements` already had this filter; only
+      the doc surface was missing it. Two regression tests in
+      `TestDocGeneration` cover both surfaces. Live docs
+      re-synced + verified: zero references to the two archived
+      IDs (REQ-94590539 + REQ-8a9f714b) across REQUIREMENTS.md
+      / FINDINGS.md / PROCESS-RULES.md / TEST_SPEC.md.
 
 ## Milestone 11: Rationale linkage (v1.x)
 

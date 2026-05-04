@@ -185,7 +185,15 @@ def generate_requirements_doc(
     cfg = KIND_DOC_CONFIG.get(kind, KIND_DOC_CONFIG["requirement"])
     private_ids = private_ids or set()
     all_reqs = store.list_requirements(include_superseded=False)
-    reqs = [r for r in all_reqs if r.kind == kind]
+    # M12.7b: filter archived items. store.list_requirements only
+    # filters by superseded_at; archived is a status value and leaks
+    # through. The doc generator must surface neither — archived items
+    # would otherwise show up as "Active <kind>: N+1" with the archived
+    # one rendered as if active.
+    reqs = [
+        r for r in all_reqs
+        if r.kind == kind and r.status != "archived"
+    ]
     superseded_all = [
         r for r in store.list_requirements(include_superseded=True)
         if r.superseded_at
@@ -358,8 +366,10 @@ def generate_test_spec_doc(store: LoomStore, output_dir: Path, specs: Dict[str, 
     """
     private_ids = private_ids or set()
     reqs = store.list_requirements(include_superseded=False)
+    # M12.7b: same archived-leak fix as generate_requirements_doc.
+    reqs = [r for r in reqs if r.status != "archived"]
     specs = specs or {}
-    
+
     if public_mode:
         reqs = [r for r in reqs if r.id not in private_ids]
     
