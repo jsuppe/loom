@@ -1,0 +1,32 @@
+[
+  {
+    "id": "canary-1-empty-restate",
+    "rationale": "Because we wanted to.",
+    "expected_reject_reason": "no actual justification — restates the choice as the reason",
+    "category": "non_justification"
+  },
+  {
+    "id": "canary-2-tbd",
+    "rationale": "TBD",
+    "expected_reject_reason": "placeholder, no content",
+    "category": "placeholder"
+  },
+  {
+    "id": "canary-3-confident_assertion",
+    "rationale": "This is the right call.",
+    "expected_reject_reason": "confident assertion with no grounding (no data, no warrant, no qualifier)",
+    "category": "ungrounded_claim"
+  },
+  {
+    "id": "canary-4-tautology",
+    "rationale": "We need this requirement because the requirement is needed.",
+    "expected_reject_reason": "tautological — uses the conclusion as the premise",
+    "category": "tautology"
+  },
+  {
+    "id": "canary-5-restated-what",
+    "rationale": "The system must validate inputs because it should validate inputs to ensure inputs are validated.",
+    "expected_reject_reason": "restates WHAT as WHY — no actual cause, evidence, or constraint cited",
+    "category": "what_as_why"
+  }
+]

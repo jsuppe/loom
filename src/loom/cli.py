@@ -1586,6 +1586,8 @@ def cmd_warrant(args):
         )
         if validator_name == "toulmin@v0":
             result = warrants.toulmin_v0(rationale)
+        elif validator_name == "toulmin@v1":
+            result = warrants.toulmin_v1(rationale)
         else:
             print(f"❌ unknown validator: {validator_name}")
             return 1

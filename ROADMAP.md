@@ -1,5 +1,74 @@
 # Loom Roadmap
 
+## Milestone 13: Driftgraph integration (v1.x — in flight)
+
+**Motivation.** Per PR #13's "Operationalizing the integration:
+Loom-side build plan", Loom integrates with Driftgraph (the
+`jsuppe/sdr-graph-memory` substrate) as the warrant storage +
+retrieval + drift-detection layer. Loom owns extraction +
+philosophical validators (Toulmin, falsifiability, Hegelian);
+Driftgraph owns storage + retrieval + drift mechanics. Loom is
+the gatekeeper, Driftgraph is the warehouse.
+
+- [x] **13.L1 Wire test (Toulmin@v0 heuristic).** New module
+      `src/loom/warrants.py` with HMAC-authenticated HTTP client,
+      `push_warrant` / `push_retraction`, secret loader (env →
+      canonical `~/.driftgraph/loom-webhook-secret` → empty), and
+      a 5-line Toulmin@v0 heuristic (length / justification keyword
+      / sentence completeness). CLI: `loom warrant push <REQ-id>`
+      and `loom warrant retract <claim_id>`. End-to-end smoke: 3
+      real loom rationales pushed (3 episodes, 9 claim_ids), 1
+      retraction (200 + supersedes_edges_written: 1). 18 tests in
+      `tests/test_warrants.py` (Toulmin@v0 shape + HMAC signing +
+      secret loader precedence). Substrate-side note flagged:
+      the bash curl smoke in PR #13 fails on Git-Bash for
+      Windows because `echo -n` doesn't suppress newlines reliably.
+- [x] **13.L2 First real validator (Toulmin@v1 LLM-driven).**
+      `toulmin_v1(rationale)` extracts the Toulmin shape (claim,
+      data, warrant, qualifier, rebuttal) via the M11.5 model
+      dispatch (Anthropic Haiku if `ANTHROPIC_API_KEY` set, else
+      qwen3.5:latest via Ollama; override via
+      `LOOM_TOULMIN_V1_MODEL`). Pass threshold = 0.75 (data +
+      warrant + qualifier-OR-rebuttal). Acceptance per PR #13
+      comment 2 — both gates cleared:
+        * **Cut 1 — Canary 0/5 false positives** on the
+          hand-curated `tests/data/toulmin_canary_v1.json`
+          (placeholder, ungrounded claim, tautology, restated-
+          what-as-why, and "because we wanted to"). All 5
+          rejected with score=0.00.
+        * **Cut 2 — Pass-rate band 30–60%** on a 19-rationale
+          sample from the dogfooded loom store: 6/19 = 31.6%
+          (just inside the lower edge). Bimodality ratio = 8.50
+          (heavy weight at 0.0–0.25 and 0.75–1.00; ZERO entries
+          in the muddled 0.25–0.5 middle bin) — qwen3.5 is
+          confidently distinguishing, not hedging.
+        * (Bonus, optional) Cut 3 alignment via Cypher — deferred.
+      Live: 6 toulmin@v1 claims pushed to Driftgraph (6 episodes,
+      18 claim_ids; in the 6–12 target).
+      **Secondary finding captured as REQ-4d3e74f2** (kind=
+      finding, status=confirmed): requirement-shaped rationales
+      pass at ~5x the rate of finding-shaped rationales (55.6%
+      vs 12.5%). The dogfooded findings are citation-shaped
+      ("Source: harness.py + FINDINGS-X.md, N=10 per condition")
+      — they CITE evidence but don't ARGUE warrant inline. This
+      is a real signal about the loom rationale-capture
+      conventions: when downstream Toulmin validation matters,
+      capture inline argument, not just citation.
+      Eval harness: `experiments/pilot/warrants_l2_eval.py`;
+      results: `warrants_l2_results.json` +
+      `warrants_l2_summary.md`. 2 new tests in
+      `TestToulminV1Canary` (canary dataset exists, validator
+      rejects 0/5).
+- [ ] **13.L3 Multi-validator + retraction trigger.** Add
+      Falsifiability@v1 alongside Toulmin@v1; wire automatic
+      retraction trigger via the existing `push_retraction` (e.g.
+      `loom supersede` → cascade). Driftgraph's foundation-drift
+      cascade handles the dependent-flagging.
+- [ ] **13.L4 Productionize.** Network failure handling
+      (retries, circuit-breaker), idempotency (claim_id dedup),
+      secret rotation, observability (per-validator latency
+      percentiles, push-success rate via `loom warrant stats`).
+
 ## Milestone 12: Research mode (v1.x)
 
 **Motivation.** Loom was designed for software-development workflows

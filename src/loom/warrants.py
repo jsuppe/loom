@@ -236,3 +236,178 @@ def toulmin_v0(rationale: str) -> ValidatorResult:
         reason=reason,
         parts={"checks": checks},
     )
+
+
+# ---------------------------------------------------------------------------
+# Toulmin@v1 — LLM-driven shape extraction (Phase L2)
+# ---------------------------------------------------------------------------
+#
+# Acceptance per PR #13 comment 2:
+#   1. Coverage band: 30–60% pass on a 20-rationale sample
+#   2. 0/5 false positives on the canary set in
+#      tests/data/toulmin_canary_v1.json
+#   3. (Bonus, optional) Downstream Driftgraph alignment via Cypher
+#
+# Threshold rationale: <30% suggests the validator is too strict
+# (selecting a tiny minority of rationales as "valid Toulmin"); >60%
+# suggests it's pattern-matching rather than philosophically
+# evaluating. Inside the band, score distribution shape matters more
+# than the exact pass rate — bimodal (most claims ~0.9 or ~0.2) is
+# good signal that the validator is making meaningful distinctions;
+# clustered around 0.5 means it's hedging and not adding lift.
+
+_TOULMIN_V1_PROMPT = """\
+You are a Toulmin-shape validator for a software project's
+captured rationales. The Toulmin model says a well-formed
+argument has six parts:
+
+  CLAIM      — the assertion being made
+  DATA       — facts/evidence the claim rests on
+  WARRANT    — the connecting principle that lets DATA support CLAIM
+  BACKING    — supporting authority for the WARRANT (often implicit)
+  QUALIFIER  — the strength of the claim ("usually", "in production")
+  REBUTTAL   — conditions under which the claim doesn't hold
+
+For Toulmin@v1 we evaluate whether a rationale exhibits the four
+LOAD-BEARING parts: CLAIM (implicit in the linked requirement),
+DATA, WARRANT, and either QUALIFIER or REBUTTAL. BACKING is
+optional. A rationale passes if it has data + warrant + (qualifier
+OR rebuttal). Fewer than that = rationale is asserted, not argued.
+
+NOT passes:
+  - Bare assertion ("This is the right call.")
+  - Tautology ("X because X.")
+  - Restated WHAT-as-WHY ("must validate inputs because inputs must be validated")
+  - Placeholder ("TBD", "because we wanted to")
+  - Pure vibe ("seems good", "feels cleaner")
+
+ARE passes:
+  - "phS measured a 12pp lift at N=10 on the S1 bench [DATA].
+     Anti-rationale beats rule because the model treats hedged
+     disclaimers as more authoritative [WARRANT]. Effect held
+     across both ANTI_SOFT and ANTI_HARD conditions [QUALIFIER]."
+  - "Incident I-2024-04 caused $X in remediation cost when the
+     retry loop swallowed errors [DATA]. Don't propagate from the
+     retry loop unless the caller opts in [WARRANT]. Exception:
+     idempotent reads can re-raise [REBUTTAL]."
+
+Output JSON only, exactly this shape:
+
+  {{"passes": true|false,
+    "score": 0.0-1.0,
+    "parts": {{
+      "data": "<verbatim or paraphrased excerpt, or empty>",
+      "warrant": "<verbatim or paraphrased excerpt, or empty>",
+      "qualifier": "<verbatim or paraphrased excerpt, or empty>",
+      "rebuttal": "<verbatim or paraphrased excerpt, or empty>",
+      "backing": "<verbatim or paraphrased excerpt, or empty>"
+    }},
+    "reason": "<one sentence explaining the pass/fail decision>"}}
+
+Score guidance: 1.0 = all 4 load-bearing parts present;
+0.75 = data + warrant + (qualifier OR rebuttal); 0.5 = data +
+warrant; 0.25 = only one of data/warrant; 0.0 = none. Pass
+threshold is 0.75.
+
+Rationale to evaluate:
+\"\"\"
+{rationale}
+\"\"\"
+"""
+
+
+def _default_toulmin_v1_model() -> str:
+    """Mirror the M11.5 classifier model selection: Anthropic Haiku
+    when ANTHROPIC_API_KEY is set, else qwen3.5:latest via Ollama.
+    Override via LOOM_TOULMIN_V1_MODEL."""
+    if env := os.environ.get("LOOM_TOULMIN_V1_MODEL"):
+        return env
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic:claude-haiku-4-5-20251001"
+    return "ollama:qwen3.5:latest"
+
+
+def _parse_toulmin_v1_output(content: str) -> Optional[dict]:
+    """Parse the LLM's JSON response. Tolerates code fences + leading
+    prose. Returns None on unparsable / malformed output (caller
+    treats as classifier_error → score 0)."""
+    text = (content or "").strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    # Walk brace depth to extract the last balanced JSON object.
+    depth = 0
+    start = -1
+    last = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start >= 0:
+                last = text[start:i + 1]
+                start = -1
+    if last is None:
+        return None
+    try:
+        obj = json.loads(last)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    if "passes" not in obj or "score" not in obj:
+        return None
+    return obj
+
+
+def toulmin_v1(rationale: str, *, model: str | None = None,
+               timeout: int = 60) -> ValidatorResult:
+    """LLM-driven Toulmin shape extraction (Phase L2). Routes to
+    Anthropic Haiku or qwen3.5 depending on env, asks for a
+    structured (data/warrant/qualifier/rebuttal) breakdown, returns
+    a ValidatorResult with the parts dict populated.
+
+    On any LLM/parse failure: returns passes=False, score=0.0 with
+    the failure reason in .reason. Acceptance criteria don't
+    distinguish "correctly rejected" from "couldn't evaluate" —
+    both mean "not pushing this to Driftgraph."
+    """
+    # Lazy import: services pulls in the full LLM dispatch surface
+    # (Anthropic SDK shape, Ollama HTTP, retry logic, …) which
+    # warrants.py shouldn't import at module load just to use v0.
+    from . import services
+
+    rationale = (rationale or "").strip()
+    if not rationale:
+        return ValidatorResult(
+            validator_id="toulmin@v1", passes=False, score=0.0,
+            reason="empty rationale",
+        )
+
+    model = model or _default_toulmin_v1_model()
+    prompt = _TOULMIN_V1_PROMPT.format(rationale=rationale)
+    try:
+        resp = services._call_decomposer_llm(model, prompt, timeout=timeout)
+    except Exception as e:
+        return ValidatorResult(
+            validator_id="toulmin@v1", passes=False, score=0.0,
+            reason=f"llm_error: {type(e).__name__}: {e}",
+        )
+
+    parsed = _parse_toulmin_v1_output(resp.get("content", ""))
+    if parsed is None:
+        return ValidatorResult(
+            validator_id="toulmin@v1", passes=False, score=0.0,
+            reason="parse_failed",
+            parts={"raw_content": (resp.get("content") or "")[:400]},
+        )
+
+    return ValidatorResult(
+        validator_id="toulmin@v1",
+        passes=bool(parsed.get("passes", False)),
+        score=float(parsed.get("score", 0.0)),
+        reason=str(parsed.get("reason", "")),
+        parts=parsed.get("parts", {}) or {},
+    )

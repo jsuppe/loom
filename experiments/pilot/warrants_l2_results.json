@@ -1,0 +1,440 @@
+{
+  "started_at": "2026-05-04T12:04:23.321872+00:00",
+  "finished_at": "2026-05-04T12:04:47.123781+00:00",
+  "model": "ollama:qwen3.5:latest",
+  "canary": {
+    "n": 5,
+    "false_positives": 0,
+    "acceptance_pass": true,
+    "results": [
+      {
+        "id": "canary-1-empty-restate",
+        "rationale": "Because we wanted to.",
+        "category": "non_justification",
+        "expected_reject_reason": "no actual justification — restates the choice as the reason",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale is a placeholder ('Because we wanted to') that lacks any factual evidence (DATA) or logical connecting principle (WARRANT), failing the minimum requirements for a valid argument.",
+        "actual_parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 920
+      },
+      {
+        "id": "canary-2-tbd",
+        "rationale": "TBD",
+        "category": "placeholder",
+        "expected_reject_reason": "placeholder, no content",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The input contains only the placeholder 'TBD' and lacks any data, warrant, qualifier, or rebuttal, failing the minimum requirements for a valid argument.",
+        "actual_parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 797
+      },
+      {
+        "id": "canary-3-confident_assertion",
+        "rationale": "This is the right call.",
+        "category": "ungrounded_claim",
+        "expected_reject_reason": "confident assertion with no grounding (no data, no warrant, no qualifier)",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The input is a bare assertion lacking any data, warrant, qualifier, or rebuttal.",
+        "actual_parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 720
+      },
+      {
+        "id": "canary-4-tautology",
+        "rationale": "We need this requirement because the requirement is needed.",
+        "category": "tautology",
+        "expected_reject_reason": "tautological — uses the conclusion as the premise",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale is a tautology that restates the requirement as the reason for its existence without providing any factual evidence, logical principle, or conditions.",
+        "actual_parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 787
+      },
+      {
+        "id": "canary-5-restated-what",
+        "rationale": "The system must validate inputs because it should validate inputs to ensure inputs are validated.",
+        "category": "what_as_why",
+        "expected_reject_reason": "restates WHAT as WHY — no actual cause, evidence, or constraint cited",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale is a tautology that restates the requirement as the reason without providing any evidence, connecting principle, or conditions.",
+        "actual_parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 758
+      }
+    ]
+  },
+  "sample": {
+    "n": 19,
+    "n_pass": 6,
+    "pass_rate": 0.316,
+    "in_band_30_60": true,
+    "score_bins": {
+      "0.00-0.25": 11,
+      "0.25-0.50": 0,
+      "0.50-0.75": 2,
+      "0.75-1.00": 6
+    },
+    "bimodality_ratio": 8.5,
+    "results": [
+      {
+        "req_id": "REQ-0023dae0",
+        "kind": "finding",
+        "value": "Loom doctor's domain whitelist is restricted to requirement-kind artifacts only, as findings and pro",
+        "rationale_preview": "Loom doctor's domain whitelist (behavior/ui/data/architecture/terminology) is requirement-kind only. Findings (kind=find",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The input is a bare assertion stating a problem exists without providing any specific evidence (DATA), a connecting principle (WARRANT), or conditions/exceptions (QUALIFIER/REBUTTAL).",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 868
+      },
+      {
+        "req_id": "REQ-0a83d16a",
+        "kind": "finding",
+        "value": "Loom doctor's coverage check incorrectly counts findings and process-rules as missing test specs, re",
+        "rationale_preview": "Empirically observed: Loom doctor's coverage check applies uniformly across all kinds, counting findings and process-rul",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides specific empirical data about the Loom doctor's behavior and a warrant explaining the consequence (false 0% warning), but lacks an explicit qualifier or rebuttal, resulting in a score of 0.75.",
+        "parts": {
+          "data": "Loom doctor's coverage check applies uniformly across all kinds, counting findings and process-rules as 'requirements missing test specs.' This produces a 0% coverage warning for stores rich in findings even when all true requirements are spec-covered.",
+          "warrant": "This produces a 0% coverage warning for stores rich in findings even when all true requirements are spec-covered.",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1362
+      },
+      {
+        "req_id": "REQ-2a621c40",
+        "kind": "requirement",
+        "value": "JsIndexer (and similar LSP-backed indexers) MUST be pointed at the project root including test files",
+        "rationale_preview": "phQ7: +40pp lift on placebo cell (30% → 70%) by including test_retry.js in the indexed workspace. No indexer code change",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides specific empirical data (the +40pp lift) and a warrant (code logs acting as contracts are superior to bare assertions), but lacks an explicit qualifier or rebuttal, resulting in a score of 0.75 which meets the pass threshold.",
+        "parts": {
+          "data": "phQ7: +40pp lift on placebo cell (30% → 70%) by including test_retry.js in the indexed workspace. No indexer code change needed.",
+          "warrant": "The test's `console.log('PASS: returns_null_on_failures')` functions as the closest thing to a contract in code form. PASS labels outperform bare assertions.",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1421
+      },
+      {
+        "req_id": "REQ-44283927",
+        "kind": "requirement",
+        "value": "LLM-classified outputs in Loom MUST be wrapped in deterministic guardrails before consumption. Don't",
+        "rationale_preview": "M11.5 P0 classifier: 95.2% precision, single false positive on hedge-language ('Make this faster if possible'). The fix ",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides specific evidence (data) regarding the classifier's performance and the implemented fix, along with a connecting principle (warrant) explaining why the layered guardrails are superior to prompt iteration, but lacks an explicit qualifier or rebuttal, resulting in a score of 0.75.",
+        "parts": {
+          "data": "M11.5 P0 classifier: 95.2% precision, single false positive on hedge-language ('Make this faster if possible'). The fix was a regex guardrail downstream, NOT prompt iteration.",
+          "warrant": "The intake hook ships with five layered guardrails (precision threshold, domain whitelist, softener detection, daily budget, reversibility surface) — together more reliable than any single prompt-engineering pass.",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1533
+      },
+      {
+        "req_id": "REQ-5c9db026",
+        "kind": "finding",
+        "value": "phT imperative-precedence ablation: combining a rhetorical opener ('STRICT REQUIREMENT — NON-NEGOTIA",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py + phU_imperative_followups_smoke.py + FINDINGS-bakeof",
+        "passes": false,
+        "score": 0.5,
+        "reason": "The rationale provides specific experimental data (N=60 phT, N=50 phU) but lacks an explicit warrant explaining why this data supports the claim that the kit is reliable, failing the required data+warrant structure.",
+        "parts": {
+          "data": "N=60 phT, N=50 phU length-control variants. The combined prefix+inline kit is reliable and length-independent.",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1100
+      },
+      {
+        "req_id": "REQ-5e01462c",
+        "kind": "finding",
+        "value": "M10.3 phQ series measured 0% compliance for bare-rule prompts vs 100% saturation when rationale was ",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ3_*, phQ4_*, phQ5_*, phQ7_* harnesses + FINDINGS-bakeoff-v2-pythonfirst-smoke.m",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The input is a bibliographic citation listing source files and a summary of experimental constraints rather than an argument containing a claim, supporting data, or a warrant.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 801
+      },
+      {
+        "req_id": "REQ-65f50316",
+        "kind": "requirement",
+        "value": "Loom context-bundle additions (semantic indexers, file refs, type defs) MUST be treated as condition",
+        "rationale_preview": "phQ3/phQ4/phQ5 series: indexer alone with bare rule = 0% compliance regardless of richness. Indexer + rationale-augmente",
+        "passes": false,
+        "score": 0.5,
+        "reason": "The rationale provides specific experimental data comparing bare rules versus rationale-augmented prompts, and includes a warrant explaining the underlying mechanism (amplification vs generation), but lacks any qualifier or rebuttal, resulting in a score of 0.5 which is below the 0.75 pass threshold.",
+        "parts": {
+          "data": "phQ3/phQ4/phQ5 series: indexer alone with bare rule = 0% compliance regardless of richness. Indexer + rationale-augmented prompt = 100%.",
+          "warrant": "The indexer's job is amplification, not generation. A weak instruction with rich context still fails; a strong instruction with rich context saturates.",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1445
+      },
+      {
+        "req_id": "REQ-73a0d7de",
+        "kind": "finding",
+        "value": "Loom's value-add is delivering captured rationale to the agent at the right moment. Storage alone pr",
+        "rationale_preview": "M8.1 D-smoke (FINDINGS-bakeoff-v2-pythonfirst-smoke.md): D2 (stored, undelivered) = 0% compliance, D3 (stored AND inject",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text is a bare assertion stating a finding without providing any supporting data, warrant, qualifier, or rebuttal.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 772
+      },
+      {
+        "req_id": "REQ-763cd262",
+        "kind": "finding",
+        "value": "phS anti-rationale ablation: an equivocal 'soft' anti-rationale (ANTI_SOFT, e.g. 'this might be opti",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phS_anti_rationale_smoke.py + FINDINGS-bakeoff-v2-anti-rationale.md. N=10 per cond",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The input is a bare assertion stating a surprising experimental finding without providing the specific data, warrant, qualifier, or rebuttal required to form a valid argument.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 802
+      },
+      {
+        "req_id": "REQ-8eb5fca7",
+        "kind": "requirement",
+        "value": "Loom rationale capture should accept anything explanation-shaped; the presence of explanation matter",
+        "rationale_preview": "phQ3 placebo cell: 90% compliance from length-matched filler text that just paraphrased the rule. Almost matches the 100",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text is a meta-commentary on experimental results and prose quality rather than an argument containing specific data, warrants, or rebuttals supporting a claim.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 799
+      },
+      {
+        "req_id": "REQ-a521b281",
+        "kind": "requirement",
+        "value": "Rationale capture MUST happen at chat intake (UserPromptSubmit hook), not deferred to manual `loom e",
+        "rationale_preview": "M11.5 raison d'être. Every lesson on this list says rationale is load-bearing, but users skip capturing it. M11.5 P0 pil",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides specific performance data (95.2% precision) and a warrant linking that data to the operational benefit (capturing without human intervention), but lacks an explicit qualifier or rebuttal, resulting in a score of 0.75.",
+        "parts": {
+          "data": "95.2% precision on requirement classification",
+          "warrant": "the harness can capture without pulling humans out of flow",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1075
+      },
+      {
+        "req_id": "REQ-a636de03",
+        "kind": "requirement",
+        "value": "High-stakes Loom rules (security, compliance, contractual) MUST be written with absolute imperative ",
+        "rationale_preview": "phT N=60: R_imperative (full kit) = 100% compliance against ANTI_SOFT, vs 0% baseline. R_meta_preamble (top-of-prompt au",
+        "passes": true,
+        "score": 1.0,
+        "reason": "The rationale provides specific experimental data points (compliance percentages and sample sizes) and warrants the conclusion that the recipe works by explaining the mechanism (meta-instructions failing in raw mode) and ruling out alternative explanations (length effects), satisfying all load-bearing Toulmin criteria.",
+        "parts": {
+          "data": "phT N=60: R_imperative (full kit) = 100% compliance against ANTI_SOFT, vs 0% baseline. phU N=50: length-controlled variants (prefix-only or inline-only) each score 60%. Recipe generalizes across anti-rationale shapes (R_imperative + ANTI_HARD = 100%).",
+          "warrant": "meta-instructions don't work in raw-prompt mode; both components contribute and the lift isn't a length effect",
+          "qualifier": "N=60, N=50",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1699
+      },
+      {
+        "req_id": "REQ-a9df428e",
+        "kind": "finding",
+        "value": "phQ4 measured qwen2.5-coder:32b losing 20-30pp to qwen3.5:latest on contrarian-rule cells WITHOUT ra",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ4_executor_choice_smoke.py + FINDINGS-bakeoff-v2-executor-choice.md. N=10 per (",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The input is a metadata header listing source files and a high-level implication rather than a structured argument containing explicit data, warrant, qualifier, or rebuttal.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 827
+      },
+      {
+        "req_id": "REQ-aaa595ca",
+        "kind": "requirement",
+        "value": "Loom executor selection MUST consider spec contrarian-shape, not just language. Code-specialist mode",
+        "rationale_preview": "phQ4: qwen2.5-coder:32b vs qwen3.5:latest, both with no stub: on-rule -20pp, +placebo -30pp at 32b. The bigger code-spec",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text is a bare assertion of a conclusion without providing specific data, evidence, or a warrant to support the claim.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 775
+      },
+      {
+        "req_id": "REQ-ab5b84b0",
+        "kind": "finding",
+        "value": "phQ7: including JavaScript test files (test_retry.js with PASS/FAIL labels) in the JsIndexer's works",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ7_jsindexer_smoke.py + FINDINGS-bakeoff-v2-jsindexer.md. The test's `console.lo",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text is a bare assertion stating that PASS labels outperform bare assertions without providing any supporting data, warrant, qualifier, or rebuttal.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 788
+      },
+      {
+        "req_id": "REQ-c0e06e44",
+        "kind": "process_rule",
+        "value": "All experimental findings for all tests must be retained in GitHub.",
+        "rationale_preview": "all of our experimental findings, for all tests, must be retained in github",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The input is a bare assertion stating a requirement without providing any supporting data, warrant, qualifier, or rebuttal.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 731
+      },
+      {
+        "req_id": "REQ-d9e6ba58",
+        "kind": "requirement",
+        "value": "Schema enums on LLM output (e.g. classifier domain field) MUST have downstream tolerance for off-enu",
+        "rationale_preview": "M11.5 P0: classifier was told domain MUST be one of behavior|ui|data|architecture|terminology, invented `security` 2/20 ",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides specific evidence (data) about the classifier's behavior and a connecting principle (warrant) explaining the solution and its generalizability, but lacks an explicit qualifier or rebuttal, resulting in a score of 0.75.",
+        "parts": {
+          "data": "classifier was told domain MUST be one of behavior|ui|data|architecture|terminology, invented `security` 2/20 times on true positives",
+          "warrant": "The fix was downstream routing (out-of-enum → propose branch, not crash), not a stricter prompt. Generalizes to any constrained-output field.",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 1339
+      },
+      {
+        "req_id": "REQ-e4d6f7d4",
+        "kind": "process_rule",
+        "value": "Justify experimental design choices (N, conditions, baselines) before running an ablation; defend th",
+        "rationale_preview": "Captured from this session's redirect on phS where I initially proposed N=10 without justification. The 'please provide ",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text describes a meta-discussion about the need for evidence and the costs of poor design, but it does not present a specific argument with a claim supported by data and a warrant regarding the software project's rationale itself.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 882
+      },
+      {
+        "req_id": "REQ-ec36bd89",
+        "kind": "requirement",
+        "value": "Loom requirements MUST include rationale (prose or rationale_links). Bare-rule reqs without rational",
+        "rationale_preview": "M10.3 phQ3-phQ7 series: bare rule = 0%, rule + rationale = 100% saturation. phS anti-rationale ablation: ANTI_SOFT (equi",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The text is a list of experimental results and feature comparisons without any explicit claim, warrant, or logical structure connecting evidence to a conclusion.",
+        "parts": {
+          "data": "",
+          "warrant": "",
+          "qualifier": "",
+          "rebuttal": "",
+          "backing": ""
+        },
+        "elapsed_ms": 784
+      }
+    ]
+  },
+  "acceptance": {
+    "cut_1_canary_zero_fp": true,
+    "cut_2_pass_rate_in_band": true,
+    "overall_pass": true
+  }
+}
