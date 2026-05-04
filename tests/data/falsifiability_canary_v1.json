@@ -1,0 +1,32 @@
+[
+  {
+    "id": "fcanary-1-aspiration",
+    "rationale": "We should have clean architecture in this codebase.",
+    "expected_reject_reason": "vague aspiration with no observable failure mode — what would 'unclean' look like, measurably?",
+    "category": "vague_aspiration"
+  },
+  {
+    "id": "fcanary-2-tbd",
+    "rationale": "TBD",
+    "expected_reject_reason": "placeholder, no falsifier",
+    "category": "placeholder"
+  },
+  {
+    "id": "fcanary-3-confidence",
+    "rationale": "This is just the right call. Trust me on this one.",
+    "expected_reject_reason": "confidence assertion with no test condition",
+    "category": "ungrounded_confidence"
+  },
+  {
+    "id": "fcanary-4-judgment",
+    "rationale": "Reviewers should use better judgment when reviewing PRs.",
+    "expected_reject_reason": "no observable failure mode — what does 'better judgment' fail to do?",
+    "category": "subjective_no_test"
+  },
+  {
+    "id": "fcanary-5-feel",
+    "rationale": "The system should feel performant to end users.",
+    "expected_reject_reason": "subjective without measurable threshold (vs 'requests must complete in <200ms p95')",
+    "category": "subjective_no_threshold"
+  }
+]

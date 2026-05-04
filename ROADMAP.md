@@ -89,12 +89,43 @@ the gatekeeper, Driftgraph is the warehouse.
       (verified). Behind the env flag rather than always-on
       because v0 wants explicit opt-in for cross-system
       side-effects.
-- [ ] **13.L3d Falsifiability@v1.** Second LLM-driven validator.
-      Different prompt: "what observation would falsify this
-      claim?" Passes if the rationale identifies a falsifier.
-      Same canary structure as Toulmin@v1 (5 unfalsifiable
-      rationales must reject 0/5). Independent of the retraction
-      work; can ship in parallel.
+- [x] **13.L3d Falsifiability@v1.** Second LLM-driven validator
+      (Popperian falsifier extraction). Different prompt: "what
+      observation would falsify this claim?" Passes if the
+      rationale identifies (explicitly or implicitly) a falsifier
+      — concrete condition, threshold, replication boundary, or
+      rebuttal that would invalidate the claim. Same dispatch
+      pattern as Toulmin@v1 (Anthropic Haiku if
+      ANTHROPIC_API_KEY set, else qwen3.5; override via
+      LOOM_FALSIFIABILITY_V1_MODEL).
+      Acceptance: **0/5 false positives on canary**
+      (`tests/data/falsifiability_canary_v1.json` — vague
+      aspiration, placeholder, ungrounded confidence,
+      subjective-no-test, subjective-no-threshold). All 5
+      rejected with score=0.00 by qwen3.5.
+      Sample (same 17 valid rationales as L2 minus the 2 that
+      were superseded during L3c): pass rate 4/17 = 23.5%.
+      Bimodality 3.25 (above 1.5 threshold; bin 0.5–0.75 is
+      empty, bins 0–0.25 = 9 and 0.75–1.0 = 4).
+      **Cross-validator matrix vs L2's Toulmin@v1** (the
+      headline L3d finding):
+        both pass:           2  (REQ-0a83d16a, REQ-a636de03)
+        toulmin only:        1  (REQ-2a621c40 — well-argued but
+                                 no falsifier)
+        falsifiability only: 2  (REQ-5e01462c, REQ-a9df428e —
+                                 measurable thresholds without
+                                 inline argument)
+        neither:            11
+      The validators are **complementary, not redundant** — they
+      catch different failure modes. A "fully warranted" claim
+      needs BOTH gates, not OR. Captured as REQ-bdb1e667
+      (kind=finding, status=confirmed).
+      Live in Driftgraph: 4 falsifiability@v1 episodes (4 claim_ids
+      written for the 4 passing rationales).
+      Eval: `experiments/pilot/warrants_l3d_eval.py` →
+      `warrants_l3d_results.json` + `warrants_l3d_summary.md`.
+      2 new tests in `TestFalsifiabilityV1Canary` (canary exists,
+      validator rejects 0/5 — both pass live).
 - [ ] **13.L3e End-to-end retraction → foundation-drift demo.**
       The signal the Driftgraph dev wants: push parent + child
       warrants where child's rationale references parent's

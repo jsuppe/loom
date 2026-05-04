@@ -1,0 +1,382 @@
+{
+  "started_at": "2026-05-04T14:00:08.586306+00:00",
+  "finished_at": "2026-05-04T14:02:54.427933+00:00",
+  "model": "ollama:qwen3.5:latest",
+  "canary": {
+    "n": 5,
+    "false_positives": 0,
+    "acceptance_pass": true,
+    "results": [
+      {
+        "id": "fcanary-1-aspiration",
+        "rationale": "We should have clean architecture in this codebase.",
+        "category": "vague_aspiration",
+        "expected_reject_reason": "vague aspiration with no observable failure mode — what would 'unclean' look like, measurably?",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The claim is an aspiration regarding code quality ('clean architecture') without specifying any observable metrics, thresholds, or testable conditions that would prove it false.",
+        "actual_parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 6305
+      },
+      {
+        "id": "fcanary-2-tbd",
+        "rationale": "TBD",
+        "category": "placeholder",
+        "expected_reject_reason": "placeholder, no falsifier",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale is a placeholder ('TBD') that offers no observable failure mode, test, or condition to validate or falsify the claim.",
+        "actual_parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 12327
+      },
+      {
+        "id": "fcanary-3-confidence",
+        "rationale": "This is just the right call. Trust me on this one.",
+        "category": "ungrounded_confidence",
+        "expected_reject_reason": "confidence assertion with no test condition",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale relies solely on a confidence assertion ('Trust me') and vague aspiration ('right call') without specifying any observable condition, threshold, or test that would invalidate the claim.",
+        "actual_parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 10864
+      },
+      {
+        "id": "fcanary-4-judgment",
+        "rationale": "Reviewers should use better judgment when reviewing PRs.",
+        "category": "subjective_no_test",
+        "expected_reject_reason": "no observable failure mode — what does 'better judgment' fail to do?",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The rationale relies on the vague aspiration of 'better judgment' without specifying any observable condition, threshold, or test that would prove the claim false.",
+        "actual_parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 723
+      },
+      {
+        "id": "fcanary-5-feel",
+        "rationale": "The system should feel performant to end users.",
+        "category": "subjective_no_threshold",
+        "expected_reject_reason": "subjective without measurable threshold (vs 'requests must complete in <200ms p95')",
+        "actual_passes": false,
+        "actual_score": 0.0,
+        "actual_reason": "The claim relies on subjective user perception ('feel performant') without defining any measurable threshold, test, or observable condition that would prove it false.",
+        "actual_parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 713
+      }
+    ]
+  },
+  "sample": {
+    "n": 17,
+    "n_pass": 4,
+    "pass_rate": 0.235,
+    "score_bins": {
+      "0.00-0.25": 9,
+      "0.25-0.50": 4,
+      "0.50-0.75": 0,
+      "0.75-1.00": 4
+    },
+    "bimodality_ratio": 3.25,
+    "results": [
+      {
+        "req_id": "REQ-0023dae0",
+        "kind": "finding",
+        "value": "Loom doctor's domain whitelist is restricted to requirement-kind artifacts only, as findings and pro",
+        "rationale_preview": "Loom doctor's domain whitelist (behavior/ui/data/architecture/terminology) is requirement-kind only. Findings (kind=find",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale describes a specific bug behavior (spurious warnings) but fails to specify the falsifier (e.g., 'if the warning does not appear when X is true, the claim is wrong') or the conditions under which the fix applies, making it an unfalsifiable description of a problem rather than a testable claim.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 994
+      },
+      {
+        "req_id": "REQ-0a83d16a",
+        "kind": "finding",
+        "value": "Loom doctor's coverage check incorrectly counts findings and process-rules as missing test specs, re",
+        "rationale_preview": "Empirically observed: Loom doctor's coverage check applies uniformly across all kinds, counting findings and process-rul",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale explicitly describes a specific observable outcome (0% coverage warning) under defined conditions (stores rich in findings with spec-covered requirements) that would invalidate the claim if not observed.",
+        "parts": {
+          "falsifier": "If a store rich in findings does not produce a 0% coverage warning despite all true requirements being spec-covered, the claim is wrong.",
+          "scope": "The claim applies to stores rich in findings where all true requirements are spec-covered.",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 11202
+      },
+      {
+        "req_id": "REQ-2a621c40",
+        "kind": "requirement",
+        "value": "JsIndexer (and similar LSP-backed indexers) MUST be pointed at the project root including test files",
+        "rationale_preview": "phQ7: +40pp lift on placebo cell (30% → 70%) by including test_retry.js in the indexed workspace. No indexer code change",
+        "passes": false,
+        "score": 0.25,
+        "reason": "The rationale asserts a performance lift and a preference for 'PASS' labels over assertions but fails to specify any observable condition, threshold, or test result that would prove the claim false, making it an aesthetic or preference-based justification rather than a falsifiable hypothesis.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 10822
+      },
+      {
+        "req_id": "REQ-4d3e74f2",
+        "kind": "finding",
+        "value": "Toulmin@v1 (qwen3.5) shows requirement-shaped rationales pass at ~5x the rate of finding-shaped rati",
+        "rationale_preview": "Phase L2 evaluation N=19 sample from loom store: requirements 5/9 pass (55.6%), findings 1/8 pass (12.5%), process_rules",
+        "passes": false,
+        "score": 0.0,
+        "reason": "llm_error: RuntimeError: Ollama call failed: timed out",
+        "parts": {},
+        "elapsed_ms": 60001
+      },
+      {
+        "req_id": "REQ-5c9db026",
+        "kind": "finding",
+        "value": "phT imperative-precedence ablation: combining a rhetorical opener ('STRICT REQUIREMENT — NON-NEGOTIA",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py + phU_imperative_followups_smoke.py + FINDINGS-bakeof",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale makes a definitive claim about reliability and independence but provides no observable threshold, test specification, or condition under which the claim would be invalidated, rendering it an unfalsifiable assertion of fact rather than a falsifiable hypothesis.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 22844
+      },
+      {
+        "req_id": "REQ-5e01462c",
+        "kind": "finding",
+        "value": "M10.3 phQ series measured 0% compliance for bare-rule prompts vs 100% saturation when rationale was ",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ3_*, phQ4_*, phQ5_*, phQ7_* harnesses + FINDINGS-bakeoff-v2-pythonfirst-smoke.m",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale specifies a clear empirical test (N≥10 per condition) and a replication boundary (across different rule shapes), implying that failure to reproduce the effect under these conditions would falsify the claim, though the specific threshold for 'failure' is qualitative rather than numerical.",
+        "parts": {
+          "falsifier": "If a replication at N≥10 per condition fails to reproduce the effect across the different rule shapes (phQ3/4/5/7), the claim is invalid.",
+          "scope": "Conditions: experiments/bakeoff/v2_driver harnesses with Bare cell N≥10 per condition.",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 1286
+      },
+      {
+        "req_id": "REQ-65f50316",
+        "kind": "requirement",
+        "value": "Loom context-bundle additions (semantic indexers, file refs, type defs) MUST be treated as condition",
+        "rationale_preview": "phQ3/phQ4/phQ5 series: indexer alone with bare rule = 0% compliance regardless of richness. Indexer + rationale-augmente",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale presents absolute performance claims ('0% compliance', '100% compliance') without specifying the experimental conditions, dataset, or failure modes that would invalidate these thresholds, rendering it an unfalsifiable assertion of capability rather than a testable hypothesis.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 886
+      },
+      {
+        "req_id": "REQ-73a0d7de",
+        "kind": "finding",
+        "value": "Loom's value-add is delivering captured rationale to the agent at the right moment. Storage alone pr",
+        "rationale_preview": "M8.1 D-smoke (FINDINGS-bakeoff-v2-pythonfirst-smoke.md): D2 (stored, undelivered) = 0% compliance, D3 (stored AND inject",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale presents a specific empirical finding (95% compliance vs 0%) but fails to identify any condition, threshold, or observation that would invalidate this claim, making it an untestable assertion of fact rather than a falsifiable hypothesis.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 871
+      },
+      {
+        "req_id": "REQ-763cd262",
+        "kind": "finding",
+        "value": "phS anti-rationale ablation: an equivocal 'soft' anti-rationale (ANTI_SOFT, e.g. 'this might be opti",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phS_anti_rationale_smoke.py + FINDINGS-bakeoff-v2-anti-rationale.md. N=10 per cond",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale describes a surprising empirical observation but fails to specify any threshold, test condition, or rebuttal that would invalidate the claim, making it an unfalsifiable observation report.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 780
+      },
+      {
+        "req_id": "REQ-8eb5fca7",
+        "kind": "requirement",
+        "value": "Loom rationale capture should accept anything explanation-shaped; the presence of explanation matter",
+        "rationale_preview": "phQ3 placebo cell: 90% compliance from length-matched filler text that just paraphrased the rule. Almost matches the 100",
+        "passes": false,
+        "score": 0.25,
+        "reason": "The rationale relies on a qualitative observation ('almost matches', 'not even good prose') and a subjective conclusion ('not worth paying') without specifying a measurable threshold, testable condition, or clear empirical boundary that would falsify the claim.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 861
+      },
+      {
+        "req_id": "REQ-a636de03",
+        "kind": "requirement",
+        "value": "High-stakes Loom rules (security, compliance, contractual) MUST be written with absolute imperative ",
+        "rationale_preview": "phT N=60: R_imperative (full kit) = 100% compliance against ANTI_SOFT, vs 0% baseline. R_meta_preamble (top-of-prompt au",
+        "passes": true,
+        "score": 0.9,
+        "reason": "The rationale provides explicit numerical thresholds (100% vs 0%, 60% each) and sample sizes (N=60, N=50) that serve as concrete falsifiers for the performance claims.",
+        "parts": {
+          "falsifier": "If a replication at N=60 shows R_imperative compliance <100% against ANTI_SOFT, or if length-controlled variants at N=50 do not each score ~60%, the claim is wrong.",
+          "scope": "The claim holds for raw-prompt mode and across anti-rationale shapes (e.g., ANTI_SOFT, ANTI_HARD).",
+          "rebuttal": "None explicitly stated, though the claim is bounded by the specific 'raw-prompt mode' context mentioned."
+        },
+        "elapsed_ms": 1494
+      },
+      {
+        "req_id": "REQ-a9df428e",
+        "kind": "finding",
+        "value": "phQ4 measured qwen2.5-coder:32b losing 20-30pp to qwen3.5:latest on contrarian-rule cells WITHOUT ra",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ4_executor_choice_smoke.py + FINDINGS-bakeoff-v2-executor-choice.md. N=10 per (",
+        "passes": true,
+        "score": 0.75,
+        "reason": "The rationale provides an implicit falsifier by specifying a replication boundary (N=10 vs N=100) and a qualitative test condition (whether selection depends on reliability), meeting the criteria for a qualitative falsifier.",
+        "parts": {
+          "falsifier": "If a replication at N=100 with a different distribution shows that executor selection does not depend on the reliability of rationale-augmentation, the claim is invalid.",
+          "scope": "The claim applies to the specific bakeoff experiments involving model × condition pairs with N=10 per group.",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 1247
+      },
+      {
+        "req_id": "REQ-aaa595ca",
+        "kind": "requirement",
+        "value": "Loom executor selection MUST consider spec contrarian-shape, not just language. Code-specialist mode",
+        "rationale_preview": "phQ4: qwen2.5-coder:32b vs qwen3.5:latest, both with no stub: on-rule -20pp, +placebo -30pp at 32b. The bigger code-spec",
+        "passes": false,
+        "score": 0.25,
+        "reason": "The rationale relies on specific empirical observations to derive a conditional strategy, but it fails to explicitly define the falsifier (e.g., a specific threshold for 'reliable' rationale-augmentation or a condition under which the specialist model would fail despite reliable augmentation), making the core claim about 'executor selection' unfalsifiable as stated.",
+        "parts": {
+          "falsifier": "",
+          "scope": "on-rule -20pp, +placebo -30pp at 32b; with rationale present, 32b wins (+20pp on rat)",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 18242
+      },
+      {
+        "req_id": "REQ-ab5b84b0",
+        "kind": "finding",
+        "value": "phQ7: including JavaScript test files (test_retry.js with PASS/FAIL labels) in the JsIndexer's works",
+        "rationale_preview": "Source: experiments/bakeoff/v2_driver/phQ7_jsindexer_smoke.py + FINDINGS-bakeoff-v2-jsindexer.md. The test's `console.lo",
+        "passes": false,
+        "score": 0.25,
+        "reason": "The rationale relies on a subjective preference ('PASS labels outperform bare assertions') and a vague reference to a 'contract in code form' without specifying a measurable threshold, observable failure mode, or concrete test condition that would invalidate the claim.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 857
+      },
+      {
+        "req_id": "REQ-c0e06e44",
+        "kind": "process_rule",
+        "value": "All experimental findings for all tests must be retained in GitHub.",
+        "rationale_preview": "all of our experimental findings, for all tests, must be retained in github",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale is a procedural directive about data retention rather than a claim about the world that can be falsified by a specific observation or threshold.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 718
+      },
+      {
+        "req_id": "REQ-e4d6f7d4",
+        "kind": "process_rule",
+        "value": "Justify experimental design choices (N, conditions, baselines) before running an ablation; defend th",
+        "rationale_preview": "Captured from this session's redirect on phS where I initially proposed N=10 without justification. The 'please provide ",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale describes a procedural discipline and justifies a rule based on past costs and user feedback, but it fails to specify any observable condition, threshold, or test that would prove the claim (that justification is required) false.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 850
+      },
+      {
+        "req_id": "REQ-ec36bd89",
+        "kind": "requirement",
+        "value": "Loom requirements MUST include rationale (prose or rationale_links). Bare-rule reqs without rational",
+        "rationale_preview": "M10.3 phQ3-phQ7 series: bare rule = 0%, rule + rationale = 100% saturation. phS anti-rationale ablation: ANTI_SOFT (equi",
+        "passes": false,
+        "score": 0.0,
+        "reason": "The rationale presents specific numerical results (percentages, point lifts) but frames them as established facts or design choices without specifying the experimental conditions, sample sizes, or the specific observation that would invalidate these claims, making it an unfalsifiable assertion of outcome rather than a testable hypothesis.",
+        "parts": {
+          "falsifier": "",
+          "scope": "",
+          "rebuttal": ""
+        },
+        "elapsed_ms": 933
+      }
+    ]
+  },
+  "cross_validator": {
+    "both_pass": [
+      "REQ-0a83d16a",
+      "REQ-a636de03"
+    ],
+    "toulmin_only": [
+      "REQ-2a621c40"
+    ],
+    "falsifiability_only": [
+      "REQ-5e01462c",
+      "REQ-a9df428e"
+    ],
+    "neither": [
+      "REQ-0023dae0",
+      "REQ-5c9db026",
+      "REQ-65f50316",
+      "REQ-73a0d7de",
+      "REQ-763cd262",
+      "REQ-8eb5fca7",
+      "REQ-aaa595ca",
+      "REQ-ab5b84b0",
+      "REQ-c0e06e44",
+      "REQ-e4d6f7d4",
+      "REQ-ec36bd89"
+    ]
+  },
+  "acceptance": {
+    "cut_1_canary_zero_fp": true,
+    "overall_pass": true
+  }
+}

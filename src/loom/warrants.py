@@ -415,6 +415,159 @@ def toulmin_v1(rationale: str, *, model: str | None = None,
 
 
 # ---------------------------------------------------------------------------
+# Falsifiability@v1 — Popperian falsifier extraction (Phase L3d)
+# ---------------------------------------------------------------------------
+#
+# Per Popper: a claim is scientifically meaningful only if it's
+# falsifiable — if you can specify what observation would prove
+# it false. This validator evaluates whether a rationale identifies
+# (explicitly or implicitly) what would change the conclusion.
+#
+# Toulmin@v1 catches "is this argued?"; Falsifiability@v1 catches
+# "is this testable?" The two cover different failure modes:
+#
+#   Argued + falsifiable:    fully load-bearing rationale
+#   Argued + unfalsifiable:  philosophical claim ("clean architecture")
+#   Unargued + falsifiable:  bald assertion ("X must be < 50ms")
+#   Unargued + unfalsifiable: pure aspiration ("system should feel snappy")
+#
+# A rationale can pass Toulmin (has data + warrant) but fail
+# Falsifiability (no clear test condition) — and vice versa. Phase
+# L3 ships them as siblings so the loom dev can pick one or both.
+
+_FALSIFIABILITY_V1_PROMPT = """\
+You are a Popperian falsifiability validator. A claim is
+falsifiable if and only if you can specify what observation
+would prove it false. Your job: decide whether the rationale
+identifies (explicitly or implicitly) a falsifier — a concrete
+condition, threshold, or observation that would invalidate the
+claim if it occurred.
+
+A rationale PASSES (passes=true) when at least one of these holds:
+  - explicit threshold: "if X drops below Y, claim is wrong"
+  - test specification: "this is testable by running Z and
+    observing result R"
+  - empirical scope: "claim holds in conditions A; outside A,
+    re-evaluate"
+  - replication boundary: "measured at N=10; at N=100 with
+    different distribution, may not generalize"
+  - rebuttal condition: "exception: when condition C is true,
+    the claim doesn't apply"
+
+A rationale FAILS (passes=false) when:
+  - vague aspiration with no observable failure mode
+    ("clean architecture", "good code", "performant")
+  - pure taste/preference ("feels right", "elegant")
+  - tautology ("X because X")
+  - confidence assertion with no test ("this is the right call",
+    "trust me")
+  - aesthetic justification ("looks better")
+  - placeholder ("TBD", "we wanted to")
+
+PASS examples:
+  - "phS measured a 12pp lift at N=10 on the S1 bench. If a
+     replication at N=30 shows <5pp difference, the effect is
+     artifact." [explicit threshold + replication boundary]
+  - "Cache invalidation must fire within 50ms of write. Failure
+     to fire within 200ms is a P1 bug." [explicit threshold]
+  - "The retry loop should not propagate errors; we observed
+     incident I-2024-04 caused $X cost when it did. Exception:
+     idempotent reads can re-raise." [empirical grounding +
+     rebuttal condition]
+
+FAIL examples:
+  - "We should have clean architecture." [no observable failure mode]
+  - "TBD" [placeholder]
+  - "This is the right call." [confidence with no test]
+  - "Use better judgment in PR review." [no measurable
+     condition]
+  - "The system should feel performant." [no measurable threshold]
+
+Output JSON only, exactly this shape:
+
+  {{"passes": true|false,
+    "score": 0.0-1.0,
+    "parts": {{
+      "falsifier": "<the specific observation/threshold/test that would
+                   prove this wrong, or empty if none>",
+      "scope": "<conditions under which the claim applies, or empty>",
+      "rebuttal": "<conditions that exempt the claim, or empty>"
+    }},
+    "reason": "<one sentence explaining the pass/fail decision>"}}
+
+Score guidance:
+  1.0  = explicit falsifier with measurable threshold (numerical or
+         clearly-observable pass/fail)
+  0.75 = implicit falsifier — a clear test exists but the threshold
+         is qualitative
+  0.5  = empirical grounding, but the falsifier is vague
+  0.25 = principle stated, no test
+  0.0  = unfalsifiable (aspiration, taste, tautology, placeholder)
+
+Pass threshold: 0.75.
+
+Rationale to evaluate:
+\"\"\"
+{rationale}
+\"\"\"
+"""
+
+
+def _default_falsifiability_v1_model() -> str:
+    """Same model selection as Toulmin@v1 — Anthropic Haiku if
+    ANTHROPIC_API_KEY set, else qwen3.5:latest. Override via
+    LOOM_FALSIFIABILITY_V1_MODEL."""
+    if env := os.environ.get("LOOM_FALSIFIABILITY_V1_MODEL"):
+        return env
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic:claude-haiku-4-5-20251001"
+    return "ollama:qwen3.5:latest"
+
+
+def falsifiability_v1(rationale: str, *, model: str | None = None,
+                      timeout: int = 60) -> ValidatorResult:
+    """LLM-driven Popperian falsifier extraction (Phase L3d).
+    Same dispatch + parsing pattern as toulmin_v1; different prompt.
+    Returns a ValidatorResult with parts={falsifier, scope, rebuttal}.
+    """
+    from . import services
+
+    rationale = (rationale or "").strip()
+    if not rationale:
+        return ValidatorResult(
+            validator_id="falsifiability@v1", passes=False, score=0.0,
+            reason="empty rationale",
+        )
+
+    model = model or _default_falsifiability_v1_model()
+    prompt = _FALSIFIABILITY_V1_PROMPT.format(rationale=rationale)
+    try:
+        resp = services._call_decomposer_llm(model, prompt, timeout=timeout)
+    except Exception as e:
+        return ValidatorResult(
+            validator_id="falsifiability@v1", passes=False, score=0.0,
+            reason=f"llm_error: {type(e).__name__}: {e}",
+        )
+
+    # Reuse the toulmin parser — same JSON shape requirements.
+    parsed = _parse_toulmin_v1_output(resp.get("content", ""))
+    if parsed is None:
+        return ValidatorResult(
+            validator_id="falsifiability@v1", passes=False, score=0.0,
+            reason="parse_failed",
+            parts={"raw_content": (resp.get("content") or "")[:400]},
+        )
+
+    return ValidatorResult(
+        validator_id="falsifiability@v1",
+        passes=bool(parsed.get("passes", False)),
+        score=float(parsed.get("score", 0.0)),
+        reason=str(parsed.get("reason", "")),
+        parts=parsed.get("parts", {}) or {},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Warrants log — claim_id tracking (Phase L3a)
 # ---------------------------------------------------------------------------
 #

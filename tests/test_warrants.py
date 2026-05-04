@@ -393,6 +393,48 @@ class TestWarrantsLog:
         )
 
 
+class TestFalsifiabilityV1Canary:
+    """Phase L3d acceptance: the LLM-driven Falsifiability@v1
+    validator must reject all 5 of the curated unfalsifiable
+    rationales in ``tests/data/falsifiability_canary_v1.json``.
+    Same 0/5 false-positive bar as Toulmin@v1.
+
+    Skipped until ``warrants.falsifiability_v1`` ships in L3d."""
+
+    @pytest.fixture
+    def canary_path(self):
+        return Path(__file__).parent / "data" / "falsifiability_canary_v1.json"
+
+    def test_canary_dataset_exists(self, canary_path):
+        assert canary_path.exists(), (
+            "Falsifiability canary dataset missing — Phase L3d "
+            "requires tests/data/falsifiability_canary_v1.json with "
+            "≥5 unfalsifiable rationales the validator must reject."
+        )
+
+    def test_falsifiability_v1_rejects_all_canary_rationales(self, canary_path):
+        if not hasattr(warrants, "falsifiability_v1"):
+            pytest.skip("falsifiability_v1 ships in Phase L3d")
+        if not canary_path.exists():
+            pytest.skip("falsifiability canary dataset not yet committed")
+        items = json.loads(canary_path.read_text(encoding="utf-8"))
+        false_positives = []
+        for item in items:
+            r = warrants.falsifiability_v1(item["rationale"])
+            if r.passes:
+                false_positives.append({
+                    "id": item["id"],
+                    "rationale": item["rationale"],
+                    "expected_reject_reason": item.get("expected_reject_reason"),
+                    "validator_score": r.score,
+                })
+        assert false_positives == [], (
+            f"Falsifiability@v1 false-positive on "
+            f"{len(false_positives)} canary rationale(s); see "
+            f"TestFalsifiabilityV1Canary"
+        )
+
+
 class TestToulminV1Canary:
     """Phase L2 acceptance: the LLM-driven Toulmin@v1 validator must
     reject all 5 of the curated bad rationales in
