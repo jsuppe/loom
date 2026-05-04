@@ -647,12 +647,40 @@ request, not a statistical rate. The acceptance is binary:
 curl http://127.0.0.1:8080/health
 # expected: {"ok": true, "service": "driftgraph-warrants"}
 
-# 2. End-to-end with curl (proves the wire is live)
-#    Read the secret from the canonical shared path.
+# 2. End-to-end smoke (proves the wire is live).
+#    Two flavors below — pick whichever your shell supports cleanly.
+
+# === Option A: Python-based HMAC (recommended, works on every shell) ===
+python -c "
+import hmac, hashlib, json, pathlib, sys, urllib.request
+
+secret = pathlib.Path.home().joinpath('.driftgraph', 'loom-webhook-secret').read_text(encoding='utf-8').strip()
+body = json.dumps({
+    'project': 'sparkeye',
+    'validator_id': 'manual@v0',
+    'validator_score': 0.9,
+    'claim_text': 'Manual smoke',
+    'rationale': \"posted by python -c from loom dev's machine.\",
+}).encode('utf-8')
+sig = 'sha256=' + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+req = urllib.request.Request(
+    'http://127.0.0.1:8080/warrants',
+    data=body,
+    headers={'Content-Type': 'application/json', 'X-Hub-Signature-256': sig},
+    method='POST',
+)
+with urllib.request.urlopen(req) as r:
+    print(r.status, r.read().decode())
+"
+# expected: 201 with {"episode_id": "...", "claim_ids": [...]}
+
+# === Option B: Pure bash (uses printf — DO NOT use echo -n; it's
+# unreliable on Git-Bash for Windows because of xpg_echo quirks.
+# The body bytes signed must EXACTLY match the body bytes sent.) ===
 SECRET=$(cat ~/.driftgraph/loom-webhook-secret)   # Linux/macOS
-# Windows: SECRET=$(cat $env:USERPROFILE\.driftgraph\loom-webhook-secret)
+# Windows Git-Bash: SECRET=$(cat "$USERPROFILE/.driftgraph/loom-webhook-secret")
 BODY='{"project":"sparkeye","validator_id":"manual@v0","validator_score":0.9,"claim_text":"Manual smoke","rationale":"posted by curl from loom dev'\''s machine."}'
-SIG="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
 curl -X POST http://127.0.0.1:8080/warrants \
   -H "Content-Type: application/json" \
   -H "X-Hub-Signature-256: $SIG" \
