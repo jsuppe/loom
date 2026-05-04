@@ -816,6 +816,113 @@ don't. The Cut 3 query above is also useful for picking the right
 threshold — sweep `s >= X` and find the X that maximizes the
 gap in `pct_grounded` between passing and failing.
 
+### How `BECAUSE_OF` edges actually get written (read this before L3e)
+
+*Added 2026-05-04 in response to a clarifying question from the
+loom dev: "does Driftgraph create BECAUSE_OF edges automatically
+from claim_text mentioning a prior claim_id, or is there an
+explicit edge-creation API?"*
+
+Two write paths, both supported. Pick the right one for the use
+case.
+
+**Path 1 — Explicit `target_claim_id` in the POST justifications
+array (DETERMINISTIC; recommended for L3e and any case where you
+know the parent claim_id).**
+
+```json
+{
+  "project": "sparkeye",
+  "validator_id": "toulmin@v1",
+  "validator_score": 0.85,
+  "claim_text": "Defer meeting summarizer to v2",
+  "rationale": "Out of scope for POC v1.",
+  "justifications": [
+    {
+      "kind": "because_of",
+      "target_claim_id": "clm_f5ef189165604a60",
+      "rationale": "meeting summarizer is out of scope per established POC v1 scope",
+      "confidence": 0.95
+    }
+  ]
+}
+```
+
+Driftgraph MERGEs the edge directly: `MATCH (src:Claim) MATCH
+(tgt:Claim) MERGE (src)-[:BECAUSE_OF]->(tgt)`. No canonicalization
+lookup, no LLM resolution, no chance of the edge silently failing
+because of normalization mismatches. Loom retrieves the parent's
+`claim_id` from the parent POST's response (`claim_ids[0]`) and
+threads it into the child POST. Returns
+`explicit_justifications_resolved: 1, explicit_edges_written: 1`
+on success.
+
+**Path 2 — Semantic `(target_subject, target_predicate, target_object)`.**
+
+```json
+{
+  "justifications": [
+    {
+      "kind": "because_of",
+      "target_subject": "POC v1 scope",
+      "target_predicate": "is_set_to",
+      "target_object": "ask-anything path only",
+      "rationale": "...",
+      "confidence": 0.9
+    }
+  ]
+}
+```
+
+Driftgraph runs `RESOLVE_ENTITY` (vector cosine ≥ 0.92 on
+`target_subject` against existing `:Entity` nodes) +
+`RESOLVE_PRED` (vector cosine ≥ 0.85 on `target_predicate`) +
+`FIND_PRIOR_CLAIMS` to locate the existing live `:Claim` whose
+canonical entity + predicate match. **Brittle** because:
+
+- The LLM that originally extracted the parent may have
+  canonicalized `"POC v1 scope"` → `"POC scope"` (entity tau
+  doesn't always match across distinct LLM calls)
+- The predicate normalizer maps `"is_set_to"` → `"is_set_to"`
+  but `"is"` → `"uses"`. Different post bodies producing
+  different canonical predicates won't resolve.
+
+When semantic resolution fails, the response shows
+`explicit_justifications_dropped: N, explicit_edges_written: 0`.
+That's the signal to switch to Path 1 instead, OR to verify what
+the parent POST actually canonicalized to (Cypher snippet below).
+
+**Path 3 — Implicit (LLM-extracted from the rationale text).**
+
+If the rationale text contains "given that X", "because Y is",
+"follows from Z", etc., the Phase 9 grounding-aware extractor
+inside `Ingestor.ingest_episode` emits its own justifications and
+they get resolved via the same semantic path. This works
+opportunistically — useful when the rationale is naturally
+written with inline argument, but not reliable enough for L3e
+where you need a *specific* edge to exist.
+
+**Don't put `clm_xxxxx` literals in the rationale text.** The
+extractor would treat them as a literal string entity and
+produce nonsense. Path 1 (target_claim_id) is the right way
+to reference a prior claim by id.
+
+**Verify what canonical form the parent POST landed at:**
+
+```bash
+# Replace ep_<id> with the parent POST's episode_id from response
+cypher-shell -u neo4j -p $NEO4J_PASSWORD -d sparkeye \
+  "MATCH (ep:Episode {episode_id:'ep_<id>'})-[:OBSERVED]->(c:Claim)-[:ABOUT {role:'subject'}]->(e:Entity) \
+   MATCH (c)-[:HAS_PREDICATE]->(p:Predicate) \
+   RETURN c.claim_id AS claim_id, e.canonical AS subject_entity, \
+          p.canonical AS predicate, c.object_text AS object"
+```
+
+This shows you the canonical entity name and predicate for each
+claim the parent POST produced — useful both for diagnosing why
+a Path 2 lookup failed AND for deciding whether to use the
+canonical form for Path 2 or just lock in Path 1's claim_id.
+
 ### Phase L3 — Multi-validator + retraction (~half day)
 
 **Goal:** prove the system handles more than one validator
@@ -841,6 +948,14 @@ and that retraction works.
 3. If a previously-passing warrant fails on re-validation, call
    `push_retraction(claim_id)`. Driftgraph handles the
    foundation-drift cascade.
+4. **For the L3e demo specifically:** use Path 1 above
+   (`target_claim_id`). Construct parent → child as two
+   sequential POSTs; the child's `justifications[0].target_claim_id`
+   is the `claim_ids[0]` returned in the parent POST's response.
+   That guarantees the BECAUSE_OF edge exists, so retracting the
+   parent reliably triggers the foundation-drift cascade for the
+   child. Don't rely on Path 2 or Path 3 for L3e — they're
+   subject to canonicalization variance.
 
 **Acceptance:**
 
@@ -849,7 +964,8 @@ and that retraction works.
 - `/warrants` in Driftgraph shows both validators in the
   per-validator breakdown.
 - Retracting one of them via `push_retraction` invalidates the
-  corresponding claim; if it had `BECAUSE_OF` dependents, the
+  corresponding claim; if it had `BECAUSE_OF` dependents (Path 1
+  or Path 2 or Path 3 — all fire the same cascade), the
   amber 🪨 foundation-drift alert fires next time a query
   walks past.
 
