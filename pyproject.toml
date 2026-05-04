@@ -41,6 +41,13 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]
+# M13.5 — Driftgraph inbound channel. Loom queries Driftgraph's
+# Neo4j directly via in-process imports (Architecture B); the
+# neo4j driver is the only new transitive dep. Without this
+# extra installed, loom.driftgraph_query.is_available() returns
+# False and the inbound channel silently degrades — agent gets
+# the M11.5/M12-era context as if M13.5 didn't exist.
+driftgraph = ["neo4j>=5.0"]
 dev = [
     "pytest>=8.0",
     "pytest-xdist>=3.0",

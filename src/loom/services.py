@@ -1718,6 +1718,33 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     drift = [r for r in reqs if r["superseded"]]
     linked = bool(reqs or specs)
 
+    # M13.5b — Driftgraph foundation-drift signals. For each linked
+    # req that has Driftgraph claim_ids in our warrants log, query
+    # the substrate for any superseded ancestors. Failures degrade
+    # silently (no signal). The PreToolUse hook is on the agent's
+    # critical path; this code MUST NOT throw.
+    graph_drift: list[dict[str, Any]] = []
+    try:
+        from . import driftgraph_query
+        if driftgraph_query.is_available():
+            for r in reqs:
+                gd = driftgraph_query.find_drifted_ancestors_for_req(
+                    store.data_dir, r["id"],
+                )
+                if gd["drifted"]:
+                    graph_drift.append({
+                        "req_id": r["id"],
+                        "drifted_ancestors": gd["drifted_ancestors"],
+                    })
+                # Annotate the per-req entry so callers can render the
+                # "🪨 graph-drifted" indicator next to each req.
+                r["graph_drifted"] = gd["drifted"]
+    except Exception:
+        # Anything raised here = the inbound channel is broken;
+        # don't take down loom context with it.
+        pass
+    has_graph_drift = bool(graph_drift)
+
     if not linked:
         summary = ""
     else:
@@ -1731,11 +1758,21 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
             summary += " — DRIFT on " + ", ".join(d["id"] for d in drift[:3])
             if len(drift) > 3:
                 summary += f" (+{len(drift) - 3} more)"
+        if has_graph_drift:
+            ids = ", ".join(g["req_id"] for g in graph_drift[:3])
+            summary += f" — GRAPH-DRIFT on {ids}"
+            if len(graph_drift) > 3:
+                summary += f" (+{len(graph_drift) - 3} more)"
 
     return {
         "file": file_path,
         "linked": linked,
+        # M13.5b: drift_detected stays the local-only signal for
+        # back-compat. graph_drift_detected is the new substrate
+        # signal; PreToolUse hook can gate on either or both.
         "drift_detected": bool(drift),
+        "graph_drift_detected": has_graph_drift,
+        "graph_drift": graph_drift,
         "requirements": reqs,
         "specifications": specs,
         "summary": summary,

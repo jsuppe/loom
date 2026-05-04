@@ -137,10 +137,60 @@ the gatekeeper, Driftgraph is the warehouse.
       (retries, circuit-breaker), idempotency (claim_id dedup),
       secret rotation, observability (per-validator latency
       percentiles, push-success rate via `loom warrant stats`).
-- [ ] **13.L4 Productionize.** Network failure handling
-      (retries, circuit-breaker), idempotency (claim_id dedup),
-      secret rotation, observability (per-validator latency
-      percentiles, push-success rate via `loom warrant stats`).
+- [x] **13.5a-c Inbound channel — Driftgraph signals in
+      `loom context` / PreToolUse hook (Architecture B).**
+      v0 of the inbound channel; Loom now sees Driftgraph
+      foundation-drift signals before edits, not just outbound
+      warrant pushes. New `src/loom/driftgraph_query.py`:
+        * Repo discovery (env var → `~/Downloads/grag` →
+          `~/dev/grag` → `~/dev/sdr-graph-memory`)
+        * In-process import of Driftgraph's `chains` module +
+          `experiments.v03.schema.connect()` via sys.path
+        * `is_available()` — True iff repo + Neo4j both reachable
+          (graceful degrade everywhere else)
+        * `find_drifted_ancestors_for_claim(project, claim_id)` —
+          walks BECAUSE_OF up to 5 hops; surfaces any ancestor
+          with `invalidated_at IS NOT NULL`
+        * `find_drifted_ancestors_for_req(data_dir, req_id)` —
+          looks up active claim_ids from .warrants-log.jsonl,
+          queries each, returns
+          `{drifted, claim_ids, drifted_ancestors, available}`
+      services.context() additions:
+        * `graph_drift_detected: bool` — top-level signal
+        * `graph_drift: list` — per-req {req_id, drifted_ancestors}
+        * each `requirements[i].graph_drifted` — per-req tag
+        * `summary` appends "GRAPH-DRIFT on REQ-A, REQ-B"
+      `loom context` CLI: per-req `🪨 graph-drift` tag + bottom
+      "Foundation drift on Driftgraph" section enumerating
+      drifted ancestors; exit code 2 on either local OR graph
+      drift. PreToolUse hook: per-req `[GRAPH-DRIFT]` tag +
+      "Driftgraph foundation-drift — upstream evidence moved"
+      section; `LOOM_HOOK_BLOCK_ON_DRIFT=1` blocks on either.
+      pyproject.toml: `[driftgraph]` extra (`neo4j>=5.0`).
+      Without the extra, every public function in
+      driftgraph_query degrades to "no signal" — agent gets
+      M11.5/M12-era context as if M13.5 didn't exist.
+      End-to-end smoke verified by manufacturing a synthetic
+      drift case via direct Cypher (live → BECAUSE_OF →
+      retracted), running `find_drifted_ancestors`, verifying
+      it returns the drifted ancestor with hops=1, then
+      cleaning up the synthetic edge.
+      Tests: 15 in `test_driftgraph_query.py` — all use
+      monkeypatched modules so no live Neo4j needed in CI.
+      Architecture B trade-off: Loom imports from a sibling
+      repo via sys.path hack. Migrating to a clean read API
+      (Path C — substrate-side HTTP /claims/<id>) only swaps
+      `_ensure_modules`; everything else stays.
+      **One real substrate-side finding from this work:** zero
+      of our currently-live Loom claims have BECAUSE_OF parents
+      in the graph. Driftgraph isn't auto-extracting BECAUSE_OF
+      edges from rationale text mentioning prior claim_ids;
+      either claim-extraction post-processing doesn't catch
+      this pattern, or the explicit `justifications` field in
+      the warrant payload (per `warrants_endpoint.py` line 30)
+      is the intended path. Worth flagging back to the
+      Driftgraph dev — orthogonal to M13.5 itself but needed
+      before the L3e end-to-end demo can produce real drift.
 
 ## Milestone 12: Research mode (v1.x)
 

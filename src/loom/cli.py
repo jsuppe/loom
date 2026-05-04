@@ -223,7 +223,8 @@ def cmd_context(args):
 
     if not use_pretty:
         print(json.dumps(data, indent=2))
-        return 2 if data["drift_detected"] else 0
+        # M13.5b: graph drift counts as drift for the exit code.
+        return 2 if (data["drift_detected"] or data.get("graph_drift_detected")) else 0
 
     print(f"🧵 Loom Context — {args.file}")
     print()
@@ -235,7 +236,8 @@ def cmd_context(args):
         print("Requirements:")
         for r in data["requirements"]:
             marker = "⚠️ superseded" if r["superseded"] else "✓"
-            print(f"  {marker} {r['id']} [{r['domain']}] ({r['lines']})")
+            graph_tag = " 🪨 graph-drift" if r.get("graph_drifted") else ""
+            print(f"  {marker} {r['id']} [{r['domain']}] ({r['lines']}){graph_tag}")
             print(f"     {r['value']}")
     if data["specifications"]:
         print()
@@ -246,8 +248,17 @@ def cmd_context(args):
     if data["drift_detected"]:
         print()
         print("⚠️  Drift detected — review before editing.")
+    if data.get("graph_drift_detected"):
+        print()
+        print("🪨  Foundation drift on Driftgraph — upstream evidence has been retracted:")
+        for g in data.get("graph_drift") or []:
+            for anc in g["drifted_ancestors"][:3]:
+                a = anc.get("ancestor", {})
+                subj = (a.get("ancestor_subject") or "")[:60]
+                print(f"     {g['req_id']} → ancestor {a.get('ancestor_claim_id', '?')[:16]}: {subj}")
+        print("   Re-evaluate this evidence chain before editing.")
 
-    return 2 if data["drift_detected"] else 0
+    return 2 if (data["drift_detected"] or data.get("graph_drift_detected")) else 0
 
 
 def cmd_cost(args):

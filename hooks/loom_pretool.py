@@ -182,6 +182,11 @@ def main() -> int:
     reqs = data.get("requirements", []) or []
     specs = data.get("specifications", []) or []
     drift = bool(data.get("drift_detected"))
+    # M13.5b: foundation drift from the Driftgraph substrate. Distinct
+    # signal from local supersedes — surfaced separately so the agent
+    # knows the upstream evidence moved on the graph side.
+    graph_drift = bool(data.get("graph_drift_detected"))
+    graph_drift_entries = data.get("graph_drift", []) or []
 
     if not data.get("linked"):
         _finish(tool=tool_name, file=file_path, fired=False, bytes_out=0,
@@ -194,19 +199,33 @@ def main() -> int:
     lines: list[str] = [summary] if summary else []
     for r in reqs:
         flag = " [SUPERSEDED]" if r.get("superseded") else ""
-        lines.append(f"  - {r['id']} [{r['domain']}]{flag}: {r['value']}")
+        graph_flag = " [GRAPH-DRIFT]" if r.get("graph_drifted") else ""
+        lines.append(f"  - {r['id']} [{r['domain']}]{flag}{graph_flag}: {r['value']}")
         if r.get("rationale"):
             lines.append(f"    Rationale: {r['rationale']}")
     for s in specs:
         lines.append(f"  - {s['id']} -> {s['parent_req']}: {s['description']}")
 
+    if graph_drift_entries:
+        lines.append("")
+        lines.append("Driftgraph foundation-drift — upstream evidence moved on the graph:")
+        for g in graph_drift_entries:
+            for anc in g["drifted_ancestors"][:3]:
+                a = anc.get("ancestor", {})
+                subj = (a.get("ancestor_subject") or "")[:60]
+                lines.append(f"  - {g['req_id']} → ancestor "
+                             f"{a.get('ancestor_claim_id', '?')[:16]}: {subj}")
+
     message = "\n".join(lines)
     bytes_out = len(message.encode("utf-8"))
 
-    if drift and os.environ.get("LOOM_HOOK_BLOCK_ON_DRIFT") == "1":
+    # M13.5b: gate blocks on EITHER local drift OR graph drift when
+    # LOOM_HOOK_BLOCK_ON_DRIFT=1 is set.
+    if (drift or graph_drift) and os.environ.get("LOOM_HOOK_BLOCK_ON_DRIFT") == "1":
         print(message, file=sys.stderr)
         _finish(tool=tool_name, file=file_path, fired=True, bytes_out=bytes_out,
-                reqs=len(reqs), specs=len(specs), drift=True, skipped=None)
+                reqs=len(reqs), specs=len(specs),
+                drift=(drift or graph_drift), skipped=None)
         return 2
 
     response = {
