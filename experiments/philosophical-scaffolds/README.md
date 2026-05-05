@@ -816,6 +816,259 @@ don't. The Cut 3 query above is also useful for picking the right
 threshold — sweep `s >= X` and find the X that maximizes the
 gap in `pct_grounded` between passing and failing.
 
+### Reading from Driftgraph: read API + push webhook (Phase 13.5 + 13.5b — substrate-side, just shipped)
+
+*Added 2026-05-05 in response to the loom dev's M13.5 scope check
+question. Both sides shipped + smoke-tested end-to-end.*
+
+The substrate now exposes a small read HTTP API (3 routes) plus a
+push-back webhook so Loom can build a low-latency cache mirror
+without polling. This is the path the loom dev's PreToolUse hook
+should use — direct Cypher and in-process imports stay open for
+debugging but neither needs to be a runtime dependency.
+
+#### Read API
+
+All endpoints are on the same `WARRANTS_PORT` (default 8080) as
+the inbound `/warrants` endpoint. Auth follows two patterns:
+
+- **GET endpoints** use `Authorization: Bearer <secret>` with the
+  same `LOOM_WEBHOOK_SECRET` as inbound. Bearer (not HMAC) because
+  there's no body to sign over.
+- **POST endpoints** use HMAC-SHA256 over the body in
+  `X-Hub-Signature-256`, identical to the inbound flow.
+
+```
+GET  /claims/{claim_id}?project=<name>
+  → 200 with the full claim status, including foundation_drifted
+    and supersedes_chain. 404 if claim_id doesn't exist in the
+    project's database.
+
+GET  /projects/{project_name}/foundation-drift?limit=<int>
+  → 200 with the list of live claims whose direct BECAUSE_OF
+    target has been invalidated. limit defaults to 100, capped
+    at 500.
+
+POST /claims/lookup
+  body: {"project": "...", "claim_ids": [...]}
+  → 200 with the per-claim status (same shape as GET /claims/{id})
+    for each id, plus a missing_claim_ids list. Capped at 500
+    claim_ids per request.
+```
+
+Single-claim response shape:
+
+```json
+{
+  "claim_id": "clm_...",
+  "kind": "warrant",                 // or "chat" / "authoritative"
+  "valid": true,                     // false if invalidated_at is set
+  "invalidated_at": null,            // unix-ms or null
+  "observed_at": 1777904984684,
+  "confidence": 0.9,                 // extractor confidence
+  "validator_id": "toulmin@v1",      // null when not validator-tagged
+  "validator_score": 0.85,
+  "subject": "POC v1 scope",
+  "predicate": "uses",
+  "object": "ask-anything path only",
+  "source_episode_id": "ep_...",
+  "source": "loom_warrant",
+  "supersedes_chain": ["clm_...", "clm_..."],   // SUPERSEDES* outbound, longest path
+  "because_of_targets": ["clm_..."],            // direct BECAUSE_OF outbound
+  "foundation_drifted": false,                  // any BECAUSE_OF target invalidated?
+  "n_invalidated_parents": 0
+}
+```
+
+Foundation-drift response shape:
+
+```json
+{
+  "project": "sparkeye",
+  "drifted_claims": [
+    {
+      "claim_id": "clm_...",
+      "kind": "warrant",
+      "subject": "...", "predicate": "...", "object": "...",
+      "validator_id": "toulmin@v1",
+      "validator_score": 0.85,
+      "source": "loom_warrant",
+      "broken_chain": [
+        {
+          "target_claim_id": "clm_<the retracted parent>",
+          "target_subject": "...",
+          "target_object": "...",
+          "retracted_at": 1777976981831,
+          "retraction_validator": "toulmin-revalidate",
+          "rationale": "<the BECAUSE_OF rationale on the original edge>"
+        }
+      ]
+    }
+  ],
+  "count": 1
+}
+```
+
+Bulk lookup response shape:
+
+```json
+{
+  "project": "sparkeye",
+  "claims": [<single-claim shape>, <single-claim shape>, null],
+  "found_count": 2,
+  "missing_claim_ids": ["clm_doesnt_exist"]
+}
+```
+
+Note: `claims` preserves request order; missing IDs land as `null`
+in the array AND are listed separately in `missing_claim_ids`.
+This means Loom can zip the response array against its request
+list directly.
+
+Smoke-test commands (from any shell):
+
+```bash
+SECRET=$(cat ~/.driftgraph/loom-webhook-secret)
+
+# 1. Single claim
+curl -s "http://127.0.0.1:8080/claims/clm_<id>?project=sparkeye" \
+  -H "Authorization: Bearer $SECRET"
+
+# 2. Foundation-drift across project
+curl -s "http://127.0.0.1:8080/projects/sparkeye/foundation-drift" \
+  -H "Authorization: Bearer $SECRET"
+
+# 3. Bulk lookup (HMAC over body, like the inbound POST)
+BODY='{"project":"sparkeye","claim_ids":["clm_a","clm_b"]}'
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
+curl -s -X POST "http://127.0.0.1:8080/claims/lookup" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: $SIG" \
+  -d "$BODY"
+```
+
+#### Push webhook (the recommended path for PreToolUse latency)
+
+Polling per-edit at 6s p95 will feel terrible. Push from Driftgraph
+to Loom's webhook eliminates per-edit Driftgraph hits entirely —
+PreToolUse reads from Loom's local cache with 0ms latency, and the
+cache stays current via push events.
+
+Configure on the Driftgraph side: add `loom_drift_webhook: "<url>"`
+to the project's entry in `projects.yaml`. The bot will register
+the dispatcher at next startup and start firing events.
+
+Three event types:
+
+```
+event: "foundation_drift_detected"
+  // Fired when a chat utterance supersedes a Claim that's a
+  // BECAUSE_OF target (i.e., a downstream warrant's grounding
+  // just moved). One event per detection batch with the full
+  // list of affected dependents inline.
+{
+  "event": "foundation_drift_detected",
+  "project": "sparkeye",
+  "fired_at": 1777977055759,
+  "triggering_episode_id": "ep_...",
+  "superseded_claim_ids": ["clm_..."],
+  "affected_dependents": [
+    {
+      "claim_id": "clm_<dependent>",
+      "subject": "...", "predicate": "...", "object": "...",
+      "source": "loom_warrant",
+      "repo_path": "docs/decisions/0007-...md",  // null for chat sources
+      "url": "https://github.com/.../blob/main/...",
+      "rationale": "<original BECAUSE_OF rationale>",
+      "target_claim_id": "clm_<the superseded parent>"
+    }
+  ],
+  "n_dependents": 1
+}
+
+event: "claim_superseded"
+  // Fired per SUPERSEDES write inside _process_message. Each
+  // alert in the chat = one event. Loom can use this to know
+  // which claims are no longer live.
+{
+  "event": "claim_superseded",
+  "project": "sparkeye",
+  "fired_at": 1777977055759,
+  "new_claim": {
+    "claim_id": "clm_...",
+    "subject": "...", "object": "...",
+    "episode_id": "discord_<id>"
+  },
+  "old_claim": {
+    "claim_id": "clm_...",
+    "subject": "...", "object": "...",
+    "episode_id": "..."
+  },
+  "predicate": "...",
+  "topic": "<canonical entity>",
+  "confidence": 0.92,
+  "rationale": "<the conflict judge's rationale>"
+}
+
+event: "claim_invalidated"
+  // Fired when Loom POSTs a retraction (POST /warrants with
+  // retraction_target_claim_id). Echoes back so Loom's cache
+  // doesn't have to wait for a poll to know its own retraction
+  // landed.
+{
+  "event": "claim_invalidated",
+  "project": "sparkeye",
+  "fired_at": 1777977055759,
+  "claim_id": "clm_...",
+  "retraction_validator": "toulmin-revalidate@v1",
+  "rationale": "no longer passes Toulmin shape check",
+  "invalidated_at": 1777977055728
+}
+```
+
+Auth: every webhook POST is HMAC-SHA256 signed with
+`LOOM_WEBHOOK_SECRET` in `X-Hub-Signature-256`, exactly like the
+inbound `/warrants` flow. User-Agent is `driftgraph-webhook/1`.
+
+Delivery semantics: **fire-and-forget**, not at-least-once. The
+substrate doesn't retry on failure (Loom timeout, 5xx, network
+glitch all silently drop). For a robust cache mirror, Loom should
+periodically re-sync via the read API as a backstop — e.g., a
+nightly "fetch all foundation-drifted claims and reconcile" pass.
+That covers any push events that didn't make it through.
+
+Smoke-test pattern: a tiny aiohttp catcher script lives in the
+Driftgraph repo at `sdr-benchmark/_webhook_catcher.py` for
+verifying signatures and payload shapes locally without running
+real Loom. Loom's webhook handler should mirror its auth + parsing
+behavior.
+
+#### What this changes for the loom dev's PreToolUse hook
+
+Before Phase 13.5 + 13.5b, the only path was direct Cypher (your
+A) or in-process import (your B). Now there's a clean HTTP read
+path AND push events to keep a local cache fresh.
+
+Recommended PreToolUse pattern:
+
+1. On bot/Loom startup, hit `GET /projects/<name>/foundation-drift`
+   to seed the local cache with everything currently drifted
+2. Subscribe to the push webhook to receive deltas
+3. On each PreToolUse: read from local cache only (no Driftgraph
+   round-trip)
+4. Periodically (e.g., hourly) re-fetch the foundation-drift list
+   as a backstop in case any push events were dropped
+5. Optional: when a tool's edit references specific claim_ids
+   (e.g., it's editing an ADR file), hit `POST /claims/lookup`
+   for those specific IDs to get the freshest state — falls back
+   to cache on network failure
+
+Cost target: PreToolUse adds ≤1ms to every edit (cache hit), with
+backstop polling at 1 request per hour. Push events arrive within
+seconds of the underlying state change.
+
+---
+
 ### How `BECAUSE_OF` edges actually get written (read this before L3e)
 
 *Added 2026-05-04 in response to a clarifying question from the
