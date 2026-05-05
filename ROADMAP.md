@@ -191,6 +191,73 @@ the gatekeeper, Driftgraph is the warehouse.
       is the intended path. Worth flagging back to the
       Driftgraph dev — orthogonal to M13.5 itself but needed
       before the L3e end-to-end demo can produce real drift.
+- [x] **13.5d Push-based cache + receiver (Loom-side).**
+      Built per the dev's response on the 5 escalation
+      questions: dev recommended skip-B-as-runtime, ship
+      Path C (HTTP read API) + push webhook from substrate.
+      Substrate-side work is in-flight on their PR; Loom-side
+      shipped now so the receiver is ready when events start
+      arriving.
+        * `src/loom/driftgraph_cache.py` — local mirror of
+          graph state. `record_event()` appends webhook payloads
+          to `<data_dir>/.driftgraph-cache.jsonl` (verbatim +
+          received_at). `compute_claim_state(claim_id)` replays
+          the log to compute `{invalidated, foundation_drifted,
+          drifted_ancestors}` per claim. `lookup_drifted_for_req`
+          mirrors the M13.5b query API exactly so
+          `services.context()` can swap implementations
+          transparently.
+        * `hooks/loom_drift_webhook.py` — stdlib `http.server`
+          receiver. Listens on configurable port (default 8081
+          / `LOOM_DRIFT_PORT`), exposes `GET /health` +
+          `POST /drift-events`. Verifies HMAC-SHA256 via the
+          same `LOOM_WEBHOOK_SECRET` as the outbound /warrants
+          endpoint (substrate ↔ Loom symmetric). Refuses to
+          start if no secret is configured. Filters events by
+          project (so one substrate broadcasting to multiple
+          Loom receivers doesn't pollute each other's caches).
+          Stdlib-only on purpose — receiver is a v0 piece; no
+          new deps.
+        * `services.context()` priority order: cache (M13.5d)
+          → in-process Cypher (M13.5b/Architecture B fallback)
+          → no signal. New `graph_drift_source` field surfaces
+          which channel produced the result (debug visibility).
+        * Live smoke: started receiver locally, POSTed a
+          synthetic foundation_drift event with valid HMAC,
+          verified the event landed in
+          `.driftgraph-cache.jsonl` with auto-stamped
+          received_at, verified `compute_claim_state(...)`
+          returned `foundation_drifted=True` for the dependent
+          claim_id. Cleaned up the synthetic event afterward.
+      **Architecture B kept in place as v0 fallback** rather
+      than torn out. Two reasons: (1) zero-signal degradation
+      when neither channel works is the right behavior, and B
+      provides "neither channel" coverage for users without the
+      receiver running yet; (2) `loom warrant cache-replay` /
+      debug-drift CLI tools (future) can use it for emergency
+      querying without spinning up the receiver. When the
+      substrate's read API ships and the cache is mature, B can
+      delete in a single commit.
+      Tests: 19 new in `tests/test_driftgraph_cache.py` —
+      record_event (creation, received_at handling, silent
+      failure), has_cache (3 states), compute_claim_state
+      (claim_invalidated, supersedes, foundation_drift,
+      ancestor de-dupe, corrupt-line resilience),
+      lookup_drifted_for_req (the no-cache → fallback path,
+      cache-present-no-claims, cache-with-drift), receiver
+      HMAC verification (correct sig, tampered body, missing
+      prefix, empty secret).
+- [ ] **13.5e End-to-end demo + Loom-receiver service file.**
+      Once the substrate-side PR ships:
+        - update receiver to consume the agreed event shapes
+          (currently event-shape-agnostic; cache replay reads
+          per-kind)
+        - run a real parent → child → retract → foundation_drift
+          demo and verify the receiver-cached state matches the
+          live Driftgraph state
+        - ship a small systemd / launchctl / Windows scheduled-
+          task example so users can run the receiver as a
+          background service
 
 ## Milestone 12: Research mode (v1.x)
 

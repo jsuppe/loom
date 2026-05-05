@@ -1718,17 +1718,23 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     drift = [r for r in reqs if r["superseded"]]
     linked = bool(reqs or specs)
 
-    # M13.5b — Driftgraph foundation-drift signals. For each linked
-    # req that has Driftgraph claim_ids in our warrants log, query
-    # the substrate for any superseded ancestors. Failures degrade
-    # silently (no signal). The PreToolUse hook is on the agent's
-    # critical path; this code MUST NOT throw.
+    # M13.5b/d — Driftgraph foundation-drift signals. Two paths,
+    # checked in priority order:
+    #   1. Local cache (M13.5d) — populated by webhook events from
+    #      the substrate. Zero-latency lookup; fresh per-event.
+    #   2. In-process Cypher (M13.5b / Architecture B) — fallback
+    #      when no cache exists yet (cold start before any
+    #      webhook has fired) or as a CLI debug path.
+    # PreToolUse hook is on the agent's critical path; this code
+    # MUST NOT throw. Each path swallows its own errors.
     graph_drift: list[dict[str, Any]] = []
+    graph_drift_source = None  # "cache" | "cypher" | None
     try:
-        from . import driftgraph_query
-        if driftgraph_query.is_available():
+        from . import driftgraph_cache
+        if driftgraph_cache.has_cache(store.data_dir):
+            graph_drift_source = "cache"
             for r in reqs:
-                gd = driftgraph_query.find_drifted_ancestors_for_req(
+                gd = driftgraph_cache.lookup_drifted_for_req(
                     store.data_dir, r["id"],
                 )
                 if gd["drifted"]:
@@ -1736,9 +1742,21 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
                         "req_id": r["id"],
                         "drifted_ancestors": gd["drifted_ancestors"],
                     })
-                # Annotate the per-req entry so callers can render the
-                # "🪨 graph-drifted" indicator next to each req.
                 r["graph_drifted"] = gd["drifted"]
+        else:
+            from . import driftgraph_query
+            if driftgraph_query.is_available():
+                graph_drift_source = "cypher"
+                for r in reqs:
+                    gd = driftgraph_query.find_drifted_ancestors_for_req(
+                        store.data_dir, r["id"],
+                    )
+                    if gd["drifted"]:
+                        graph_drift.append({
+                            "req_id": r["id"],
+                            "drifted_ancestors": gd["drifted_ancestors"],
+                        })
+                    r["graph_drifted"] = gd["drifted"]
     except Exception:
         # Anything raised here = the inbound channel is broken;
         # don't take down loom context with it.
@@ -1773,6 +1791,11 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
         "drift_detected": bool(drift),
         "graph_drift_detected": has_graph_drift,
         "graph_drift": graph_drift,
+        # M13.5d: which channel produced the graph_drift result.
+        # Useful for debugging "why didn't the cache fire?" — if the
+        # source is "cypher" but a webhook should have already
+        # populated the cache, the receiver isn't running.
+        "graph_drift_source": graph_drift_source,
         "requirements": reqs,
         "specifications": specs,
         "summary": summary,
