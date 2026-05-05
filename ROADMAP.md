@@ -133,10 +133,52 @@ the gatekeeper, Driftgraph is the warehouse.
       verify amber 🪨 foundation-drift indicator appears in
       `/why <topic>`. Captures as `experiments/pilot/
       warrants_l3_retraction_demo.py`.
-- [ ] **13.L4 Productionize.** Network failure handling
-      (retries, circuit-breaker), idempotency (claim_id dedup),
-      secret rotation, observability (per-validator latency
-      percentiles, push-success rate via `loom warrant stats`).
+- [-] **13.L4 Productionize.** Partial — observability shipped;
+      retries/idempotency/secret-rotation still open.
+      **Done:**
+        * `loom warrant stats` CLI + `services.warrant_stats`
+          rollup over `.warrants-log.jsonl`. Reports totals
+          (pushes, retracts, failures, success rate),
+          per-validator (count, score p50/p95, latency
+          p50/p95/p99/max), per-project, retraction sources
+          (manual / by_req / supersede_cascade), failure
+          breakdown (by_kind, by_status, recent 5), and
+          currently-active claim count. `--since N` and
+          `--tail N` flags for windowed views.
+        * `push_warrant` now stamps `_elapsed_ms` on responses
+          + on `WarrantPushError` instances so callers can
+          forward latency to the warrants log without timing
+          the call themselves.
+        * `record_push_failure` — new logger for failed pushes
+          (HTTP 4xx/5xx, network errors, ValueError on missing
+          secret). Without this, the warrants log was
+          successes-only and stats couldn't compute success rate.
+        * `record_push` / `record_retraction` gain optional
+          `elapsed_ms` field; pre-L4 records (no elapsed_ms)
+          are silently skipped from latency aggregates but
+          still counted in totals.
+        * 6 new tests in `TestWarrantStats`: empty log,
+          push+retract aggregation, failure logging drops
+          success rate, pre-L4 records skipped from latency,
+          retraction-source classification, since_days window.
+      **Empirical first read on the dogfooded loom store**
+      (after 9 pushes + 22 retracts since L1):
+        - toulmin@v1 latency p50=7456ms p95=7456ms (n=1; the
+          rest predate the L4 instrumentation)
+        - 100% push success rate after the bogus-project
+          smoke (which we logged + cleaned up)
+        - 18 by_req retractions + 4 supersede_cascade — the
+          cascade is working as designed
+      **Still open** for L4 completion:
+        * Retries on transient failures (5xx, URLError) with
+          exponential backoff
+        * Idempotency — don't double-write if a retried push
+          succeeded after we marked it failed (probably needs
+          a substrate-side dedup_key; flag back to dev)
+        * Secret rotation — graceful handling when the secret
+          file changes mid-process
+        * Push-success-rate alerting threshold (e.g. doctor
+          warns when 24h success rate < 95%)
 - [x] **13.5a-c Inbound channel — Driftgraph signals in
       `loom context` / PreToolUse hook (Architecture B).**
       v0 of the inbound channel; Loom now sees Driftgraph
@@ -247,17 +289,62 @@ the gatekeeper, Driftgraph is the warehouse.
       cache-present-no-claims, cache-with-drift), receiver
       HMAC verification (correct sig, tampered body, missing
       prefix, empty secret).
-- [ ] **13.5e End-to-end demo + Loom-receiver service file.**
-      Once the substrate-side PR ships:
-        - update receiver to consume the agreed event shapes
-          (currently event-shape-agnostic; cache replay reads
-          per-kind)
-        - run a real parent → child → retract → foundation_drift
-          demo and verify the receiver-cached state matches the
-          live Driftgraph state
-        - ship a small systemd / launchctl / Windows scheduled-
-          task example so users can run the receiver as a
-          background service
+- [-] **13.5e Substrate-side Phase 13.5 contract integration.**
+      Driftgraph dev shipped Phase 13.5 (read API) + 13.5b (push
+      webhook) in their PR — three new HTTP routes plus per-
+      project `loom_drift_webhook` config. Loom-side updates:
+        * **Cache event-name update** — substrate uses
+          `claim_invalidated`, `claim_superseded`,
+          `foundation_drift_detected`, `warrant_ingested` per
+          `webhook_dispatcher.py`. `compute_claim_state` now
+          handles all four (legacy `supersedes` and
+          `foundation_drift` names retained for any pre-13.5b
+          records). 2 new tests cover the new event names.
+        * **HTTP read API client** — new
+          `src/loom/driftgraph_http.py`:
+            - `get_claim_status(project, claim_id)` — Bearer
+              auth → claim row including `foundation_drifted`
+              bool + `n_invalidated_parents`
+            - `bulk_claim_lookup(project, claim_ids)` — HMAC
+              over body, capped at 500 IDs (raises rather
+              than silently truncating)
+            - `list_foundation_drifted(project, limit)` —
+              cold-start cache seeding
+            - `is_available()` — probes `/health`
+            - `find_drifted_ancestors_for_req(data_dir, req_id)`
+              — same-shape convenience matching the cache + B
+              wrappers so `services.context()` can swap.
+          Bearer header is `Authorization: Bearer <secret>`
+          with the same shared `LOOM_WEBHOOK_SECRET`. All
+          functions degrade to None / no-signal on transport
+          failure.
+        * **services.context() priority order updated** —
+          three paths now: cache (best) → HTTP read API
+          (cold-start) → Cypher (Architecture B fallback,
+          will eventually delete). `graph_drift_source`
+          field exposes which channel produced the result
+          ("cache" | "http" | "cypher" | None).
+        * Live smoke against the running substrate:
+          `is_available()=True`; `get_claim_status` /
+          `bulk_claim_lookup` / `list_foundation_drifted` all
+          return the expected shapes; the substrate's L3e
+          smoke claim (`clm_90db5b107c6c41c6` with
+          `validator_id=l3e-direct@v0`) shows
+          `foundation_drifted=True` /
+          `n_invalidated_parents=1` — verified end-to-end.
+      Tests: 15 new in `test_driftgraph_http.py` + 2 added
+      to `test_driftgraph_cache.py` for the new event names.
+      All use mocked urllib so no live substrate needed in CI.
+      **Still open:**
+        - Run a fresh end-to-end demo against the real Phase 9
+          machinery (push parent + child where child's
+          rationale uses substrate `justifications` field to
+          create a BECAUSE_OF edge; retract parent; verify the
+          webhook fires; verify cache shows drift)
+        - `loom warrants run-receiver` background-service
+          examples (systemd / launchctl / Windows scheduled-
+          task)
+        - Document the env config + setup steps in README
 
 ## Milestone 12: Research mode (v1.x)
 

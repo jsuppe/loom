@@ -777,6 +777,7 @@ def cmd_supersede(args):
                     response=response,
                     endpoint_url=warrants.endpoint(),
                     triggered_by_req_id=args.req_id,
+                    elapsed_ms=response.get("_elapsed_ms"),
                 )
                 print(f"   ✓ Retracted {response.get('retracted_claim_id')} "
                       f"(supersedes_edges_written="
@@ -1673,29 +1674,117 @@ def cmd_warrant(args):
             )
             print(json.dumps(payload, indent=2))
             return 0
+        project_tag = args.project_tag or args.project
         try:
             response = warrants.push_warrant(result.to_payload(
-                project=args.project_tag or args.project,
+                project=project_tag,
                 claim_text=req.value,
                 rationale=rationale,
             ))
-        except (warrants.WarrantPushError, ValueError) as e:
+        except warrants.WarrantPushError as e:
+            # L4: log failures so `loom warrant stats` can compute
+            # success rate and surface common error modes.
+            warrants.record_push_failure(
+                store.data_dir,
+                req_id=args.req_id, validator_id=result.validator_id,
+                score=result.score, project_tag=project_tag,
+                endpoint_url=warrants.endpoint(),
+                error_kind="http_error", error_message=str(e),
+                http_status=e.status,
+                elapsed_ms=getattr(e, "elapsed_ms", None),
+            )
+            print(f"❌ Driftgraph push failed: {e}")
+            return 1
+        except ValueError as e:
+            warrants.record_push_failure(
+                store.data_dir,
+                req_id=args.req_id, validator_id=result.validator_id,
+                score=result.score, project_tag=project_tag,
+                endpoint_url=warrants.endpoint(),
+                error_kind="value_error", error_message=str(e),
+            )
             print(f"❌ Driftgraph push failed: {e}")
             return 1
         # L3a: persist claim_ids so retract --req and the supersede
-        # cascade can find them later.
+        # cascade can find them later. L4: also stamp elapsed_ms.
         warrants.record_push(
             store.data_dir,
             req_id=args.req_id,
             validator_id=result.validator_id,
             score=result.score,
-            project_tag=args.project_tag or args.project,
+            project_tag=project_tag,
             response=response,
             endpoint_url=warrants.endpoint(),
+            elapsed_ms=response.get("_elapsed_ms"),
         )
         print(f"   episode_id: {response.get('episode_id')}")
         for cid in response.get("claim_ids", []):
             print(f"   claim_id:   {cid}")
+        return 0
+
+    if args.warrant_action == "stats":
+        # M13.L4 — observability rollup over .warrants-log.jsonl
+        store = LoomStore(args.project)
+        data = services.warrant_stats(
+            store,
+            since_days=getattr(args, "since", None),
+            tail=getattr(args, "tail", None),
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(data, indent=2))
+            return 0
+        print(f"🧵 Loom Warrant Stats — {args.project}")
+        if data["since_days"]:
+            print(f"   (window: last {data['since_days']}d)")
+        print()
+        if not data["exists"]:
+            print(f"No warrants log at {data['log_path']}.")
+            print("Push something with `loom warrant push <REQ-id>` first.")
+            return 0
+        t = data["totals"]
+        print(f"Pushes:      {t['pushes']} ({t['push_success_rate_pct']}% success)")
+        if t["push_failures"]:
+            print(f"  failures:  {t['push_failures']}")
+        print(f"Retracts:    {t['retracts']}")
+        print(f"Active claims (live in Driftgraph): {data['active_claims']}")
+        if data["by_validator"]:
+            print()
+            print("By validator:")
+            for v, info in sorted(
+                data["by_validator"].items(),
+                key=lambda kv: -kv[1]["count"],
+            ):
+                lat = info["latency_ms"]
+                sc = info["score"]
+                print(f"  {v:<22} count={info['count']:>3}  "
+                      f"score p50={sc['p50']} p95={sc['p95']}  "
+                      f"latency p50={lat['p50']}ms p95={lat['p95']}ms "
+                      f"max={lat['max']}ms (n={lat['n']})")
+        if data["by_project"]:
+            print()
+            print("By project tag:")
+            for proj, info in sorted(data["by_project"].items()):
+                print(f"  {proj:<22} pushes={info['pushes']:>3}  "
+                      f"retracts={info['retracts']:>3}")
+        rs = data["retraction_sources"]
+        if any(rs.values()):
+            print()
+            print(f"Retraction sources:  manual={rs['manual']}  "
+                  f"by_req={rs['by_req']}  "
+                  f"supersede_cascade={rs['supersede_cascade']}")
+        f = data["failures"]
+        if f["by_kind"]:
+            print()
+            print("Failures:")
+            for kind, n in sorted(f["by_kind"].items(), key=lambda kv: -kv[1]):
+                print(f"  by_kind   {kind:<18} {n}")
+            for status, n in sorted(f["by_status"].items(), key=lambda kv: -kv[1]):
+                print(f"  status    {status:<18} {n}")
+            if f["recent"]:
+                print("  recent:")
+                for r in f["recent"]:
+                    print(f"    {r['ts']}  {r['validator_id']:<22} "
+                          f"{r['error_kind']:<14} {r['error_message']}")
         return 0
 
     if args.warrant_action == "retract":
@@ -1749,6 +1838,7 @@ def cmd_warrant(args):
                 response=response,
                 endpoint_url=warrants.endpoint(),
                 triggered_by_req_id=triggered,
+                elapsed_ms=response.get("_elapsed_ms"),
             )
             print(f"✅ Retracted {response.get('retracted_claim_id')}  "
                   f"(supersedes_edges_written="
@@ -2728,6 +2818,24 @@ def main():
     p_warrant_push.add_argument(
         "--dry-run", action="store_true",
         help="Run the validator and print the payload without POSTing.",
+    )
+
+    # warrant stats — M13.L4 observability rollup
+    p_warrant_stats = p_warrant_sub.add_parser(
+        "stats",
+        help="Aggregate push/retract/failure activity from "
+             "<data_dir>/.warrants-log.jsonl",
+    )
+    p_warrant_stats.add_argument(
+        "--since", type=int, default=None,
+        help="Clip the rollup to the trailing N days",
+    )
+    p_warrant_stats.add_argument(
+        "--tail", type=int, default=None,
+        help="Only consider the last N records",
+    )
+    p_warrant_stats.add_argument(
+        "--json", "-j", action="store_true", help="Output as JSON",
     )
 
     p_warrant_retract = p_warrant_sub.add_parser(

@@ -86,7 +86,7 @@ class TestComputeClaimState:
     def test_supersedes_event_marks_state(self, tmp_path):
         # Substrate uses 'supersedes' kind for chat-utterance-driven
         # invalidations; cache should treat it the same as
-        # claim_invalidated.
+        # claim_invalidated. (Legacy event name, pre-13.5b.)
         dc.record_event(tmp_path, {
             "event": "supersedes",
             "invalidated_claim_id": "clm_X",
@@ -95,6 +95,34 @@ class TestComputeClaimState:
         })
         s = dc.compute_claim_state(tmp_path, "clm_X")
         assert s["invalidated"] is True
+
+    def test_claim_superseded_event_phase_13_5b(self, tmp_path):
+        # Phase 13.5b webhook event name for chat-driven supersedes.
+        dc.record_event(tmp_path, {
+            "event": "claim_superseded",
+            "superseded_claim_id": "clm_Y",
+            "by_claim_id": "clm_new",
+            "superseded_at": "2026-05-05T03:00:00+00:00",
+            "fired_at": 1730000000,
+        })
+        s = dc.compute_claim_state(tmp_path, "clm_Y")
+        assert s["invalidated"] is True
+        assert s["invalidated_at"] == "2026-05-05T03:00:00+00:00"
+
+    def test_foundation_drift_detected_event_phase_13_5b(self, tmp_path):
+        # Phase 13.5b uses foundation_drift_detected; cache should
+        # treat the same as legacy foundation_drift.
+        dc.record_event(tmp_path, {
+            "event": "foundation_drift_detected",
+            "retracted_claim_id": "clm_dead",
+            "retracted_subject": "old finding",
+            "dependents": [{"claim_id": "clm_dependent"}],
+            "fired_at": 1730000000,
+        })
+        s = dc.compute_claim_state(tmp_path, "clm_dependent")
+        assert s["foundation_drifted"] is True
+        assert len(s["drifted_ancestors"]) == 1
+        assert s["drifted_ancestors"][0]["ancestor_claim_id"] == "clm_dead"
 
     def test_foundation_drift_event_records_ancestors(self, tmp_path):
         dc.record_event(tmp_path, {

@@ -1718,45 +1718,61 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     drift = [r for r in reqs if r["superseded"]]
     linked = bool(reqs or specs)
 
-    # M13.5b/d — Driftgraph foundation-drift signals. Two paths,
+    # M13.5b/d/e — Driftgraph foundation-drift signals. Three paths,
     # checked in priority order:
     #   1. Local cache (M13.5d) — populated by webhook events from
-    #      the substrate. Zero-latency lookup; fresh per-event.
-    #   2. In-process Cypher (M13.5b / Architecture B) — fallback
-    #      when no cache exists yet (cold start before any
-    #      webhook has fired) or as a CLI debug path.
+    #      the substrate. Zero-latency; fresh per-event. Best path.
+    #   2. HTTP read API (M13.5e — Phase 13.5 substrate contract):
+    #      cold-start, before any webhook has fired. p95 latency
+    #      is one HTTP round-trip; OK on the cold path.
+    #   3. In-process Cypher (M13.5b / Architecture B) — last-ditch
+    #      fallback for users who cloned grag locally but don't
+    #      have substrate auth set up. Will eventually delete.
     # PreToolUse hook is on the agent's critical path; this code
     # MUST NOT throw. Each path swallows its own errors.
     graph_drift: list[dict[str, Any]] = []
-    graph_drift_source = None  # "cache" | "cypher" | None
+    graph_drift_source = None  # "cache" | "http" | "cypher" | None
+
+    def _drift_via(path_fn):
+        # Helper to walk reqs through a single channel's lookup
+        # function (any of the three driftgraph_* modules' shape).
+        # Returns (drift_entries, was_any_drifted_per_req_dict).
+        local: list[dict[str, Any]] = []
+        for r in reqs:
+            gd = path_fn(store.data_dir, r["id"])
+            if gd["drifted"]:
+                local.append({
+                    "req_id": r["id"],
+                    "drifted_ancestors": gd["drifted_ancestors"],
+                })
+            r["graph_drifted"] = gd["drifted"]
+        return local
+
     try:
         from . import driftgraph_cache
         if driftgraph_cache.has_cache(store.data_dir):
             graph_drift_source = "cache"
-            for r in reqs:
-                gd = driftgraph_cache.lookup_drifted_for_req(
-                    store.data_dir, r["id"],
-                )
-                if gd["drifted"]:
-                    graph_drift.append({
-                        "req_id": r["id"],
-                        "drifted_ancestors": gd["drifted_ancestors"],
-                    })
-                r["graph_drifted"] = gd["drifted"]
+            graph_drift = _drift_via(driftgraph_cache.lookup_drifted_for_req)
         else:
-            from . import driftgraph_query
-            if driftgraph_query.is_available():
-                graph_drift_source = "cypher"
-                for r in reqs:
-                    gd = driftgraph_query.find_drifted_ancestors_for_req(
-                        store.data_dir, r["id"],
+            try:
+                from . import driftgraph_http
+                if driftgraph_http.is_available():
+                    graph_drift_source = "http"
+                    graph_drift = _drift_via(
+                        driftgraph_http.find_drifted_ancestors_for_req,
                     )
-                    if gd["drifted"]:
-                        graph_drift.append({
-                            "req_id": r["id"],
-                            "drifted_ancestors": gd["drifted_ancestors"],
-                        })
-                    r["graph_drifted"] = gd["drifted"]
+            except Exception:
+                pass
+            if graph_drift_source is None:
+                try:
+                    from . import driftgraph_query
+                    if driftgraph_query.is_available():
+                        graph_drift_source = "cypher"
+                        graph_drift = _drift_via(
+                            driftgraph_query.find_drifted_ancestors_for_req,
+                        )
+                except Exception:
+                    pass
     except Exception:
         # Anything raised here = the inbound channel is broken;
         # don't take down loom context with it.
@@ -1799,6 +1815,231 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
         "requirements": reqs,
         "specifications": specs,
         "summary": summary,
+    }
+
+
+def warrant_stats(
+    store: LoomStore,
+    *,
+    since_days: int | None = None,
+    tail: int | None = None,
+) -> dict[str, Any]:
+    """Aggregate Driftgraph push/retract activity from the warrants
+    log (M13.L4 — observability rollup).
+
+    Reads ``<data_dir>/.warrants-log.jsonl`` and returns:
+
+        {
+          "log_path": str, "exists": bool,
+          "since_days": int | None,
+          "totals": {pushes, retracts, push_failures,
+                     push_success_rate_pct},
+          "by_validator": {  # only for successful pushes
+              "<validator_id>": {count, score: {p50, p95},
+                                 latency_ms: {p50, p95, p99, max}},
+              ...
+          },
+          "by_project": {"<project_tag>": {pushes, retracts}},
+          "failures": {  # M13.L4 surfaces error patterns
+              "by_kind": {"http_error": int, ...},
+              "by_status": {"404": int, ...},
+              "recent": [{ts, validator_id, error_kind, ...}, ...]
+          },
+          "retraction_sources": {manual, by_req, supersede_cascade},
+          "active_claims": int,  # pushed minus retracted
+        }
+
+    Latency aggregates only include records with ``elapsed_ms``
+    (added in L4); pre-L4 records are silently skipped from
+    latency stats but still counted in totals.
+    """
+    import json as _json
+    import math
+    from datetime import datetime, timedelta, timezone
+    from . import warrants as _warrants
+
+    path = _warrants.warrants_log_path(store.data_dir)
+    empty = {
+        "log_path": str(path),
+        "exists": False,
+        "since_days": since_days,
+        "totals": {
+            "pushes": 0, "retracts": 0, "push_failures": 0,
+            "push_success_rate_pct": 0.0,
+        },
+        "by_validator": {},
+        "by_project": {},
+        "failures": {
+            "by_kind": {}, "by_status": {}, "recent": [],
+        },
+        "retraction_sources": {
+            "manual": 0, "by_req": 0, "supersede_cascade": 0,
+        },
+        "active_claims": 0,
+    }
+    if not path.exists():
+        return empty
+
+    cutoff: datetime | None = None
+    if since_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+
+    entries: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+            ts = rec.get("ts", "")
+            if cutoff is not None:
+                try:
+                    when = datetime.fromisoformat(
+                        ts.replace("Z", "+00:00"),
+                    )
+                except (ValueError, AttributeError):
+                    continue
+                if when < cutoff:
+                    continue
+            entries.append(rec)
+    except OSError:
+        out = dict(empty); out["exists"] = True; return out
+
+    if tail is not None and tail > 0:
+        entries = entries[-tail:]
+
+    pushes = [e for e in entries if e.get("event") == "warrant_pushed"]
+    failures = [e for e in entries if e.get("event") == "warrant_push_failed"]
+    retracts = [e for e in entries if e.get("event") == "warrant_retracted"]
+
+    n_pushes = len(pushes)
+    n_failures = len(failures)
+    n_retracts = len(retracts)
+    total_pushes_attempted = n_pushes + n_failures
+    success_rate = (
+        round(100.0 * n_pushes / total_pushes_attempted, 1)
+        if total_pushes_attempted else 0.0
+    )
+
+    # ----- per-validator rollup -----
+    by_validator: dict[str, dict[str, Any]] = {}
+    validator_scores: dict[str, list[float]] = {}
+    validator_latencies: dict[str, list[float]] = {}
+    for p in pushes:
+        v = p.get("validator_id") or "unknown"
+        if v not in by_validator:
+            by_validator[v] = {"count": 0}
+            validator_scores[v] = []
+            validator_latencies[v] = []
+        by_validator[v]["count"] += 1
+        if (s := p.get("score")) is not None:
+            try:
+                validator_scores[v].append(float(s))
+            except (TypeError, ValueError):
+                pass
+        if (lat := p.get("elapsed_ms")) is not None:
+            try:
+                validator_latencies[v].append(float(lat))
+            except (TypeError, ValueError):
+                pass
+
+    def _pct(values: list[float], p: float) -> float:
+        if not values:
+            return 0.0
+        s = sorted(values)
+        idx = max(0, min(len(s) - 1, math.ceil(p * len(s)) - 1))
+        return round(s[idx], 2)
+
+    for v in by_validator:
+        scores = validator_scores[v]
+        lats = validator_latencies[v]
+        by_validator[v]["score"] = {
+            "p50": _pct(scores, 0.50),
+            "p95": _pct(scores, 0.95),
+        }
+        by_validator[v]["latency_ms"] = {
+            "p50": int(_pct(lats, 0.50)),
+            "p95": int(_pct(lats, 0.95)),
+            "p99": int(_pct(lats, 0.99)),
+            "max": int(max(lats)) if lats else 0,
+            "n": len(lats),
+        }
+
+    # ----- per-project rollup -----
+    by_project: dict[str, dict[str, int]] = {}
+    for p in pushes:
+        proj = p.get("project_tag") or "unknown"
+        by_project.setdefault(proj, {"pushes": 0, "retracts": 0})
+        by_project[proj]["pushes"] += 1
+    for r in retracts:
+        proj = r.get("project_tag") or "unknown"
+        by_project.setdefault(proj, {"pushes": 0, "retracts": 0})
+        by_project[proj]["retracts"] += 1
+
+    # ----- failure breakdown -----
+    failure_by_kind: dict[str, int] = {}
+    failure_by_status: dict[str, int] = {}
+    for f in failures:
+        kind = f.get("error_kind") or "unknown"
+        failure_by_kind[kind] = failure_by_kind.get(kind, 0) + 1
+        if (st := f.get("http_status")) is not None:
+            key = str(st)
+            failure_by_status[key] = failure_by_status.get(key, 0) + 1
+    recent_failures = [
+        {
+            "ts": f.get("ts"),
+            "validator_id": f.get("validator_id"),
+            "error_kind": f.get("error_kind"),
+            "error_message": (f.get("error_message") or "")[:120],
+            "http_status": f.get("http_status"),
+        }
+        for f in failures[-5:]
+    ]
+
+    # ----- retraction sources -----
+    sources = {"manual": 0, "by_req": 0, "supersede_cascade": 0}
+    for r in retracts:
+        trig = r.get("triggered_by_req_id")
+        reason = (r.get("reason") or "")
+        if not trig:
+            sources["manual"] += 1
+        elif reason.startswith("loom supersede"):
+            sources["supersede_cascade"] += 1
+        else:
+            sources["by_req"] += 1
+
+    # ----- currently-active claims (pushed minus retracted) -----
+    active: set[str] = set()
+    for p in pushes:
+        for cid in p.get("claim_ids") or []:
+            active.add(cid)
+    for r in retracts:
+        cid = r.get("retracted_claim_id") or r.get("claim_id")
+        if cid:
+            active.discard(cid)
+
+    return {
+        "log_path": str(path),
+        "exists": True,
+        "since_days": since_days,
+        "totals": {
+            "pushes": n_pushes,
+            "retracts": n_retracts,
+            "push_failures": n_failures,
+            "push_success_rate_pct": success_rate,
+        },
+        "by_validator": by_validator,
+        "by_project": by_project,
+        "failures": {
+            "by_kind": failure_by_kind,
+            "by_status": failure_by_status,
+            "recent": recent_failures,
+        },
+        "retraction_sources": sources,
+        "active_claims": len(active),
     }
 
 

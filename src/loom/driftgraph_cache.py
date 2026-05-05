@@ -135,26 +135,35 @@ def compute_claim_state(data_dir: Path, claim_id: str) -> dict[str, Any]:
     for ev in events:
         kind = ev.get("event")
 
-        # claim_invalidated: explicit supersede of a specific claim_id
-        # (Loom retraction, chat utterance, ingest replacement, …)
-        if kind in ("claim_invalidated", "supersedes"):
+        # claim_invalidated / claim_superseded: explicit supersede of a
+        # specific claim_id. The two event kinds carry the same
+        # semantic for Loom (something we cared about no longer holds);
+        # the substrate distinguishes them by source (Loom retraction
+        # vs chat utterance) but we don't act on that distinction in
+        # the cache. The legacy "supersedes" name is still accepted in
+        # case any pre-Phase-13.5b records exist in the wild.
+        if kind in ("claim_invalidated", "claim_superseded", "supersedes"):
             target = (
                 ev.get("retracted_claim_id")
                 or ev.get("invalidated_claim_id")
+                or ev.get("superseded_claim_id")
                 or ev.get("claim_id")
             )
             if target == claim_id:
                 state["invalidated"] = True
                 state["invalidated_at"] = (
                     ev.get("invalidated_at")
+                    or ev.get("superseded_at")
                     or ev.get("detected_at")
+                    or ev.get("fired_at")
                     or ev.get("received_at")
                 )
 
-        # foundation_drift: a BECAUSE_OF ancestor of one or more
-        # dependents was just invalidated. We're claim_id; check if
-        # we're in the dependents list.
-        elif kind == "foundation_drift":
+        # foundation_drift_detected: a BECAUSE_OF ancestor of one or
+        # more dependents was just invalidated. Substrate event name is
+        # foundation_drift_detected (Phase 13.5b); legacy
+        # foundation_drift accepted for any pre-13.5b records.
+        elif kind in ("foundation_drift_detected", "foundation_drift"):
             for dep in ev.get("dependents") or []:
                 if dep.get("claim_id") != claim_id:
                     continue

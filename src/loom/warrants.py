@@ -93,19 +93,29 @@ def push_warrant(payload: dict, *, secret: str | None = None,
     endpoint. Returns the parsed response JSON, typically::
 
         {"episode_id": "ep_...", "claim_ids": ["clm_...", ...],
-         "edges_written": int}
+         "edges_written": int,
+         "_elapsed_ms": int  # M13.L4 — round-trip latency}
+
+    The leading-underscore ``_elapsed_ms`` is set by this function
+    (not by the substrate response) so callers can pass it through
+    to ``record_push`` without timing the call themselves. Strip
+    before forwarding the response to anyone who treats it as the
+    raw Driftgraph payload.
 
     Required payload keys (Driftgraph contract): ``project``,
     ``validator_id``, ``validator_score``, ``claim_text``, ``rationale``.
 
     Raises:
         WarrantPushError: substrate returned non-2xx (signature
-            mismatch, schema rejection, …).
+            mismatch, schema rejection, …). The exception carries
+            ``elapsed_ms`` so failure latency makes it into stats.
         urllib.error.URLError: network-level failure (substrate
-            unreachable, timeout, …). Phase L4 will add retries; for
+            unreachable, timeout, …). L4 will add retries; for
             now the caller decides.
         ValueError: secret is empty (integration not configured).
     """
+    import time as _time
+
     secret = secret if secret is not None else load_secret()
     if not secret:
         raise ValueError(
@@ -124,12 +134,18 @@ def push_warrant(payload: dict, *, secret: str | None = None,
             "X-Hub-Signature-256": sig,
         },
     )
+    t0 = _time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            data = json.loads(resp.read().decode("utf-8"))
+            data["_elapsed_ms"] = int((_time.perf_counter() - t0) * 1000)
+            return data
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", errors="replace")
-        raise WarrantPushError(e.code, body_text) from e
+        elapsed_ms = int((_time.perf_counter() - t0) * 1000)
+        err = WarrantPushError(e.code, body_text)
+        err.elapsed_ms = elapsed_ms  # type: ignore[attr-defined]
+        raise err from e
 
 
 def push_retraction(project: str, claim_id: str, reason: str = "",
@@ -599,9 +615,17 @@ def record_push(
     project_tag: str,
     response: dict,
     endpoint_url: str,
+    elapsed_ms: int | None = None,
 ) -> None:
-    """Append a push record to the warrants log. Best-effort —
-    failure to log must never break the warrant push itself."""
+    """Append a successful push record to the warrants log.
+    Best-effort — failure to log must never break the warrant
+    push itself.
+
+    M13.L4: ``elapsed_ms`` measures the round-trip latency
+    of the underlying HTTP call so `loom warrant stats` can
+    report per-validator latency percentiles. Optional for
+    back-compat with pre-L4 records (legacy entries simply
+    won't appear in latency aggregates)."""
     rec = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "event": "warrant_pushed",
@@ -614,6 +638,52 @@ def record_push(
         "claim_ids": response.get("claim_ids", []),
         "edges_written": response.get("edges_written"),
     }
+    if elapsed_ms is not None:
+        rec["elapsed_ms"] = elapsed_ms
+    try:
+        path = warrants_log_path(data_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def record_push_failure(
+    data_dir: pathlib.Path, *,
+    req_id: str,
+    validator_id: str,
+    score: float,
+    project_tag: str,
+    endpoint_url: str,
+    error_kind: str,
+    error_message: str,
+    http_status: int | None = None,
+    elapsed_ms: int | None = None,
+) -> None:
+    """Append a failed-push record. M13.L4 — without this, `loom
+    warrant stats` can't compute push success rate or surface
+    common failure modes (signature mismatch, substrate down,
+    schema rejection, …).
+
+    ``error_kind`` is a short tag for grouping ("http_error",
+    "network", "value_error", "unknown"); ``error_message`` is
+    free-form prose for the failure tail."""
+    rec = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": "warrant_push_failed",
+        "req_id": req_id,
+        "validator_id": validator_id,
+        "score": score,
+        "project_tag": project_tag,
+        "endpoint": endpoint_url,
+        "error_kind": error_kind,
+        "error_message": error_message[:500],  # cap long bodies
+    }
+    if http_status is not None:
+        rec["http_status"] = http_status
+    if elapsed_ms is not None:
+        rec["elapsed_ms"] = elapsed_ms
     try:
         path = warrants_log_path(data_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -631,6 +701,7 @@ def record_retraction(
     response: dict,
     endpoint_url: str,
     triggered_by_req_id: str | None = None,
+    elapsed_ms: int | None = None,
 ) -> None:
     """Append a retraction record. ``triggered_by_req_id`` is set
     when the retraction came from `--req` lookup or the supersede
@@ -646,6 +717,8 @@ def record_retraction(
         "supersedes_edges_written": response.get("supersedes_edges_written"),
         "triggered_by_req_id": triggered_by_req_id,
     }
+    if elapsed_ms is not None:
+        rec["elapsed_ms"] = elapsed_ms
     try:
         path = warrants_log_path(data_dir)
         path.parent.mkdir(parents=True, exist_ok=True)

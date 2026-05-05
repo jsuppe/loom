@@ -180,7 +180,12 @@ class TestPushWarrant:
              "claim_text": "c", "rationale": "r"},
             secret="s", url="http://x/warrants",
         )
-        assert result == {"episode_id": "ep_abc", "claim_ids": ["clm_1"]}
+        # The substrate's payload survives intact; M13.L4 adds a
+        # client-side _elapsed_ms timing field. Test the substrate
+        # shape, then check the timing was attached.
+        assert result["episode_id"] == "ep_abc"
+        assert result["claim_ids"] == ["clm_1"]
+        assert isinstance(result["_elapsed_ms"], int)
 
     def test_raises_on_4xx(self, monkeypatch):
         # Simulate a 400 by raising HTTPError from urlopen.
@@ -391,6 +396,145 @@ class TestWarrantsLog:
             response={"episode_id": "ep", "claim_ids": []},
             endpoint_url="http://x",
         )
+
+
+class TestWarrantStats:
+    """M13.L4 — observability rollup over .warrants-log.jsonl."""
+
+    def _seed(self, tmp_path, records):
+        """Write a list of pre-shaped records to the warrants log."""
+        log = warrants.warrants_log_path(tmp_path)
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("w", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+
+    def test_returns_zeros_when_log_missing(self, tmp_path):
+        from loom import services
+        from loom.store import LoomStore
+        store = LoomStore("test-stats-empty", data_dir=tmp_path)
+        out = services.warrant_stats(store)
+        assert out["exists"] is False
+        assert out["totals"]["pushes"] == 0
+        assert out["totals"]["push_success_rate_pct"] == 0.0
+        assert out["active_claims"] == 0
+
+    def test_aggregates_pushes_and_retracts(self, tmp_path):
+        from loom import services
+        from loom.store import LoomStore
+        store = LoomStore("test-stats", data_dir=tmp_path)
+        self._seed(tmp_path, [
+            {"ts": "2026-05-05T01:00:00+00:00", "event": "warrant_pushed",
+             "req_id": "REQ-a", "validator_id": "toulmin@v1",
+             "score": 0.9, "project_tag": "sparkeye",
+             "claim_ids": ["clm_1", "clm_2"], "elapsed_ms": 500},
+            {"ts": "2026-05-05T02:00:00+00:00", "event": "warrant_pushed",
+             "req_id": "REQ-b", "validator_id": "toulmin@v1",
+             "score": 0.75, "project_tag": "sparkeye",
+             "claim_ids": ["clm_3"], "elapsed_ms": 700},
+            {"ts": "2026-05-05T03:00:00+00:00", "event": "warrant_retracted",
+             "claim_id": "clm_1", "retracted_claim_id": "clm_1",
+             "project_tag": "sparkeye", "reason": ""},
+        ])
+        out = services.warrant_stats(store)
+        assert out["exists"] is True
+        assert out["totals"]["pushes"] == 2
+        assert out["totals"]["retracts"] == 1
+        assert out["totals"]["push_success_rate_pct"] == 100.0
+        # Active = pushed (3 claims) - retracted (1 claim) = 2
+        assert out["active_claims"] == 2
+        # Per-validator
+        v = out["by_validator"]["toulmin@v1"]
+        assert v["count"] == 2
+        assert v["latency_ms"]["max"] == 700
+        assert v["latency_ms"]["n"] == 2
+        assert v["score"]["p50"] in (0.75, 0.9)  # nearest-rank can pick either
+
+    def test_failure_logging_drops_success_rate(self, tmp_path):
+        from loom import services
+        from loom.store import LoomStore
+        store = LoomStore("test-stats-fail", data_dir=tmp_path)
+        self._seed(tmp_path, [
+            {"ts": "2026-05-05T01:00:00+00:00", "event": "warrant_pushed",
+             "req_id": "REQ-a", "validator_id": "v", "score": 1.0,
+             "project_tag": "p", "claim_ids": ["c1"]},
+            {"ts": "2026-05-05T02:00:00+00:00", "event": "warrant_push_failed",
+             "req_id": "REQ-b", "validator_id": "v", "score": 1.0,
+             "project_tag": "p", "error_kind": "http_error",
+             "error_message": "404 not found", "http_status": 404,
+             "elapsed_ms": 30},
+        ])
+        out = services.warrant_stats(store)
+        assert out["totals"]["pushes"] == 1
+        assert out["totals"]["push_failures"] == 1
+        # 1 success out of 2 attempts.
+        assert out["totals"]["push_success_rate_pct"] == 50.0
+        # Failure breakdown
+        assert out["failures"]["by_kind"]["http_error"] == 1
+        assert out["failures"]["by_status"]["404"] == 1
+        assert len(out["failures"]["recent"]) == 1
+        assert out["failures"]["recent"][0]["http_status"] == 404
+
+    def test_pre_l4_records_skipped_from_latency(self, tmp_path):
+        # Records without elapsed_ms (legacy / pre-L4) get counted in
+        # totals but contribute n=0 to latency aggregates.
+        from loom import services
+        from loom.store import LoomStore
+        store = LoomStore("test-stats-legacy", data_dir=tmp_path)
+        self._seed(tmp_path, [
+            {"ts": "2026-05-05T01:00:00+00:00", "event": "warrant_pushed",
+             "req_id": "REQ-a", "validator_id": "toulmin@v0",
+             "score": 1.0, "project_tag": "p", "claim_ids": ["c1"]},
+            # No elapsed_ms on this one
+        ])
+        out = services.warrant_stats(store)
+        v = out["by_validator"]["toulmin@v0"]
+        assert v["count"] == 1
+        assert v["latency_ms"]["n"] == 0  # excluded from latency sample
+        assert v["latency_ms"]["max"] == 0
+
+    def test_retraction_sources_classified(self, tmp_path):
+        from loom import services
+        from loom.store import LoomStore
+        store = LoomStore("test-stats-rsrc", data_dir=tmp_path)
+        self._seed(tmp_path, [
+            {"ts": "2026-05-05T01:00:00+00:00", "event": "warrant_retracted",
+             "claim_id": "c1", "retracted_claim_id": "c1",
+             "project_tag": "p", "reason": "", "triggered_by_req_id": None},
+            {"ts": "2026-05-05T02:00:00+00:00", "event": "warrant_retracted",
+             "claim_id": "c2", "retracted_claim_id": "c2",
+             "project_tag": "p", "reason": "stale evidence",
+             "triggered_by_req_id": "REQ-x"},
+            {"ts": "2026-05-05T03:00:00+00:00", "event": "warrant_retracted",
+             "claim_id": "c3", "retracted_claim_id": "c3",
+             "project_tag": "p", "reason": "loom supersede REQ-y",
+             "triggered_by_req_id": "REQ-y"},
+        ])
+        out = services.warrant_stats(store)
+        rs = out["retraction_sources"]
+        assert rs["manual"] == 1
+        assert rs["by_req"] == 1
+        assert rs["supersede_cascade"] == 1
+
+    def test_since_days_window_clips(self, tmp_path):
+        from loom import services
+        from loom.store import LoomStore
+        from datetime import datetime, timedelta, timezone
+        store = LoomStore("test-stats-window", data_dir=tmp_path)
+        old_ts = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+        recent_ts = datetime.now(timezone.utc).isoformat()
+        self._seed(tmp_path, [
+            {"ts": old_ts, "event": "warrant_pushed",
+             "req_id": "REQ-old", "validator_id": "v", "score": 1.0,
+             "project_tag": "p", "claim_ids": ["c1"]},
+            {"ts": recent_ts, "event": "warrant_pushed",
+             "req_id": "REQ-new", "validator_id": "v", "score": 1.0,
+             "project_tag": "p", "claim_ids": ["c2"]},
+        ])
+        out_all = services.warrant_stats(store)
+        assert out_all["totals"]["pushes"] == 2
+        out_recent = services.warrant_stats(store, since_days=30)
+        assert out_recent["totals"]["pushes"] == 1
 
 
 class TestFalsifiabilityV1Canary:
