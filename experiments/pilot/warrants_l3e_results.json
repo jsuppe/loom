@@ -1,0 +1,100 @@
+{
+  "started_at": "2026-05-05T12:14:57.037595+00:00",
+  "finished_at": "2026-05-05T12:15:08.975370+00:00",
+  "phase_1_pass": true,
+  "phase_2_runbook": [
+    "1. Edit ~/Downloads/grag/product/discord_demo/projects.yaml",
+    "   uncomment + set:",
+    "     loom_drift_webhook: \"http://127.0.0.1:8081/drift-events\"",
+    "2. Restart the Driftgraph bot (the running process needs to",
+    "   reload projects.yaml; current PID is the python3.13 listening",
+    "   on 8080).",
+    "3. Start the Loom-side receiver:",
+    "     python hooks/loom_drift_webhook.py --project loom --port 8081",
+    "4. Run this script again. Step 1d (the BECAUSE_OF wiring)",
+    "   will not fire a webhook by itself — for that, run a real",
+    "   `loom warrant retract --req REQ-id` on a parent that has",
+    "   live BECAUSE_OF children. The substrate's foundation-drift",
+    "   detector fires synchronously after the retract and the",
+    "   webhook hits the receiver.",
+    "5. Verify ~/.openclaw/loom/loom/.driftgraph-cache.jsonl gains",
+    "   a `foundation_drift_detected` event line.",
+    "6. Re-run `loom context <file>` — graph_drift_source flips",
+    "   from 'http' to 'cache' (zero-latency lookup; no HTTP hop)."
+  ],
+  "trace": [
+    {
+      "label": "substrate /health reachable",
+      "ok": true
+    },
+    {
+      "label": "Loom store + project_tag",
+      "ok": true,
+      "data_dir": "C:\\Users\\jonsu\\.openclaw\\loom\\loom",
+      "project_tag": "sparkeye"
+    },
+    {
+      "label": "located child req",
+      "ok": true,
+      "req_id": "REQ-bdb1e667",
+      "kind": "finding",
+      "status": "confirmed",
+      "value_preview": "Toulmin@v1 and Falsifiability@v1 are complementary validators on the loom ration"
+    },
+    {
+      "label": "child pushed",
+      "ok": true,
+      "claim_id": "clm_8cf2de6c740e4356",
+      "stdout_tail": "   claim_id:   clm_c8ce40be63424e0b",
+      "stderr": null
+    },
+    {
+      "label": "found invalidated parent candidate",
+      "ok": true,
+      "parent_claim_id": "clm_5361a2e0295e4d8a"
+    },
+    {
+      "label": "synthetic BECAUSE_OF edge created",
+      "ok": true,
+      "child": "clm_8cf2de6c740e4356",
+      "parent": "clm_5361a2e0295e4d8a"
+    },
+    {
+      "label": "substrate /claims/<id> reports foundation_drifted",
+      "ok": true,
+      "n_invalidated_parents": 1,
+      "because_of_targets": [
+        "clm_5361a2e0295e4d8a"
+      ]
+    },
+    {
+      "label": "loom HTTP wrapper returns drift",
+      "ok": true,
+      "n_drifted_ancestors": 1,
+      "available": true
+    },
+    {
+      "label": "linked file to req",
+      "ok": true,
+      "file": "C:\\Users\\jonsu\\dev\\loom\\experiments\\pilot\\warrants_l2_results.json",
+      "stdout_tail": "s.json\n\n⚠️  ollama unreachable: HTTP Error 400: Bad Request, using hash fallback embeddings\n✓ Linked C:\\Users\\jonsu\\dev\\loom\\experiments\\pilot\\warrants_l2_results.json as evidence for 1 requirement(s)"
+    },
+    {
+      "label": "services.context() detects graph drift",
+      "ok": true,
+      "graph_drift_source": "http",
+      "graph_drift_detected": true,
+      "summary_tail": "Loom: C:\\Users\\jonsu\\dev\\loom\\experiments\\pilot\\warrants_l2_results.json linked to 1 req(s) — GRAPH-DRIFT on REQ-bdb1e667"
+    },
+    {
+      "label": "cleanup synthetic edge(s)",
+      "ok": true,
+      "removed": 1
+    },
+    {
+      "label": "demo claim retracted",
+      "ok": true,
+      "stdout_tail": "✅ Retracted clm_c8ce40be63424e0b  (supersedes_edges_written=1)"
+    }
+  ]
+}
