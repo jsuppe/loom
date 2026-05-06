@@ -3151,7 +3151,15 @@ def sync(
 
     # M12.2 — emit a per-kind file for each non-empty non-default kind.
     # Counts only kinds that have at least one active req.
-    all_reqs = store.list_requirements(include_superseded=False)
+    # M12.7c: filter archived items out of the kinds-present check.
+    # Without this, an archived-only kind still triggers an empty
+    # per-kind file (e.g. an archived hypothesis produces an empty
+    # HYPOTHESES.md). store.list_requirements only filters by
+    # superseded_at, not by status=='archived'.
+    all_reqs = [
+        r for r in store.list_requirements(include_superseded=False)
+        if r.status != "archived"
+    ]
     kinds_present = {r.kind for r in all_reqs}
     kind_paths: dict[str, str] = {}
     for kind in KIND_DOC_CONFIG:

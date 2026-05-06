@@ -836,6 +836,35 @@ class TestDocGeneration:
         assert "archived rule should not render" not in content
         assert "**Active Process rules:** 1" in content
 
+    def test_sync_does_not_emit_per_kind_file_for_archived_only_kind(
+        self, temp_store, sample_embedding,
+    ):
+        """M12.7c regression: services.sync's kinds_present check
+        used the archived-included list, so archiving the only req
+        of a kind still produced an empty per-kind doc file
+        (e.g. archived-only hypothesis → empty HYPOTHESES.md)."""
+        import tempfile
+        from loom import services
+        # 1 archived hypothesis (only req of kind=hypothesis), plus
+        # one regular requirement so the store isn't empty.
+        services.extract(
+            temp_store, domain="behavior", value="real req",
+            rationale="r",
+        )
+        h = services.extract(
+            temp_store, domain="experimental", value="some hypothesis",
+            rationale="r", kind="hypothesis",
+        )
+        services.set_status(temp_store, h["req_id"], "archived")
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = services.sync(temp_store, out_dir)
+            from pathlib import Path
+            # REQUIREMENTS.md exists; HYPOTHESES.md must NOT.
+            assert (Path(out_dir) / "REQUIREMENTS.md").exists()
+            assert not (Path(out_dir) / "HYPOTHESES.md").exists()
+            assert "hypothesis" not in result["kind_paths"]
+
     def test_archived_items_excluded_from_test_spec_doc(
         self, temp_store, sample_embedding,
     ):
