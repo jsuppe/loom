@@ -225,37 +225,61 @@ def find_drifted_ancestors_for_req(
         return out
 
     status_by_id = bulk_claim_lookup(project, active) or {}
+
+    # Two-pass: first collect every unique ancestor_id across all
+    # foundation-drifted children, then ONE follow-up bulk-lookup
+    # to fetch the ancestors' subject/object/invalidated_at. That's
+    # 2 HTTP calls regardless of how many child claims we have,
+    # vs the naïve N-call-per-ancestor approach.
+    ancestor_ids: set[str] = set()
     for claim_id in active:
         info = status_by_id.get(claim_id)
         if not info or not info.get("foundation_drifted"):
             continue
-        # The substrate response carries `because_of_targets` as the
-        # list of ancestors this claim points at; we don't get the
-        # PER-DRIFTED-ANCESTOR breakdown from this endpoint, only the
-        # count + claim shape. For richer info, callers can paginate
-        # through /claims/<id> per ancestor. v0 of the inbound
-        # channel: surface the count + the ancestor IDs we know about.
         for anc_id in info.get("because_of_targets") or []:
+            if anc_id:
+                ancestor_ids.add(anc_id)
+    ancestor_status = (
+        bulk_claim_lookup(project, list(ancestor_ids))
+        if ancestor_ids else {}
+    ) or {}
+
+    # Dedupe by ancestor_claim_id within this single-req call —
+    # the same ancestor invalidates the req's grounding regardless
+    # of how many of the req's child claims point at it. Without
+    # this, 3 children sharing a parent produce 3 identical lines
+    # in the agent's reminder. Track which child surfaced the
+    # ancestor first so the consumer can still reach back into
+    # the substrate per-claim if needed.
+    seen_ancestors: set[str] = set()
+    saw_deep_drift = False
+    for claim_id in active:
+        info = status_by_id.get(claim_id)
+        if not info or not info.get("foundation_drifted"):
+            continue
+        bo_targets = info.get("because_of_targets") or []
+        for anc_id in bo_targets:
+            if not anc_id or anc_id in seen_ancestors:
+                continue
+            seen_ancestors.add(anc_id)
+            anc = ancestor_status.get(anc_id) or {}
             out["drifted_ancestors"].append({
                 "claim_id": claim_id,
                 "ancestor": {
                     "ancestor_claim_id": anc_id,
-                    # subject/object not returned by the bulk
-                    # endpoint; would need a per-ancestor GET to
-                    # render rich text. Defer to the cache once
-                    # webhooks fire — drift events carry the
-                    # subject/object verbatim.
-                    "ancestor_subject": None,
-                    "ancestor_object": None,
-                    "invalidated_at": None,
+                    "ancestor_subject": anc.get("subject"),
+                    "ancestor_object": anc.get("object"),
+                    "ancestor_predicate": anc.get("predicate"),
+                    "invalidated_at": anc.get("invalidated_at"),
                     "hops": 1,
                 },
             })
-        # If because_of_targets was empty but foundation_drifted is
-        # True (substrate detected drift via a deeper hop than the
-        # immediate parent), surface a single placeholder so callers
-        # know there's drift even without ancestor detail.
-        if not info.get("because_of_targets"):
+        # foundation_drifted=True but because_of_targets is empty
+        # — substrate detected drift via a deeper hop than the
+        # immediate parent. Emit one placeholder for the whole
+        # req, not one per child.
+        if not bo_targets and not saw_deep_drift:
+            saw_deep_drift = True
             out["drifted_ancestors"].append({
                 "claim_id": claim_id,
                 "ancestor": {

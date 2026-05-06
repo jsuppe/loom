@@ -227,6 +227,98 @@ class TestFindDriftedAncestorsForReq:
         assert len(out["drifted_ancestors"]) == 1
         assert out["drifted_ancestors"][0]["ancestor"]["ancestor_claim_id"] == "clm_dead_parent"
 
+    def test_enriches_ancestor_with_subject_from_followup_lookup(
+        self, monkeypatch, tmp_path,
+    ):
+        """The substrate's /claims/<id> returns because_of_targets as
+        ID-only. The HTTP client must do a second bulk_claim_lookup
+        on those ancestor IDs to populate ancestor_subject /
+        ancestor_object / invalidated_at — otherwise the agent's
+        system-reminder shows a bare claim_id with no context."""
+        from loom import warrants
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v", score=1.0,
+            project_tag="sparkeye",
+            response={"episode_id": "ep", "claim_ids": ["clm_child"]},
+            endpoint_url="http://x",
+        )
+        monkeypatch.setattr(dh, "is_available", lambda: True)
+        # Two-call dispatcher: first bulk_claim_lookup is for the
+        # active claim_ids; second is for the ancestor IDs.
+        calls = []
+        def fake_bulk(project, ids, **kw):
+            calls.append(list(ids))
+            if "clm_child" in ids:
+                return {"clm_child": {
+                    "claim_id": "clm_child",
+                    "foundation_drifted": True,
+                    "n_invalidated_parents": 1,
+                    "because_of_targets": ["clm_parent_dead"],
+                }}
+            if "clm_parent_dead" in ids:
+                return {"clm_parent_dead": {
+                    "claim_id": "clm_parent_dead",
+                    "subject": "phS measured a 12pp lift",
+                    "object": "compliance",
+                    "predicate": "measured",
+                    "invalidated_at": 1730000000,
+                }}
+            return {}
+        monkeypatch.setattr(dh, "bulk_claim_lookup", fake_bulk)
+
+        out = dh.find_drifted_ancestors_for_req(tmp_path, "REQ-x")
+        assert out["drifted"] is True
+        assert len(out["drifted_ancestors"]) == 1
+        anc = out["drifted_ancestors"][0]["ancestor"]
+        assert anc["ancestor_claim_id"] == "clm_parent_dead"
+        # Enrichment populated from the follow-up lookup.
+        assert anc["ancestor_subject"] == "phS measured a 12pp lift"
+        assert anc["ancestor_object"] == "compliance"
+        assert anc["invalidated_at"] == 1730000000
+        # Verify two distinct bulk calls (active, then ancestors).
+        assert len(calls) == 2
+
+    def test_dedupes_when_multiple_children_share_ancestor(
+        self, monkeypatch, tmp_path,
+    ):
+        """Three children all pointing at the same parent should
+        emit ONE drifted_ancestors entry, not three identical lines.
+        Without this, agents see triplicate warnings in the
+        PreToolUse system-reminder."""
+        from loom import warrants
+        warrants.record_push(
+            tmp_path, req_id="REQ-x", validator_id="v", score=1.0,
+            project_tag="sparkeye",
+            response={"episode_id": "ep",
+                      "claim_ids": ["clm_c1", "clm_c2", "clm_c3"]},
+            endpoint_url="http://x",
+        )
+        monkeypatch.setattr(dh, "is_available", lambda: True)
+        def fake_bulk(project, ids, **kw):
+            if any(c in ids for c in ("clm_c1", "clm_c2", "clm_c3")):
+                # All three children point at the same parent.
+                return {
+                    cid: {"claim_id": cid, "foundation_drifted": True,
+                          "n_invalidated_parents": 1,
+                          "because_of_targets": ["clm_shared_parent"]}
+                    for cid in ("clm_c1", "clm_c2", "clm_c3")
+                }
+            return {"clm_shared_parent": {
+                "claim_id": "clm_shared_parent",
+                "subject": "shared parent claim",
+                "predicate": "is",
+                "object": "the load-bearing ancestor",
+                "invalidated_at": 1730000000,
+            }}
+        monkeypatch.setattr(dh, "bulk_claim_lookup", fake_bulk)
+
+        out = dh.find_drifted_ancestors_for_req(tmp_path, "REQ-x")
+        assert out["drifted"] is True
+        # One entry per UNIQUE ancestor, not per (child, ancestor) pair.
+        assert len(out["drifted_ancestors"]) == 1
+        assert out["drifted_ancestors"][0]["ancestor"]["ancestor_claim_id"] == "clm_shared_parent"
+        assert out["drifted_ancestors"][0]["ancestor"]["ancestor_subject"] == "shared parent claim"
+
     def test_handles_drifted_with_no_because_of_targets(self, monkeypatch, tmp_path):
         # foundation_drifted=True but because_of_targets is empty —
         # substrate detected drift via deeper hop than immediate parent.
