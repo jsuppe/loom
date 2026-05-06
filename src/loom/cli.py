@@ -256,7 +256,11 @@ def cmd_context(args):
                 a = anc.get("ancestor", {})
                 subj = (a.get("ancestor_subject") or "")[:60]
                 print(f"     {g['req_id']} → ancestor {a.get('ancestor_claim_id', '?')[:16]}: {subj}")
-        print("   Re-evaluate this evidence chain before editing.")
+        # M13.6d — imperative warning text. Empty if no drift.
+        warning_text = data.get("graph_drift_warning_text") or ""
+        if warning_text:
+            print()
+            print(warning_text)
 
     return 2 if (data["drift_detected"] or data.get("graph_drift_detected")) else 0
 

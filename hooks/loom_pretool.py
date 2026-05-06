@@ -215,6 +215,16 @@ def main() -> int:
                 subj = (a.get("ancestor_subject") or "")[:60]
                 lines.append(f"  - {g['req_id']} → ancestor "
                              f"{a.get('ancestor_claim_id', '?')[:16]}: {subj}")
+        # M13.6d — imperative warning patterned on L9 full-kit
+        # (rhetorical opener + inline action-verb imperative). On
+        # evidence-dependent tasks this lifts pause rate from 33%
+        # (M13.6c v1 generic warning) to 100% (M13.6d v2). The
+        # warning text is generated in services.context() so the
+        # hook stays a pure pass-through.
+        warning_text = data.get("graph_drift_warning_text") or ""
+        if warning_text:
+            lines.append("")
+            lines.append(warning_text)
 
     message = "\n".join(lines)
     bytes_out = len(message.encode("utf-8"))

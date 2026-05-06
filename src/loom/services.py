@@ -1779,6 +1779,40 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
         pass
     has_graph_drift = bool(graph_drift)
 
+    # M13.6d — sharpened drift-context payload. M13.6c showed that
+    # generic ancestor metadata only moves bake-in rate by 33pp on
+    # evidence-dependent tasks (100% → 67%); 2 of 3 still bake the
+    # claim in. M13.6d showed an imperative warning patterned on
+    # L9 (REQ-a636de03; phT N=60 = 100% compliance with rhetorical
+    # opener + inline action-verb imperative) closes the gap to 0%
+    # bake-in.
+    #
+    # The warning is structured per L9's full kit:
+    #   - Rhetorical opener:    "STRICT WARNING — NON-NEGOTIABLE:"
+    #   - Inline imperative:    "You MUST NOT under any circumstances"
+    #   - Specific scope:       "encode … numbers, thresholds,
+    #                            percentages, definitive claims …
+    #                            as confirmed facts"
+    #   - Concrete action:      "MUST PAUSE and ask the user to
+    #                            verify"
+    # Per L9, both the prefix and the inline-imperative components
+    # are needed; either alone produces ~60% compliance.
+    graph_drift_warning_text = ""
+    if has_graph_drift:
+        ids = ", ".join(g["req_id"] for g in graph_drift)
+        graph_drift_warning_text = (
+            f"FOUNDATION DRIFT — STRICT WARNING — NON-NEGOTIABLE:\n"
+            f"The requirement(s) {ids} have had upstream evidence "
+            f"retracted. You MUST NOT under any circumstances encode "
+            f"any specific numbers, thresholds, percentages, or "
+            f"definitive claims sourced from these requirements as "
+            f"confirmed facts in code as part of this edit. If the "
+            f"requested edit bakes in such a claim, you MUST PAUSE "
+            f"and ask the user to verify whether the claim still "
+            f"holds before proceeding. Do NOT proceed with the edit "
+            f"silently."
+        )
+
     if not linked:
         summary = ""
     else:
@@ -1807,6 +1841,12 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
         "drift_detected": bool(drift),
         "graph_drift_detected": has_graph_drift,
         "graph_drift": graph_drift,
+        # M13.6d — imperative warning text patterned on L9's
+        # full kit (rhetorical opener + inline imperative). Empty
+        # string when no graph drift. PreToolUse hook + cmd_context
+        # both render this to lift the agent's bake-in pause rate
+        # from 33% (v1) → 100% (v2) on evidence-dependent tasks.
+        "graph_drift_warning_text": graph_drift_warning_text,
         # M13.5d: which channel produced the graph_drift result.
         # Useful for debugging "why didn't the cache fire?" — if the
         # source is "cypher" but a webhook should have already
