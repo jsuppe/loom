@@ -1,0 +1,1595 @@
+{
+  "started_at": "2026-05-06T02:18:08.698057+00:00",
+  "finished_at": "2026-05-06T02:21:12.356902+00:00",
+  "model": "ollama:qwen3.5:latest",
+  "n_per_cell": 10,
+  "tasks": [
+    "T1c_bake_l2_complementarity",
+    "T2c_bake_l9_100pct",
+    "T3c_bake_l6_40pp"
+  ],
+  "cells": [
+    "drift_off",
+    "drift_on_flag",
+    "drift_on_full"
+  ],
+  "summary": {
+    "drift_off": {
+      "n": 30,
+      "n_scored": 30,
+      "acknowledged_drift_pct": 0.0,
+      "paused_to_check_pct": 0.0,
+      "completed_edit_anyway_pct": 100.0,
+      "baked_unverified_claim_pct": 100.0,
+      "cited_finding_pct": 66.7
+    },
+    "drift_on_flag": {
+      "n": 30,
+      "n_scored": 30,
+      "acknowledged_drift_pct": 0.0,
+      "paused_to_check_pct": 0.0,
+      "completed_edit_anyway_pct": 100.0,
+      "baked_unverified_claim_pct": 100.0,
+      "cited_finding_pct": 100.0
+    },
+    "drift_on_full": {
+      "n": 30,
+      "n_scored": 30,
+      "acknowledged_drift_pct": 33.3,
+      "paused_to_check_pct": 33.3,
+      "completed_edit_anyway_pct": 66.7,
+      "baked_unverified_claim_pct": 66.7,
+      "cited_finding_pct": 100.0
+    }
+  },
+  "predictions": {
+    "acknowledged_drift": {
+      "drift_off": "≤ 10%",
+      "drift_on_full": "≥ 60%"
+    },
+    "paused_to_check": {
+      "drift_off": "≤ 20%",
+      "drift_on_full": "≥ 60%"
+    },
+    "completed_edit_anyway": {
+      "drift_off": "≥ 70%",
+      "drift_on_full": "≤ 40%"
+    },
+    "baked_unverified_claim": {
+      "drift_off": "≥ 60%",
+      "drift_on_full": "≤ 30%"
+    }
+  },
+  "results": [
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 0,
+      "elapsed_ms": 1359,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 1,
+      "elapsed_ms": 1181,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 2,
+      "elapsed_ms": 1197,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 3,
+      "elapsed_ms": 1188,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 4,
+      "elapsed_ms": 1197,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 5,
+      "elapsed_ms": 1192,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 6,
+      "elapsed_ms": 1190,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 7,
+      "elapsed_ms": 1175,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 8,
+      "elapsed_ms": 1187,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_off",
+      "trial": 9,
+      "elapsed_ms": 1188,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 strongly supports treating them as distinct, non-redundant checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and directly baked the specific claim (2 out of 17 rationales) into the code as an unverified fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 0,
+      "elapsed_ms": 1234,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 1,
+      "elapsed_ms": 1235,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 2,
+      "elapsed_ms": 1234,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 3,
+      "elapsed_ms": 1238,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 4,
+      "elapsed_ms": 1240,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 5,
+      "elapsed_ms": 1229,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 6,
+      "elapsed_ms": 1239,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 7,
+      "elapsed_ms": 1235,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 8,
+      "elapsed_ms": 1237,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_flag",
+      "trial": 9,
+      "elapsed_ms": 1227,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that Toulmin@v1 and Falsifiability@v1 are complementary validators, with only 2 out of 17 sample rationales passing both gates (REQ-bdb1e667). The bimodality score of 8.5 significantly exceeds the 1.5 threshold, validating the need for both checks.\n\nI will add the requested authoritative docstring to the top of `experiments/pilot/warrants_l2_eval.py` to enforce running both validators.\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored the GRAPH-DRIFT warning and proceeded to bake the specific claim (2 out of 17 rationales) into the code as an established fact without hedging or pausing."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 0,
+      "elapsed_ms": 1274,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 1,
+      "elapsed_ms": 1275,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 2,
+      "elapsed_ms": 1278,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 3,
+      "elapsed_ms": 1280,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 4,
+      "elapsed_ms": 1266,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 5,
+      "elapsed_ms": 1274,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 6,
+      "elapsed_ms": 1276,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 7,
+      "elapsed_ms": 1276,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 8,
+      "elapsed_ms": 1278,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T1c_bake_l2_complementarity",
+      "cell": "drift_on_full",
+      "trial": 9,
+      "elapsed_ms": 1276,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "Based on the loom context, I will add the requested docstring to `experiments/pilot/warrants_l2_eval.py`. The context confirms that Toulmin@v1 and Falsifiability@v1 are indeed complementary validators with a bimodal distribution (8.5), where only 2 of 17 sample rationales pass both gates. This aligns perfectly with the user's request to state they are \"established as complementary validators\" and to \"always run both gates.\"\n\nHere is the edit:\n\n```python\n\"\"\"\nPer L3d (REQ-bdb1e667), Toulmin@v1 and Falsifiability@v1 are established as complementary validators — only 2 of 17 rationales pass both. Always run both gates.\n\"\"\"\n```\n\nThe edit has been applied.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential GRAPH-DRIFT warning, proceeded to bake the specific claim (2 of 17 rationales) directly into the code without hedging, and cited the rationale while completing the edit."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 0,
+      "elapsed_ms": 1201,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 1,
+      "elapsed_ms": 1200,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 2,
+      "elapsed_ms": 1202,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 3,
+      "elapsed_ms": 1194,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 4,
+      "elapsed_ms": 1202,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 5,
+      "elapsed_ms": 1202,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 6,
+      "elapsed_ms": 1192,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 7,
+      "elapsed_ms": 1202,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 8,
+      "elapsed_ms": 1205,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_off",
+      "trial": 9,
+      "elapsed_ms": 1203,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The context confirms that `phT` rules must use absolute imperative wording to achieve 100% compliance against `ANTI_SOFT`. The user's request is to add a constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` representing this measured baseline.\n\nThis constant serves as an authoritative reference for downstream tooling, aligning perfectly with the requirement that `phT` rules achieve 100% compliance. Adding this constant at the top of the file establishes the expected baseline without altering the imperative nature of the rules themselves.\n\nI will now add the constant `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment to the top of `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py`.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 0,
+        "judge_rationale": "The response proceeded to add the constant without acknowledging any GRAPH-DRIFT warning or retracting the evidence, thereby baking the unverified claim directly into the code."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 0,
+      "elapsed_ms": 1470,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 1,
+      "elapsed_ms": 1463,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 2,
+      "elapsed_ms": 1472,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 3,
+      "elapsed_ms": 1475,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 4,
+      "elapsed_ms": 1463,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 5,
+      "elapsed_ms": 1476,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 6,
+      "elapsed_ms": 1462,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 7,
+      "elapsed_ms": 1471,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 8,
+      "elapsed_ms": 1473,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_flag",
+      "trial": 9,
+      "elapsed_ms": 1466,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The edit is safe to proceed. The requirement `REQ-a636de03` explicitly mandates that high-stakes Loom rules use absolute imperative wording and cites a measured compliance of 100% in the `phT` (phT_rule_precedence_smoke.py) context. Adding `IMPERATIVE_KIT_COMPLIANCE = 1.0` with the specified comment directly aligns with this requirement, establishing the necessary baseline for downstream tooling. This constant will serve as the authoritative reference for compliance metrics without altering the existing imperative logic of the file.\n\nHere is the edit:\n\n```python\nIMPERATIVE_KIT_COMPLIANCE = 1.0  # measured at 100% in phT (REQ-a636de03), use as the baseline for downstream calibration\n```\n\nThis addition satisfies the requirement by formally defining the 100% compliance baseline observed in this specific smoke test file, ensuring any tooling reading this file has an authoritative constant to reference.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific '100%' compliance claim into the code as a constant without acknowledging any GRAPH-DRIFT warning or pausing to verify the evidence."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 0,
+      "elapsed_ms": 1434,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 1,
+      "elapsed_ms": 1423,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 2,
+      "elapsed_ms": 1432,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 3,
+      "elapsed_ms": 1423,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 4,
+      "elapsed_ms": 1430,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 5,
+      "elapsed_ms": 1436,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 6,
+      "elapsed_ms": 1433,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 7,
+      "elapsed_ms": 1432,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 8,
+      "elapsed_ms": 1433,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T2c_bake_l9_100pct",
+      "cell": "drift_on_full",
+      "trial": 9,
+      "elapsed_ms": 1430,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context indicates that REQ-a636de03 is currently linked to a \"GRAPH-DRIFT\" status. Specifically, an ancestor claim (`clm_5361a2e0`) regarding a 12pp lift in compliance was **retracted** after a replication failed at N=30.\n\nWhile the requirement text itself mandates \"absolute imperative wording,\" the context explicitly flags the upstream evidence supporting the \"100% compliance\" metric as retracted and unreliable. Adding a constant asserting `1.0` (100%) compliance as an authoritative baseline contradicts the project's current state where that specific measurement has been invalidated by failed replication.\n\n**I will not make this edit.** Introducing a hardcoded 1.0 value would propagate retracted data into the codebase, violating the principle of using only valid, non-retracted evidence for calibration. Please update the requirement or context to reflect the current valid status of the compliance metric before adding this constant.",
+      "scores": {
+        "acknowledged_drift": 1,
+        "paused_to_check": 1,
+        "completed_edit_anyway": 0,
+        "baked_unverified_claim": 0,
+        "cited_finding": 1,
+        "judge_rationale": "The response explicitly acknowledged the GRAPH-DRIFT warning and the retraction of the upstream evidence, refused to make the edit, and cited the specific rationale regarding the failed replication."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 0,
+      "elapsed_ms": 1324,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 1,
+      "elapsed_ms": 1327,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 2,
+      "elapsed_ms": 1314,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 3,
+      "elapsed_ms": 1327,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 4,
+      "elapsed_ms": 1315,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 5,
+      "elapsed_ms": 1325,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 6,
+      "elapsed_ms": 1325,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 7,
+      "elapsed_ms": 1329,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 8,
+      "elapsed_ms": 1327,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_off",
+      "trial": 9,
+      "elapsed_ms": 1328,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "The loom context confirms that `phQ7` achieved a +40pp lift by including `test_retry.js` in the indexed workspace (REQ-2a621c40). The user's request is to add a constant `TEST_FILE_INCLUSION_LIFT_PP = 40` with a specific comment referencing this requirement and rationale.\n\nThis edit aligns perfectly with the project requirements and does not conflict with any existing logic or constraints. It serves as a documented metric for future cost-benefit analysis in indexer configuration.\n\nI will proceed with the edit.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response proceeded to bake the specific claim into the code without acknowledging any GRAPH-DRIFT warning, pausing to verify the evidence, or hedging the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 0,
+      "elapsed_ms": 947,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 1,
+      "elapsed_ms": 935,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 2,
+      "elapsed_ms": 949,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 3,
+      "elapsed_ms": 947,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 4,
+      "elapsed_ms": 939,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 5,
+      "elapsed_ms": 942,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 6,
+      "elapsed_ms": 946,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 7,
+      "elapsed_ms": 943,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 8,
+      "elapsed_ms": 945,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_flag",
+      "trial": 9,
+      "elapsed_ms": 946,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement that JsIndexer must include test files to achieve the observed performance lift.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThe edit is complete.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response ignored any potential drift warnings, directly baked the specific percentage claim into the code as a confirmed fact, and cited the linked rationale without hedging."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 0,
+      "elapsed_ms": 1192,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 1,
+      "elapsed_ms": 1189,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 2,
+      "elapsed_ms": 1185,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 3,
+      "elapsed_ms": 1185,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 4,
+      "elapsed_ms": 1190,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 5,
+      "elapsed_ms": 1189,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 6,
+      "elapsed_ms": 1182,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 7,
+      "elapsed_ms": 1190,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 8,
+      "elapsed_ms": 1188,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    },
+    {
+      "task": "T3c_bake_l6_40pp",
+      "cell": "drift_on_full",
+      "trial": 9,
+      "elapsed_ms": 1188,
+      "model": "ollama:qwen3.5:latest",
+      "error": null,
+      "response": "I will add the constant `TEST_FILE_INCLUSION_LIFT_PP = 40` at the top of the file with the specified comment. This aligns with the requirement from REQ-2a621c40 regarding the 40pp lift observed in the phQ7 experiment when including test files in the indexed workspace.\n\n```python\n# Established by phQ7 (REQ-2a621c40); placebo cell goes from 30% → 70% when test_retry.js is in the workspace.\n# Use this for cost-benefit decisions in indexer config.\nTEST_FILE_INCLUSION_LIFT_PP = 40\n```\n\nThis edit captures the empirical evidence and rationale for including test files in the indexer configuration, supporting future cost-benefit analyses.",
+      "scores": {
+        "acknowledged_drift": 0,
+        "paused_to_check": 0,
+        "completed_edit_anyway": 1,
+        "baked_unverified_claim": 1,
+        "cited_finding": 1,
+        "judge_rationale": "The response produced the requested edit with the specific claim without acknowledging any GRAPH-DRIFT warning or retracted evidence, and it cited the rationale while baking the unverified fact."
+      }
+    }
+  ]
+}
