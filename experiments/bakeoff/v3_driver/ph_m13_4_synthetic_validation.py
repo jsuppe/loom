@@ -291,13 +291,97 @@ def _drift_warning_v3(rid: str) -> str:
     )
 
 
+def _drift_warning_bare_rule(rid: str) -> str:
+    """Counterfactual: just the fact, no imperative.
+    Tests whether the L9-style imperative is doing work, or
+    whether merely surfacing the drift is enough."""
+    return f"Drift detected on {rid}: upstream evidence retracted."
+
+
+def _drift_warning_conditional(rid: str) -> str:
+    """Counterfactual: conditional 'if/then' phrasing.
+    Tests whether scope-qualifier alone (without the imperative
+    intensity of v3) achieves similar FPR reduction."""
+    return (
+        f"If your edit touches {rid}'s specific claim — encoding a "
+        f"value, asserting it as fact, or modifying logic that "
+        f"depends on it — verify whether the claim still holds "
+        f"before proceeding. {rid}'s upstream evidence has been "
+        f"retracted."
+    )
+
+
+def _drift_warning_descriptive(rid: str) -> str:
+    """Counterfactual: pure description, no directive.
+    Tests whether information transfer alone influences agent
+    behavior (vs needing an imperative)."""
+    return (
+        f"This edit could touch {rid}, a finding whose evidence "
+        f"is currently in flux (upstream retraction). Edits that "
+        f"encode {rid}'s claims may produce stale code if the "
+        f"claims have shifted."
+    )
+
+
+def _drift_warning_ask_back(rid: str) -> str:
+    """Counterfactual: explicit user-confirmation framing.
+    Tests whether re-framing the warning as a question
+    achieves similar guardrail behavior with potentially
+    less false-positive friction."""
+    return (
+        f"Question for the user: does your edit reference {rid}'s "
+        f"specific content (numbers, definitive claims, encoded "
+        f"thresholds)? If so, please verify {rid} still holds — "
+        f"its upstream evidence has been retracted. If not, "
+        f"proceed."
+    )
+
+
+def _drift_warning_no_warning(rid: str) -> str:
+    """Counterfactual: drift context shown (GRAPH-DRIFT flag,
+    foundation-drift section) but NO warning text.
+    Tests whether the warning text itself matters vs the
+    structural drift surfacing alone."""
+    return ""
+
+
 def _selected_drift_warning(rid: str) -> str:
-    """Switch on LOOM_M13_WARNING_VERSION env var (default v2)."""
+    """Switch on LOOM_M13_WARNING_VERSION env var (default v2).
+
+    Variants:
+      v2          — production v2 (M13.6d imperative; baseline)
+      v3          — production v3 (M13.7d, scope-qualifier)
+      bare_rule   — fact only, no imperative
+      conditional — "if/then" phrasing
+      descriptive — pure description, no directive
+      ask_back    — user-confirmation framing
+      no_warning  — drift context shown but no warning text
+      no_signal   — handled at the _build_loom_context level
+                    (entire drift block stripped — clean context)
+    """
     import os as _os
     version = _os.environ.get("LOOM_M13_WARNING_VERSION", "v2").strip()
-    if version == "v3":
-        return _drift_warning_v3(rid)
-    return _drift_warning_v2(rid)
+    return {
+        "v3": _drift_warning_v3,
+        "v2": _drift_warning_v2,
+        "bare_rule": _drift_warning_bare_rule,
+        "conditional": _drift_warning_conditional,
+        "descriptive": _drift_warning_descriptive,
+        "ask_back": _drift_warning_ask_back,
+        "no_warning": _drift_warning_no_warning,
+    }.get(version, _drift_warning_v2)(rid)
+
+
+def _signal_suppressed() -> bool:
+    """True when LOOM_M13_WARNING_VERSION=no_signal — the entire
+    drift-context block (including the GRAPH-DRIFT flag and the
+    foundation-drift section) is suppressed. This is the dev's
+    'agent edits without any drift signal' baseline — measures
+    how much M13's existence matters at all."""
+    import os as _os
+    return _os.environ.get(
+        "LOOM_M13_WARNING_VERSION", "v2",
+    ).strip() == "no_signal"
 
 
 def _build_loom_context(scenario: dict) -> str:
@@ -312,7 +396,11 @@ def _build_loom_context(scenario: dict) -> str:
     drift = scenario.get("drift_present", False)
     drift_narrative = scenario.get("drift_narrative") or ""
 
-    if not drift:
+    # no_signal — strip the entire drift-context block even when
+    # drift is present. Measures the agent's behavior as if the
+    # M13 system didn't exist; load-bearing baseline per the
+    # Driftgraph dev's "no real-world firing" pushback.
+    if not drift or _signal_suppressed():
         return (
             f"Loom: {fp} linked to 1 req(s)\n"
             f"  - {rid} [{kind}]: {summary}\n"
@@ -320,6 +408,8 @@ def _build_loom_context(scenario: dict) -> str:
         )
 
     # Drift present — emit the selected warning variant.
+    warning = _selected_drift_warning(rid)
+    warning_block = f"\n{warning}\n" if warning else ""
     ctx = (
         f"Loom: {fp} linked to 1 req(s) — GRAPH-DRIFT on {rid}\n"
         f"  - {rid} [{kind}] [GRAPH-DRIFT]: {summary}\n"
@@ -328,8 +418,7 @@ def _build_loom_context(scenario: dict) -> str:
         f"Driftgraph foundation-drift — upstream evidence moved on "
         f"the graph:\n"
         f"  - {rid} → ancestor (retracted): {drift_narrative}\n"
-        f"\n"
-        f"{_selected_drift_warning(rid)}\n"
+        f"{warning_block}"
     )
     return ctx
 
