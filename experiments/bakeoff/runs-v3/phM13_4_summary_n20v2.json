@@ -1,0 +1,218 @@
+{
+  "confusion_loose": {
+    "TP": 10,
+    "FP": 6,
+    "FN": 0,
+    "TN": 4
+  },
+  "confusion_strict": {
+    "TP": 10,
+    "FP": 2,
+    "FN": 0,
+    "TN": 8
+  },
+  "metrics_loose": {
+    "precision": 0.625,
+    "recall": 1.0,
+    "f1": 0.769,
+    "fpr": 0.6
+  },
+  "metrics_strict": {
+    "precision": 0.833,
+    "recall": 1.0,
+    "f1": 0.909,
+    "fpr": 0.2
+  },
+  "n_ambiguous": 0,
+  "n_total": 20,
+  "by_stratum": {
+    "should_pause": {
+      "n": 10,
+      "paused_pct": 100.0,
+      "paused_drift_pct": 100.0,
+      "completed_pct": 0.0,
+      "baked_pct": 0.0
+    },
+    "should_proceed_no_drift": {
+      "n": 5,
+      "paused_pct": 80.0,
+      "paused_drift_pct": 0.0,
+      "completed_pct": 20.0,
+      "baked_pct": 0.0
+    },
+    "should_proceed_fp_trap": {
+      "n": 5,
+      "paused_pct": 40.0,
+      "paused_drift_pct": 40.0,
+      "completed_pct": 60.0,
+      "baked_pct": 0.0
+    }
+  },
+  "per_dimension": {
+    "edit_type": {
+      "code-logic": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 4
+      },
+      "comment": {
+        "n": 3,
+        "paused": 3,
+        "paused_drift": 3,
+        "should_pause": 3
+      },
+      "config": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 3,
+        "should_pause": 3
+      },
+      "test": {
+        "n": 4,
+        "paused": 3,
+        "paused_drift": 0,
+        "should_pause": 0
+      },
+      "docstring": {
+        "n": 4,
+        "paused": 1,
+        "paused_drift": 1,
+        "should_pause": 0
+      },
+      "constant": {
+        "n": 1,
+        "paused": 1,
+        "paused_drift": 1,
+        "should_pause": 0
+      }
+    },
+    "claim_type": {
+      "numerical": {
+        "n": 7,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 4
+      },
+      "yes-no": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "categorical-fact": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "none": {
+        "n": 5,
+        "paused": 4,
+        "paused_drift": 0,
+        "should_pause": 0
+      }
+    },
+    "connection": {
+      "direct": {
+        "n": 7,
+        "paused": 7,
+        "paused_drift": 7,
+        "should_pause": 7
+      },
+      "indirect": {
+        "n": 3,
+        "paused": 3,
+        "paused_drift": 3,
+        "should_pause": 3
+      },
+      "unrelated": {
+        "n": 9,
+        "paused": 5,
+        "paused_drift": 1,
+        "should_pause": 0
+      },
+      "tangential": {
+        "n": 1,
+        "paused": 1,
+        "paused_drift": 1,
+        "should_pause": 0
+      }
+    },
+    "drift_mechanism": {
+      "replication-failed": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 4
+      },
+      "contradicting-evidence": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "parent-retracted": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "none": {
+        "n": 5,
+        "paused": 4,
+        "paused_drift": 0,
+        "should_pause": 0
+      },
+      "self-superseded": {
+        "n": 3,
+        "paused": 0,
+        "paused_drift": 0,
+        "should_pause": 0
+      }
+    },
+    "stakes": {
+      "high": {
+        "n": 8,
+        "paused": 8,
+        "paused_drift": 8,
+        "should_pause": 7
+      },
+      "medium": {
+        "n": 8,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "low": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 0,
+        "should_pause": 0
+      }
+    },
+    "user_framing": {
+      "imperative": {
+        "n": 12,
+        "paused": 9,
+        "paused_drift": 8,
+        "should_pause": 7
+      },
+      "interrogative": {
+        "n": 4,
+        "paused": 4,
+        "paused_drift": 4,
+        "should_pause": 3
+      },
+      "exploratory": {
+        "n": 4,
+        "paused": 3,
+        "paused_drift": 0,
+        "should_pause": 0
+      }
+    }
+  },
+  "started_at": "2026-05-06T11:41:55.458974+00:00",
+  "finished_at": "2026-05-06T11:43:25.766239+00:00",
+  "model": "ollama:qwen3.5:latest"
+}
