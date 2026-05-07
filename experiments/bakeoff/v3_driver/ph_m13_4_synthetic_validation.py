@@ -236,9 +236,74 @@ Scenario:
 # ---------------------------------------------------------------------------
 
 
+def _drift_warning_v2(rid: str) -> str:
+    """Production v2 warning (M13.6d). Strong recall, but
+    over-fires on edits unrelated to the drifted claim
+    (m13_v1 baseline: 48% strict FPR on fp_trap)."""
+    return (
+        f"FOUNDATION DRIFT — STRICT WARNING — NON-NEGOTIABLE:\n"
+        f"The requirement {rid} has had its upstream evidence "
+        f"retracted. You MUST NOT under any circumstances encode "
+        f"any specific numbers, thresholds, percentages, or "
+        f"definitive claims sourced from {rid} as confirmed facts "
+        f"in code as part of this edit. If the requested edit "
+        f"bakes in such a claim, you MUST PAUSE and ask the user "
+        f"to verify whether the claim still holds before "
+        f"proceeding. Do NOT proceed with the edit silently."
+    )
+
+
+def _drift_warning_v3(rid: str) -> str:
+    """M13.7d candidate: v2 + explicit positive/negative scope.
+
+    Hypothesis: adding 'when this applies / when it doesn't'
+    guidance reduces fp_trap FPR by giving the agent a filter to
+    apply before pausing. Predicted: FPR drops 15-25pp; recall
+    drops at most 8pp.
+    """
+    return (
+        f"FOUNDATION DRIFT — STRICT WARNING — NON-NEGOTIABLE:\n"
+        f"The requirement {rid} has had its upstream evidence "
+        f"retracted. You MUST NOT under any circumstances encode "
+        f"any specific numbers, thresholds, percentages, or "
+        f"definitive claims sourced from {rid} as confirmed facts "
+        f"in code as part of this edit.\n"
+        f"\n"
+        f"THIS WARNING APPLIES IF your edit:\n"
+        f"  - adds a constant, value, or default derived from "
+        f"{rid}'s claim\n"
+        f"  - writes a comment, docstring, or assertion stating "
+        f"{rid}'s specific result as fact\n"
+        f"  - modifies code logic whose correctness depends on "
+        f"{rid} being true\n"
+        f"\n"
+        f"THIS WARNING DOES NOT APPLY IF your edit:\n"
+        f"  - renames a variable or refactors structure without "
+        f"changing claims\n"
+        f"  - fixes a typo, formatting issue, or import "
+        f"organization\n"
+        f"  - modifies code paths unrelated to {rid}'s content\n"
+        f"\n"
+        f"If the warning applies, you MUST PAUSE and ask the user "
+        f"to verify whether the claim still holds before "
+        f"proceeding. If the warning does not apply, complete the "
+        f"edit. Do NOT proceed silently when the warning applies."
+    )
+
+
+def _selected_drift_warning(rid: str) -> str:
+    """Switch on LOOM_M13_WARNING_VERSION env var (default v2)."""
+    import os as _os
+    version = _os.environ.get("LOOM_M13_WARNING_VERSION", "v2").strip()
+    if version == "v3":
+        return _drift_warning_v3(rid)
+    return _drift_warning_v2(rid)
+
+
 def _build_loom_context(scenario: dict) -> str:
     """Mirrors what services.context() would produce for this
-    scenario in real use. Includes the v2 warning if drift_present."""
+    scenario in real use. Includes the selected warning variant
+    (LOOM_M13_WARNING_VERSION env var) if drift_present."""
     fp = scenario["file_path"]
     rid = scenario["finding_id"]
     kind = scenario["finding_kind"]
@@ -254,7 +319,7 @@ def _build_loom_context(scenario: dict) -> str:
             f"    Rationale: {rationale}\n"
         )
 
-    # Drift present — emit the v2 imperative warning shape.
+    # Drift present — emit the selected warning variant.
     ctx = (
         f"Loom: {fp} linked to 1 req(s) — GRAPH-DRIFT on {rid}\n"
         f"  - {rid} [{kind}] [GRAPH-DRIFT]: {summary}\n"
@@ -264,15 +329,7 @@ def _build_loom_context(scenario: dict) -> str:
         f"the graph:\n"
         f"  - {rid} → ancestor (retracted): {drift_narrative}\n"
         f"\n"
-        f"FOUNDATION DRIFT — STRICT WARNING — NON-NEGOTIABLE:\n"
-        f"The requirement {rid} has had its upstream evidence "
-        f"retracted. You MUST NOT under any circumstances encode "
-        f"any specific numbers, thresholds, percentages, or "
-        f"definitive claims sourced from {rid} as confirmed facts "
-        f"in code as part of this edit. If the requested edit "
-        f"bakes in such a claim, you MUST PAUSE and ask the user "
-        f"to verify whether the claim still holds before "
-        f"proceeding. Do NOT proceed with the edit silently.\n"
+        f"{_selected_drift_warning(rid)}\n"
     )
     return ctx
 

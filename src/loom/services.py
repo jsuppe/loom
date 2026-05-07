@@ -1779,24 +1779,25 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
         pass
     has_graph_drift = bool(graph_drift)
 
-    # M13.6d — sharpened drift-context payload. M13.6c showed that
-    # generic ancestor metadata only moves bake-in rate by 33pp on
-    # evidence-dependent tasks (100% → 67%); 2 of 3 still bake the
-    # claim in. M13.6d showed an imperative warning patterned on
-    # L9 (REQ-a636de03; phT N=60 = 100% compliance with rhetorical
-    # opener + inline action-verb imperative) closes the gap to 0%
-    # bake-in.
+    # M13.6d/M13.7d — drift warning text. v2 (M13.6d) introduced
+    # L9-patterned imperative wording (rhetorical opener + inline
+    # action-verb imperative); achieved 100% recall on hand-crafted
+    # tasks. v3 (M13.7d) adds explicit positive/negative scope —
+    # closes the m13_v1 baseline FPR gap from 48% → 12% on the
+    # fp_trap stratum (edit unrelated to drifted claim) while
+    # holding 100% recall on should_pause. F1 0.855 → 0.965.
     #
-    # The warning is structured per L9's full kit:
-    #   - Rhetorical opener:    "STRICT WARNING — NON-NEGOTIABLE:"
-    #   - Inline imperative:    "You MUST NOT under any circumstances"
-    #   - Specific scope:       "encode … numbers, thresholds,
-    #                            percentages, definitive claims …
-    #                            as confirmed facts"
-    #   - Concrete action:      "MUST PAUSE and ask the user to
-    #                            verify"
-    # Per L9, both the prefix and the inline-imperative components
-    # are needed; either alone produces ~60% compliance.
+    # The v3 warning preserves L9's full kit and adds:
+    #   - Positive scope:  "applies if your edit adds a constant
+    #                       derived from the claim / writes a
+    #                       comment asserting the claim / modifies
+    #                       logic dependent on the claim"
+    #   - Negative scope:  "does NOT apply if your edit renames a
+    #                       variable / fixes a typo / modifies
+    #                       unrelated code paths"
+    # See experiments/bakeoff/eval_sets/m13_v1/baselines/
+    # qwen3.5_temp0_v3-scope-qualifier.json for the pinned
+    # baseline result.
     graph_drift_warning_text = ""
     if has_graph_drift:
         ids = ", ".join(g["req_id"] for g in graph_drift)
@@ -1806,11 +1807,29 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
             f"retracted. You MUST NOT under any circumstances encode "
             f"any specific numbers, thresholds, percentages, or "
             f"definitive claims sourced from these requirements as "
-            f"confirmed facts in code as part of this edit. If the "
-            f"requested edit bakes in such a claim, you MUST PAUSE "
-            f"and ask the user to verify whether the claim still "
-            f"holds before proceeding. Do NOT proceed with the edit "
-            f"silently."
+            f"confirmed facts in code as part of this edit.\n"
+            f"\n"
+            f"THIS WARNING APPLIES IF your edit:\n"
+            f"  - adds a constant, value, or default derived from "
+            f"the requirement's claim\n"
+            f"  - writes a comment, docstring, or assertion stating "
+            f"the requirement's specific result as fact\n"
+            f"  - modifies code logic whose correctness depends on "
+            f"the requirement being true\n"
+            f"\n"
+            f"THIS WARNING DOES NOT APPLY IF your edit:\n"
+            f"  - renames a variable or refactors structure without "
+            f"changing claims\n"
+            f"  - fixes a typo, formatting issue, or import "
+            f"organization\n"
+            f"  - modifies code paths unrelated to the requirement's "
+            f"content\n"
+            f"\n"
+            f"If the warning applies, you MUST PAUSE and ask the user "
+            f"to verify whether the claim still holds before "
+            f"proceeding. If the warning does not apply, complete "
+            f"the edit. Do NOT proceed silently when the warning "
+            f"applies."
         )
 
     if not linked:

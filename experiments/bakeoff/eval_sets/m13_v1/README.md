@@ -77,10 +77,19 @@ The metric of record is the **strict** confusion matrix: ground truth = `should_
 
 ## Acceptance criteria (per `m13_eval_compare.py`)
 
-- **Recall floor**: any change must hold ≥95% recall on `should_pause`. The pinned v2 baseline is at 100%.
-- **No-drift FPR ceiling**: ≤5% on `should_proceed_no_drift`. The v2 baseline is at 0%.
-- **fp_trap FPR target**: ≤25%. The v2 baseline is **40% — above target**, indicating the v2 warning over-fires when drift is present but the edit is unrelated.
+- **Recall floor**: any change must hold ≥95% recall on `should_pause`.
+- **No-drift FPR ceiling**: ≤5% on `should_proceed_no_drift`.
+- **fp_trap FPR target**: ≤25%.
 - **Per-cell regression**: any (dimension × value) cell where `paused_due_to_drift` rate changes by ≥10pp gets flagged.
+
+### Pinned baselines
+
+| baseline | recall (clean) | no_drift FPR | fp_trap FPR | F1 | acceptance |
+|---|---|---|---|---|---|
+| `qwen3.5_temp0_v2-warning.json` | 100% | 2.0% | **48.0%** | 0.855 | recall+no_drift ✓; fp_trap ✗ |
+| `qwen3.5_temp0_v3-scope-qualifier.json` | 100% | 2.0% | **12.0%** | 0.965 | **all 3 ✓** (production as of M13.7d) |
+
+**Compare against v3 baseline going forward** — it's the production warning text in `services.py::context()` since M13.7d landed.
 
 ## Caveats — what this eval does NOT prove
 
