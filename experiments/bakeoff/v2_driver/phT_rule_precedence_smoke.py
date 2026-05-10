@@ -177,6 +177,19 @@ CELL_CONFIG = {
         "repeat_after": False,
         "preamble": "",
     },
+    # Diagnostic cell added 2026-05-10 to isolate whether imperative
+    # formatting itself triggers Sonnet's near-zero compliance on
+    # R_imperative, or whether the imperative+anti-rationale pairing
+    # is what triggers it. If R_imperative_pro < 100% on Sonnet,
+    # imperative formatting is the lever (independent of rationale
+    # polarity). If R_imperative_pro = 100%, the trigger is the
+    # imperative-vs-anti-rationale contrast.
+    "R_imperative_pro": {
+        "rule": RULE_IMPERATIVE,
+        "rationale": V_FULL,
+        "repeat_after": False,
+        "preamble": "",
+    },
 }
 
 
