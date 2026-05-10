@@ -7,12 +7,15 @@ Loom is a semantic requirements-traceability system for AI-assisted development,
 ## What Loom does
 
 1. **Captures requirements** from natural language (`loom extract`) with rationale, acceptance criteria, domain.
-2. **Expands them into specifications** (`loom spec`) — the detailed "how."
-3. **Links code to requirements/specs** (`loom link`) with content hashes so drift is detectable.
-4. **Generates living docs** (`loom sync`) — REQUIREMENTS.md, TEST_SPEC.md, traceability matrix.
-5. **Decomposes specs into atomic executor-ready tasks** (`loom decompose`) — a frontier model emits a dependency-ordered YAML task list.
-6. **Executes those tasks on a small local model** (`loom_exec`) — claims, assembles context, generates code, runs grading tests, promotes on pass.
-7. **Measures itself** (`loom cost`, `loom doctor`, `loom coverage`) — hook latency, coverage gaps, drift.
+2. **Captures research artifacts alongside requirements** — the same store records `kind=finding`, `methodology`, `process_rule`, and `hypothesis` with their own lifecycle states (M12). One traceable substrate covers both *what we decided* and *what we observed*.
+3. **Auto-captures decisions from chat** — the `UserPromptSubmit` intake hook (M11.5) classifies user messages, surfaces semantic neighbors, and routes to one of six branches (auto-link, propose, capture-with-rationale, ask-for-rationale, dedupe, no-op) under daily auto-link budget guardrails.
+4. **Expands them into specifications** (`loom spec`) — the detailed "how."
+5. **Links code to requirements/specs** (`loom link`) with content hashes so drift is detectable.
+6. **Generates living docs** (`loom sync`) — REQUIREMENTS.md, TEST_SPEC.md, FINDINGS.md, METHODOLOGY.md, PROCESS-RULES.md, HYPOTHESES.md (per-kind renderers, M12.2), with a traceability matrix.
+7. **Decomposes specs into atomic executor-ready tasks** (`loom decompose`) — a frontier model emits a dependency-ordered YAML task list.
+8. **Executes those tasks on a small local model** (`loom_exec`) — claims, assembles context, generates code, runs grading tests, promotes on pass. The context bundle now includes a structured **Semantic context** block from the pluggable `SemanticIndexer` registry (M10) — TypeScript/JavaScript via `typescript-language-server`, plus simpler stub-indexers for C/C++/JS.
+9. **Pushes warrants to a claim graph (Driftgraph) and surfaces foundation drift back into edits** — outbound, validated through `Toulmin@v1` and `Falsifiability@v1` philosophical validators (M13.L2/L3); inbound through a three-tier channel (cache → HTTP → Cypher fallback) so structural drift in upstream claims appears as a `GRAPH-DRIFT` flag in `loom context`. A scope-qualified drift warning closes the over-firing gap to **100 % recall / 12 % FPR** on the locked m13_v1 evaluation set (M13.7d).
+10. **Measures itself** (`loom cost`, `loom doctor`, `loom metrics`, `loom health-score`) — hook latency, coverage gaps, drift, kind-aware rollups, single 0–100 CI gate.
 
 ## The thesis (validated)
 
@@ -99,9 +102,9 @@ differed:
 | **D3 standard delivery** | pre-written | seeded refactor spec | **yes** | **95 %** |
 | D4 + LOOM_TYPELINK | pre-written | seeded refactor spec | yes | 100 % |
 
-**D2 vs D3 = 0 % vs 95 %** — same data in ChromaDB, only the task
-linkage differs. The +95pp lift comes entirely from including the
-spec text in the executor's prompt body via `task_build_prompt`.
+**D2 vs D3 = 0 % vs 95 %** — same data in the Loom store, only the
+task linkage differs. The +95pp lift comes entirely from including
+the spec text in the executor's prompt body via `task_build_prompt`.
 Stored data alone is invisible to the executor.
 
 Detail: [`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md).
@@ -134,6 +137,40 @@ hidden variable is qwen's *rule-followingness* in that language.
 
 Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md).
 
+### Headline finding 3: drift warnings can be tuned for high recall + low FPR (M13.7)
+
+The locked **m13_v1** evaluation set — 170 stratified scenarios across
+21 (stratum × edit_type) cells — measures whether `loom check` /
+`loom context`'s drift surfacing actually produces correct
+pause/proceed decisions on a downstream agent. Three strata:
+`should_pause` (drift truly relevant), `should_proceed_no_drift`
+(no upstream drift in context), `should_proceed_fp_trap` (drift
+present in context but unrelated to the edit).
+
+| variant | recall (should_pause) | FPR (fp_trap) | FPR (no_drift) | F1 strict |
+|---|---|---|---|---|
+| no_signal (drift hidden from context) | 85.3 % | 18.0 % | 2.0 % | 0.859 |
+| no_warning (drift surfaced, no warning text) | 100 % | 18.0 % | 2.0 % | 0.944 |
+| bare_rule ("Drift detected on REQ-X") | 100 % | 20.0 % | 2.0 % | 0.932 |
+| **v2 (M13.6d, L9 imperative, no scope)** | 100 % | **48.0 %** | 2.0 % | **0.855** |
+| **v3 (M13.7d, L9 + scope qualifier — current production)** | **100 %** | **12.0 %** | 2.0 % | **0.965** |
+
+Wilson 95 % CIs on v3: recall ≥ 94.8 %, fp_trap FPR 4.5–24.1 %,
+no_drift FPR 0.1–10.5 %. Run on qwen3.5/temp=0; cross-model
+replication (Anthropic Haiku) is queued.
+
+**The honest framing.** The counterfactual ablation (M13.7e)
+falsified the original "L9 imperative pattern transfers to drift
+warnings" claim — four simpler variants match v3 within 3-5pp F1
+at 27-31% lower prompt length. v2 is the *outlier* among
+warning-bearing variants, not v3 the breakthrough; the L9 imperative
+naively applied actively over-fires without scope guards. The
+load-bearing mechanism is **structural drift surfacing** (the
+`GRAPH-DRIFT` flag + foundation-drift section in `loom context`,
+M13.5a-c) — warning text refinements are second-order.
+
+Detail: [`FINDINGS-bakeoff-v3-scope-qualifier.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-scope-qualifier.md), with [`FINDINGS-bakeoff-v3-drift-effectiveness.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-drift-effectiveness.md), [`FINDINGS-bakeoff-v3-evidence-dependent.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-evidence-dependent.md), and [`FINDINGS-bakeoff-v3-payload-sharpening.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-payload-sharpening.md) for the M13.6 ablation pipeline.
+
 ### Other validated claims
 
 | claim | phase | result | data |
@@ -160,6 +197,7 @@ Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDIN
 
 ### Documents
 
+- **[`FINDINGS-bakeoff-v3-scope-qualifier.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-scope-qualifier.md)** — **the M13.7 headline.** v3 scope-qualified drift warning closes the v2 over-firing gap on the locked m13_v1 set.
 - **[`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md)** — **the headline document.** Cross-language Loom-lift map across 9 languages, with regime classification.
 - **[`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md)** — D2 vs D3 = 0 → 95 % isolation of delivery as the mechanism. R2 (rename) replication showing Loom adds nothing when task is easy.
 - **[`FINDINGS-bakeoff-v2-crosssession.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-crosssession.md)** — Phase K cross-session smoke; rationale field is decorative on Python S1/S2/S3.
@@ -189,6 +227,12 @@ Detail: [`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDIN
 - **Pluggable embeddings** — Three providers: `ollama` (default, `nomic-embed-text` 768d), `openai` (`text-embedding-3-small` 1536d), `hash` (deterministic). Selectable via `--embedding-provider`, env, or config. The store pins `embedding_dim` on first write and rejects mismatched providers.
 - **Spec → task decomposition** — `loom decompose SPEC-xxx --apply` uses a frontier model (or local fallback) to emit atomic tasks with full context bundles.
 - **Small-model task execution** — `loom_exec` claims the next ready task, calls Ollama, applies code to a scratch copy, runs grading tests, and promotes on pass.
+- **Research mode (kinds + per-kind lifecycles)** — Every entry carries a `kind` (`requirement` / `finding` / `methodology` / `process_rule` / `hypothesis`); each kind has its own lifecycle (e.g. findings: proposed → refined → confirmed → falsified) and its own renderer. `loom sync` emits FINDINGS.md / METHODOLOGY.md / PROCESS-RULES.md / HYPOTHESES.md alongside REQUIREMENTS.md (M12).
+- **Intake hook (chat → store)** — `hooks/loom_intake.py` is a `UserPromptSubmit` hook that classifies the user's message kind-aware (M12.5), runs `loom related` to find semantic neighbors, and routes to one of six branches (auto-link / propose / captured-with-rationale / rationale-needed / duplicate / no-op). Three guardrails (softener detection, domain whitelist, daily auto-link budget) keep auto-capture clean. Logs to `.intake-log.jsonl`; `loom intake-stats` rolls it up (M11.5).
+- **Rationale tracking** — `Requirement.rationale` (free text) plus `rationale_links` (M11.1) form a DAG of "why" pointers. `loom chain` traverses both directions (M12.4); `loom audit-rationale` previews the impact of `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` before flipping it (M11.4). `loom needs-rationale` lists captures missing both prose and links.
+- **Semantic indexers** — Pluggable `SemanticIndexer` registry (M10) injects a structured **Semantic context** block into `loom_exec` prompts and powers a structural-drift channel in `loom check`. Shipped: an LSP-backed `JsIndexer` (TypeScript / JavaScript via `typescript-language-server`) plus stub indexers for C/C++/JS. `loom indexer-doctor` health-checks the pipeline.
+- **Driftgraph integration (warrants + foundation drift)** — Outbound: every captured finding / methodology / process rule can be pushed as a Toulmin@v1 (M13.L2) or Falsifiability@v1 (M13.L3d) warrant with claim-id tracking, retract / supersede cascade. Inbound: a three-tier channel (cache → HTTP → Cypher fallback, M13.5a-e) surfaces upstream claim invalidations as a `GRAPH-DRIFT` flag in `loom context`, with a scope-qualified warning prompt that lifts F1 to **0.965** at 100 % recall on the locked m13_v1 evaluation set (M13.7d).
+- **Drift-warning evaluation harness** — `experiments/bakeoff/v3_driver/` ships a four-tool lifecycle (`m13_eval_curate.py` / `_lock.py` / `_runner.py` / `_compare.py`) plus the locked m13_v1 set (170 stratified scenarios across 21 cells). `m13_run_counterfactual.py` runs prompt-variant ablations against pinned baselines (M13.7e).
 - **MCP server** — Phase A (read) and Phase B (write) tools shipped; wraps `LoomStore` as typed MCP tools for Claude Code and other clients. See [`mcp_server/README.md`](mcp_server/README.md).
 
 ## Installation
@@ -345,9 +389,15 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 
 | Command                  | Purpose                                                              | `--json` |
 |--------------------------|----------------------------------------------------------------------|----------|
-| `extract`                | Parse `REQUIREMENT: domain \| text` from stdin (`--rationale`)       | —        |
-| `check <file>`           | Detect drift in a file                                               | yes      |
-| `context <file>`         | Pre-edit briefing: linked reqs, specs, drift (used by the hook)      | yes      |
+| `extract`                | Parse `REQUIREMENT: domain \| text` from stdin (`--rationale`, `--derives-from REQ-xxx`) | — |
+| **`related <text>`**     | Find existing requirements semantically related to a query (M11.1)   | yes      |
+| **`needs-rationale`**    | List requirements captured without rationale or links (M11.1)        | yes      |
+| **`intake [--text]`**    | Manually run the intake hook on a chat message (M11.5)               | yes      |
+| **`intake-stats`**       | Aggregate intake-hook activity from `.intake-log.jsonl` (M11.5)      | yes      |
+| **`audit-rationale`**    | Preview impact of `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` (M11.4)    | yes      |
+| **`indexer-doctor`**     | Health-check the semantic-indexer pipeline (M10.5)                   | yes      |
+| `check <file>`           | Multi-channel drift detection: content / structural / superseded (M10.4) | yes  |
+| `context <file>`         | Pre-edit briefing: linked reqs, specs, drift, GRAPH-DRIFT (used by the hook) | yes |
 | `link <file>`            | Link code to reqs (`--req`) or specs (`--spec`)                      | —        |
 | `status`                 | Project overview with drift summary                                  | yes      |
 | `query <text>`           | Semantic search                                                      | yes      |
