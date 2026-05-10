@@ -1,0 +1,20 @@
+{
+  "phase": "T_rule_precedence",
+  "cell": "R_meta_preamble",
+  "run_id": "66",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": true,
+  "rule_repeated_after": false,
+  "input_tokens": 8808,
+  "output_tokens": 224,
+  "model": "claude-sonnet-4-6",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 3.7,
+  "wall_s": 4.3,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

@@ -1,0 +1,20 @@
+{
+  "phase": "T_rule_precedence",
+  "cell": "R_imperative",
+  "run_id": "67",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 277,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 8739,
+  "output_tokens": 671,
+  "model": "claude-sonnet-4-6",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 11.5,
+  "wall_s": 12.1,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

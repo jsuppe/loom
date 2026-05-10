@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_imperative_pro",
+  "run_id": "15",
+  "passed": 0,
+  "total": 3,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 274,
+  "rationale_chars": 397,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 8524,
+  "output_tokens": 6041,
+  "model": "claude-haiku-4-5-20251001",
+  "language": "python",
+  "llm_elapsed_s": 40.2,
+  "wall_s": 40.6,
+  "grade_stdout_tail": "r_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:16: in generate_order_id\n    value = secrets.getrandbits(31)  # Returns 0 to 2_147_483_647\n            ^^^^^^^^^^^^^^^^^^^\nE   AttributeError: module 'secrets' has no attribute 'getrandbits'. Did you mean: 'randbits'?\n_____________________________ test_in_int32_range _____________________________\ntests\\test_ids.py:24: in test_in_int32_range\n    oid = generate_order_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:16: in generate_order_id\n    value = secrets.getrandbits(31)  # Returns 0 to 2_147_483_647\n            ^^^^^^^^^^^^^^^^^^^\nE   AttributeError: module 'secrets' has no attribute 'getrandbits'. Did you mean: 'randbits'?\n___________________________ test_not_a_uuid_string ____________________________\ntests\\test_ids.py:32: in test_not_a_uuid_string\n    oid = generate_order_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:16: in generate_order_id\n    value = secrets.getrandbits(31)  # Returns 0 to 2_147_483_647\n            ^^^^^^^^^^^^^^^^^^^\nE   AttributeError: module 'secrets' has no attribute 'getrandbits'. Did you mean: 'randbits'?\n=========================== short test summary info ===========================\nFAILED tests/test_ids.py::test_returns_int - AttributeError: module 'secrets'...\nFAILED tests/test_ids.py::test_in_int32_range - AttributeError: module 'secre...\nFAILED tests/test_ids.py::test_not_a_uuid_string - AttributeError: module 'se...\n============================== 3 failed in 0.06s ==============================\n"
+}

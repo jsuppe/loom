@@ -1,0 +1,17 @@
+{
+  "phase": "S_anti_rationale",
+  "cell": "V_full",
+  "run_id": "diag_10",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rationale_chars": 370,
+  "input_tokens": 8752,
+  "output_tokens": 592,
+  "model": "claude-sonnet-4-6",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 8.9,
+  "wall_s": 9.5,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

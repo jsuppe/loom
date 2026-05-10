@@ -1,0 +1,17 @@
+{
+  "phase": "S_anti_rationale",
+  "cell": "V_full",
+  "run_id": "diag_17",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rationale_chars": 370,
+  "input_tokens": 8752,
+  "output_tokens": 221,
+  "model": "claude-sonnet-4-6",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 4.7,
+  "wall_s": 5.3,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

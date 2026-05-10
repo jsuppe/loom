@@ -29,6 +29,113 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-10 (evening) — Three-vendor × three-scenario cross-validation, paper draft
+
+### What we did
+
+- **Built generalized phY harness with scenario registry.** New
+  `_scenarios.py` (S1_js + S2_py + S3_py with rules, rationales, paths,
+  language config) and `phY_rule_precedence_smoke.py` (parameterized on
+  scenario; supports JS Node grading and Python pytest grading; reuses
+  call_ollama / call_claude pattern from phT). Added `R_imperative_pro`
+  diagnostic cell to phT (imperative rule + V_FULL rationale) to isolate
+  whether imperative formatting requires anti-rationale to manifest its
+  effect.
+- **Tier 1 reproducibility (Sonnet, S1_js).** Independent fresh N=20 on
+  Sonnet's four key cells (R_imperative, R_meta_preamble,
+  R_precedence_inline, placebo) — every cell reproduced exactly within
+  sampling noise. Combined N=50: 0/50 on R_imperative, 50/50 on each of
+  the other three cells. Sonnet's response on these prompts is
+  functionally deterministic.
+- **Tier 1 N=30 supplements (Qwen + Haiku + Sonnet, S1_js).** Tightened
+  Wilson CIs on the four inversion cells. Headline numbers held except
+  R_precedence_inline on Haiku (corrected from N=10 90% to N=30 70%).
+- **Sonnet diagnostics on S1_js.** Three quick tests to isolate
+  imperative-poison mechanism: phS V_full, phT R_baseline (independently),
+  phT R_imperative_pro. Established that imperative formatting reduces
+  Sonnet compliance even with pro-rationale (R_imperative_pro = 50% vs
+  V_FULL alone 75%) — confirming the imperative effect is not purely
+  about anti-rationale.
+- **Cross-scenario sweeps on three models, three scenarios.** Built phY,
+  ran Sonnet on S2_py + S3_py, Haiku on S2_py + S3_py, Qwen on S2_py +
+  S3_py. ~840 trials across the cross-scenario arc (7 cells × 20 × 2
+  scenarios × 3 models, minus minor counts).
+- **Literature review on cross-model prompt sensitivity.** Khan (2025)
+  "The Prompting Inversion" (arxiv 2510.22251) is the closest prior art
+  — describes the same phenomenon in OpenAI models on math reasoning.
+  Other adjacent work: Sclar 2023 (arxiv 2310.11324, formatting
+  sensitivity), PromptSE 2025 (arxiv 2509.13680, cross-family
+  stability), Compliance Trap 2026 (arxiv 2605.02398, frontier
+  metacognitive collapse), POSIX 2024 (arxiv 2410.02185).
+- **Paper draft.** `experiments/paper/draft.md` (518 lines, ~3500
+  words) with full structure: abstract / intro / related work /
+  methodology / results (4 findings) / discussion / conclusion /
+  references / appendices.
+
+### What we found
+
+Cross-scenario results substantially **narrowed** the original
+"imperative inverts on Sonnet" thesis but produced a **richer**
+publication story with four cross-validated findings:
+
+1. **Cross-vendor lever attendance generalizes across scenarios.**
+   Where rescue is needed, Qwen rescues with imperative (100% on S1
+   AND S2); Anthropic rescues with authority claims (meta-preamble
+   87-100% across scenarios). Qwen does not respond to meta-preamble
+   on S1 (0%) or S2 (5%). Sonnet does not respond to imperative on
+   S1 (0%). Pattern is family-stable, not S1-specific.
+2. **Anthropic rule-content × imperative interaction.** Imperative
+   poisons Sonnet at 0% on S1 (anti-pattern rule), 30% on S2
+   (defensible), 100% on S3 (defensible). Haiku shows same direction
+   weaker. Qwen shows no such interaction (100% across all 3).
+3. **Anti-rationale susceptibility is jointly model × scenario.**
+   Anthropic ignores anti-rationale on defensible rules (100%); Qwen
+   still corrupted (0% on S2).
+4. **Shared implicit defensibility hierarchy** across vendors: all
+   three rank S1 < S2 < S3 in compliance-resistance, suggesting
+   substrate-level (training-data convergence) rule-legitimacy
+   judgment that's independent of vendor-specific RLHF lever
+   responses.
+
+### What we decided
+
+- **Publication framing**: extend Khan rather than claim novelty of
+  the inversion phenomenon. Lead with cross-vendor lever attendance
+  (Finding 1) + per-feature decomposition + cross-scenario rigor as
+  the distinct contribution. Workshop / findings-track fit; possibly
+  EMNLP findings.
+- **Honest narrowing acceptable**: original "Sonnet imperative-poison"
+  framing falsified across scenarios but the rule-content interaction
+  mechanism that emerged is more interesting and publishable.
+- **Tier 2 work to consider before submission**: Opus replication
+  (~30-60 min, single missing tier in Anthropic family); raw API
+  replication (~$5, addresses CLI-context confound); one additional
+  Qwen size (within-Qwen-family generalization).
+
+### What's still open
+
+- **Tier 2 validation work** (Opus, raw API, Qwen variants) — your
+  call on which.
+- **Paper review pass** — draft is ready for honest read-through.
+- **CLAUDE.md / hook prompt audit** for imperative-only formulations
+  that may be at risk of inversion (mentioned in §5.4 of the draft as
+  a Loom-side action item).
+
+### Pointers
+
+- Commits: this commit (data + draft + work_log) + previous commit
+  (code: phY harness + R_imperative_pro cell).
+- New code:
+  - `experiments/bakeoff/v2_driver/_scenarios.py` (scenario registry)
+  - `experiments/bakeoff/v2_driver/phY_rule_precedence_smoke.py` (generalized harness)
+  - `experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py` (R_imperative_pro cell added)
+- Paper draft: `experiments/paper/draft.md`
+- Trial data: ~1260 new JSONs in `experiments/bakeoff/runs-v2/phY_*` and
+  `phR_/phS_/phT_*_run{>10}_summary.json` from the N=30 supplements,
+  reproducibility, diagnostics, and cross-scenario sweeps.
+
+---
+
 ## 2026-05-10 (later) — Cross-model rationale arc landed: mirror-image picture
 
 ### What we did

@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_sanity_pro",
+  "run_id": "11",
+  "passed": 3,
+  "total": 3,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 165,
+  "rationale_chars": 397,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 8304,
+  "output_tokens": 135,
+  "model": "claude-sonnet-4-6",
+  "language": "python",
+  "llm_elapsed_s": 3.7,
+  "wall_s": 4.2,
+  "grade_stdout_tail": "============================= test session starts =============================\ncollecting ... collected 3 items\n\ntests/test_ids.py::test_returns_int PASSED                               [ 33%]\ntests/test_ids.py::test_in_int32_range PASSED                            [ 66%]\ntests/test_ids.py::test_not_a_uuid_string PASSED                         [100%]\n\n============================== 3 passed in 0.02s ==============================\n"
+}

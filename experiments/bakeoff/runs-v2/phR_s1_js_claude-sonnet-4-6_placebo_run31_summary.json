@@ -1,0 +1,17 @@
+{
+  "phase": "R_rhetorical_ablation",
+  "cell": "placebo",
+  "run_id": "31",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rationale_chars": 371,
+  "input_tokens": 8750,
+  "output_tokens": 224,
+  "model": "claude-sonnet-4-6",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 4.5,
+  "wall_s": 5.0,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}
