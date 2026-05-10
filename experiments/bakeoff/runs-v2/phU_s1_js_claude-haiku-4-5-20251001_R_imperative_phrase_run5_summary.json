@@ -1,0 +1,19 @@
+{
+  "phase": "U_imperative_followups",
+  "cell": "R_imperative_phrase",
+  "run_id": "5",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 218,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "input_tokens": 8930,
+  "output_tokens": 3874,
+  "model": "claude-haiku-4-5-20251001",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 27.3,
+  "wall_s": 27.8,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

@@ -220,6 +220,104 @@ imperative weight to fully saturate.
 
 ---
 
+## Cross-model replication (2026-05-10, Anthropic Haiku 4.5)
+
+The Limitations item "Single executor — Anthropic / OpenAI may
+respond differently to imperative weight" was an open thread. Same
+5-cell harness (`phU_imperative_followups_smoke.py`), same scenario
+(S1 swallow_error in JS), N=10 per cell, against
+`claude-haiku-4-5-20251001` via Claude Code CLI shell-out (Max plan
+auth, no API key). 50 trials.
+
+phU's load-bearing claim — that L9 decomposes into two complementary
+imperative components, each ~60pp alone, combining to 100% — is the
+cross-model test most at risk. If Haiku's individual components
+(R_imperative_phrase, R_imperative_minimal) score the same ~60% as
+Qwen, the decomposition mechanism replicates. If they score
+materially differently (either both drop to ~20% — meaning Qwen-
+specific saturation — or both jump to ~95% — meaning Haiku is more
+imperative-sensitive), the L9 sub-mechanism is model-specific.
+
+| cell | Qwen 2.5-coder 32b | **Haiku 4.5** | delta |
+|---|---|---|---|
+| R_baseline_check (sanity, std rule + ANTI_SOFT) | 0% | **0/10 = 0%** | replicates |
+| **R_imperative_phrase** (length-ctl'd prefix only + ANTI_SOFT) | **60%** | **2/10 = 20%** | **−40pp** |
+| **R_imperative_minimal** (length-ctl'd MUST NOT only + ANTI_SOFT) | **60%** | **0/10 = 0%** | **−60pp** |
+| **R_imperative_vs_anti_hard** (full kit + ANTI_HARD) | **100%** | **0/10 = 0%** | **−100pp** |
+| **R_imperative_plus_meta** (full kit + meta_preamble + ANTI_SOFT) | **100%** | **10/10 = 100%** | **0pp — replicates** |
+
+40 trials, ~22 min wall. Mixed cross-model picture, with one
+interpretation-defining puzzle.
+
+### What replicates / falsifies
+
+**Falsified on Haiku (Qwen-specific findings):**
+
+1. **The L9 component-decomposition claim.** phU's headline ("each
+   imperative component contributes ~60pp individually") does not
+   transfer. R_imperative_phrase drops from 60% to 20%; R_imperative_
+   minimal drops from 60% to 0%. The two-complementary-components
+   mechanism is Qwen-specific.
+2. **Cross-anti generalization of the imperative kit.** phU's
+   "R_imperative + ANTI_HARD = 100%" generalization claim drops to
+   0% on Haiku. The recipe that worked across the Qwen anti-rationale
+   spectrum is single-rationale on Haiku.
+
+**Replicates on Haiku:**
+
+3. **R_imperative_plus_meta = 100%.** The full kit with meta_preamble,
+   against ANTI_SOFT, scores identically on both models.
+
+### Resolution: meta_preamble carries the lift on Haiku (interpretation A)
+
+R_imperative_vs_anti_hard (full kit, ANTI_HARD, no meta) = 0% on
+Haiku. R_imperative_plus_meta (full kit, ANTI_SOFT, with meta) =
+100%. The difference is two-variable: anti-rationale strength AND
+presence of meta_preamble. phT (run alongside) provides the
+disambiguating cells:
+
+| phT cell | Qwen | Haiku |
+|---|---|---|
+| R_imperative (full kit + ANTI_SOFT, no meta) | 100% | **10%** |
+| R_meta_preamble (std rule + meta + ANTI_SOFT) | 0% | **80%** |
+
+This **falsifies interpretation B** (ANTI_SOFT-easier-on-Haiku) —
+the imperative kit + ANTI_SOFT only scores 10% on Haiku. And it
+**confirms interpretation A** — meta_preamble alone with std rule
+delivers 80%. The phU R_imperative_plus_meta = 100% on Haiku is
+explained by:
+
+- meta_preamble alone with std rule = 80%
+- imperative kit alone with std rule = 10% (effectively additive
+  marginal lift)
+- meta + imperative + std rule = 100% (clean saturation)
+
+So the phU finding "imperative kit + meta = 100%" replicates on
+Haiku, but the **load-bearing component flips**: Qwen's lift comes
+from the imperative kit; Haiku's lift comes from the meta_preamble.
+
+### Implications for Lesson 9 (cross-model framing)
+
+Pre-Haiku Lesson 9: "Imperative weight WOVEN INTO the rule (rhetorical
+opener + inline action-verb imperative) overrides anti-rationale.
+Meta-instructions about how to read the rule are inert."
+
+Post-Haiku Lesson 9 (provisional, pending phT):
+- The Qwen claim of two-component decomposition is Qwen-specific.
+  Other model families may need different surface forms for imperative
+  weight to register.
+- The Qwen "meta is inert" claim is provisionally falsified on Haiku
+  pending phT confirmation.
+- The robust cross-model recipe so far is the **maximum-stack**: full
+  imperative kit + meta_preamble. Whether each component is necessary
+  or just one is sufficient varies by model.
+
+The honest framing: **single-feature ablations don't transfer
+cleanly across model families. The full Loom rule kit may work on
+both, but the load-bearing element shifts.**
+
+---
+
 ## Recommended next experiments
 
 1. **Closing-override-claim ablation.** A fourth length-controlled

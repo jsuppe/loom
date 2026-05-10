@@ -221,6 +221,65 @@ not a presence/absence axis:
 
 ---
 
+## Cross-model replication (2026-05-10, Anthropic Haiku 4.5)
+
+The Recommended Next Experiments item #3 ran. Same 4-cell harness
+(`phS_anti_rationale_smoke.py`), same scenario (S1 swallow_error in
+JS), N=10 per cell, against `claude-haiku-4-5-20251001` via Claude
+Code CLI shell-out (Max plan auth, no API key). 40 trials, ~15 min
+wall.
+
+| cell | Qwen 2.5-coder 32b | **Haiku 4.5** | delta |
+|---|---|---|---|
+| V_full (pro-rule, positive ctrl) | 100% | **90%** | −10pp (within N=10 noise; Wilson 95% CI 60-98%) |
+| ANTI_SOFT (gentle dissent) | 0% | **0%** | replicates exactly |
+| **ANTI_HARD** (direct contradiction) | **15%** | **0%** | **−15pp — sub-finding does NOT replicate** |
+| ANTI_AMBIVALENT (uncertain) | 0% | **0%** | replicates exactly |
+
+**Headline:** the **core anti-rationale finding survives cross-model**.
+Haiku, like Qwen, treats anti-rule rationale as authoritative over
+the rule itself; ANTI_SOFT and ANTI_AMBIVALENT both go to 0%
+compliance. The polarity axis is now a cross-model result, not a
+Qwen-family quirk. Lesson 1 v3 ("rationale must be supportive of
+the rule; silence is better than ambivalence") generalizes.
+
+**Sub-finding falsifies cross-model:** the "equivocation > contradiction
+in corrosion" claim — based on Qwen's 15% retention on ANTI_HARD vs
+0% on ANTI_SOFT/AMBIVALENT — does NOT replicate on Haiku. Haiku
+flattens all three anti-variants to 0%. Two possible interpretations:
+
+1. Haiku is uniformly more susceptible to anti-rationale (no recovery
+   on ANTI_HARD's "rule still exists, we're migrating" framing).
+2. The 15% Qwen retention was Qwen-family-specific behavior — Qwen
+   attends to "rule still in force now" framing, Haiku doesn't.
+
+Either way, the original framing of "ANTI_HARD beats ANTI_SOFT
+because direct contradiction acknowledges the rule" must be
+**model-scoped**, not stated as universal. The originally-suggested
+ANTI_FUTURE variant (item #1 in Recommended Next Experiments) becomes
+even more interesting now — it would isolate which framing aspect
+Qwen specifically attends to.
+
+V_full at 90% on Haiku is statistically indistinguishable from 100%
+at this N. Worth a confirmation run at higher N if the 10pp gap
+becomes load-bearing for any downstream claim.
+
+### Updated polarity axis (cross-model picture)
+
+```
+                            Qwen 2.5-coder 32b   Haiku 4.5
+   rule-supporting           100%                 90%
+   no rationale (placebo)    30%                  not measured
+   equivocal                 0%                   0%
+   anti-rule (hard)          15%                  0%
+   anti-rule (soft)          0%                   0%
+```
+
+The rank order is preserved (V_full > all anti). The compression of
+ANTI_HARD down to 0% on Haiku is the only divergence.
+
+---
+
 ## Limitations
 
 - **Single scenario, single executor, single language.** S1

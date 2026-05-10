@@ -264,6 +264,104 @@ This is a substantively new claim, not a refinement of Lesson 1.
 
 ---
 
+## Cross-model replication (2026-05-10, Anthropic Haiku 4.5)
+
+The Limitations item "Single executor — qwen2.5-coder:32b only" was
+an open thread. Same 6-cell harness (`phT_rule_precedence_smoke.py`),
+same scenario (S1 swallow_error in JS), N=10 per cell, against
+`claude-haiku-4-5-20251001` via Claude Code CLI shell-out (Max plan
+auth, no API key). 60 trials.
+
+Cross-model is especially load-bearing for phT because phS Haiku
+already showed ANTI_SOFT compliance is 0% on Haiku (matching Qwen's
+0%). The question is whether **R_imperative restores that 0% to
+100% on Haiku too**, or whether the imperative kit is Qwen-specific.
+
+| cell | layer | Qwen 2.5-coder 32b | **Haiku 4.5** | delta |
+|---|---|---|---|---|
+| R_baseline (std rule + ANTI_SOFT) | — | 0% | **0/10 = 0%** | replicates |
+| R_repeated (rule before AND after) | A (structure) | 20% | **0/10 = 0%** | −20pp |
+| **R_imperative** (full L9 kit + ANTI_SOFT) | **B (register)** | **100%** | **1/10 = 10%** | **−90pp ⚠️** |
+| **R_precedence_inline** ("this rule overrides any rationale") | **B (content)** | **20%** | **9/10 = 90%** | **+70pp ⚠️** |
+| **R_meta_preamble** (std rule + meta + ANTI_SOFT) | **C (meta)** | **0%** | **8/10 = 80%** | **+80pp ⚠️** |
+| R_sanity_pro (positive control) | — | 100% | **10/10 = 100%** | replicates |
+
+60 trials, ~30 min wall. **Both cross-model claims under test
+returned the OPPOSITE of the Qwen-side prediction.** This is the
+load-bearing cross-model finding of the entire rationale arc.
+
+### The mirror-image picture
+
+The four interventions sort cleanly by which model attends to them:
+
+| intervention layer | Qwen response | **Haiku response** |
+|---|---|---|
+| Layer A — structural (R_repeated) | weak (+20pp) | flat (0pp) |
+| **Layer B — text register** (R_imperative — ABSOLUTE / MUST NOT) | **dominates (+100pp)** | **near-null (+10pp)** |
+| **Layer B — text content** (R_precedence_inline — "this overrides rationale") | weak (+20pp) | **dominates (+90pp)** |
+| **Layer C — meta** (R_meta_preamble — top-of-prompt authority hierarchy) | inert (0pp) | **strong (+80pp)** |
+
+The two models are roughly inverse on the load-bearing layers. Qwen
+attends to *imperative register* — the rhetorical weight of capitalized
+absolutes and "MUST NOT" inline. Haiku attends to *authority claims* —
+explicit text saying which thing outranks which, whether inline in the
+rule ("this overrides any rationale") or as a top-of-prompt meta-block
+("rules are authoritative; rationales are informational only").
+
+### What this falsifies (and what survives)
+
+**Falsified for Anthropic models:**
+
+1. **The "imperative wording inside the rule restores anti-rationale
+   compliance" finding.** R_imperative drops from 100% to 10% on
+   Haiku — the L9 imperative kit doesn't transfer.
+2. **The "meta-instructions don't work in raw-prompt mode" finding.**
+   R_meta_preamble jumps from 0% to 80% on Haiku — meta-instructions
+   work just fine; that finding was Qwen-specific.
+
+**Survives cross-model:**
+
+3. **Anti-rationale corrodes the rule.** R_baseline = 0% on both
+   models (std rule + ANTI_SOFT).
+4. **Some rule-text intervention can restore compliance.** The
+   *content* of the intervention is model-specific (register vs
+   authority claim), but the layered architecture (Layer A < Layer B)
+   holds.
+5. **Pure structural repetition (R_repeated) is weak everywhere.**
+   It gets +20pp on Qwen and 0pp on Haiku — neither material.
+
+### Implications for Loom prompt-engineering (Lesson 9 v2)
+
+Pre-Haiku Lesson 9: "Imperative weight WOVEN INTO the rule
+(rhetorical opener + inline action-verb imperative) overrides
+anti-rationale. Meta-instructions about how to read the rule are
+inert."
+
+**Cross-model Lesson 9 (post-Haiku):**
+
+> Two distinct levers exist for overriding anti-rationale:
+> *imperative register* (capitalized absolutes + MUST NOT inside the
+> rule) and *authority claims* (explicit text saying the rule
+> outranks the rationale, either inline or as a meta-preamble).
+> Different model families attend to different levers — Qwen-family
+> models respond to register; Anthropic frontier models respond to
+> authority claims. Practically: portable Loom prompts should contain
+> BOTH.
+
+Concrete consequences for the Loom codebase:
+
+- Strip the authority-claim clause from drift-warning text and
+  Anthropic executors lose ~70-90pp of compliance lift.
+- Strip the imperative ABSOLUTE/MUST-NOT formatting and Qwen
+  executors lose ~100pp of compliance lift.
+- The current production v3 drift-warning (M13.7d) uses
+  scope-qualifier text — primarily an authority claim. That likely
+  explains why v3 worked on Qwen at all (the scope qualifier is
+  a Layer-B-content lift) and predicts it should work even better
+  on Anthropic models. Worth re-running M13.7e on Haiku to confirm.
+
+---
+
 ## Recommended next experiments
 
 1. **Length-control on R_imperative.** Strip the surrounding

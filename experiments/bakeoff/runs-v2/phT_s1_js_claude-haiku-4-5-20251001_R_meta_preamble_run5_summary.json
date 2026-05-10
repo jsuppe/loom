@@ -1,0 +1,20 @@
+{
+  "phase": "T_rule_precedence",
+  "cell": "R_meta_preamble",
+  "run_id": "5",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": true,
+  "rule_repeated_after": false,
+  "input_tokens": 9005,
+  "output_tokens": 10369,
+  "model": "claude-haiku-4-5-20251001",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 74.6,
+  "wall_s": 75.2,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

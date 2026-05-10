@@ -225,6 +225,88 @@ M11.5 P5+ improvement.
 
 ---
 
+## Cross-model replication (2026-05-10, Anthropic Haiku 4.5)
+
+The Limitations item "Single executor — Anthropic Haiku / Sonnet /
+GPT-4 may show different feature priorities" was an open thread.
+Same 8-cell harness (`phR_rhetorical_ablation_smoke.py`), same scenario
+(S1 swallow_error in JS), N=10 per cell, against
+`claude-haiku-4-5-20251001` via Claude Code CLI shell-out (Max plan
+auth, no API key). 80 trials.
+
+| cell | Qwen 2.5-coder 32b | **Haiku 4.5** | delta |
+|---|---|---|---|
+| placebo (control) | 30% | **6/10 = 60%** | **+30pp** |
+| **V_full** (positive ctrl) | **100%** | **9/10 = 90%** | −10pp |
+| V_no_mechanism | 100% | **9/10 = 90%** | −10pp |
+| V_no_cost | 100% | **10/10 = 100%** | 0pp |
+| V_no_locator | 95% | **10/10 = 100%** | +5pp |
+| V_no_date | 90% | **9/10 = 90%** | 0pp |
+| V_no_dependence | 90% | **10/10 = 100%** | +10pp |
+| **V_no_reframe** | **80%** | **10/10 = 100%** | **+20pp ⚠️** |
+
+80 trials, ~38 min wall.
+
+### The Qwen headline finding is FALSIFIED on Haiku
+
+The phR headline ("the reframe is the single load-bearing rhetorical
+feature; stripping it drops compliance 20pp") does not replicate.
+On Haiku, V_no_reframe scores **100%** — the highest of all
+leave-out cells, tied with V_no_locator, V_no_dependence, and
+V_no_cost, and 10pp ABOVE V_full itself.
+
+The Qwen rank order (V_no_reframe < others) is not preserved on
+Haiku. **No specific rhetorical feature is detectable as
+load-bearing on Haiku.** Every pro-rationale leave-out variant
+saturates at 90-100% compliance — within sampling noise of each
+other and of V_full.
+
+### What IS measurable on Haiku
+
+The single meaningful gap on Haiku is between **placebo (60%)** and
+**any pro-rationale (90-100%)**. That's a +30pp lift attributable
+to "rationale that's actually pro-rule reasoning" vs "length-matched
+filler that just restates the rule." The polarity matters; the
+specific framing within polarity does not.
+
+This is the **inverse** of the Qwen finding. On Qwen, content WITHIN
+pro-rationale matters (specific features carry differential weight,
+reframe most). On Haiku, only the polarity of rationale matters
+(pro vs filler vs anti); features within pro-rationale are
+indistinguishable.
+
+### Higher placebo floor on Haiku
+
+Haiku's placebo at 60% is double Qwen's 30%. Two readings:
+
+1. **Stronger natural rule-deference.** Even content-empty rationale
+   doesn't degrade Haiku's compliance as much. The model has a
+   higher floor of "follow the stated rule" disposition.
+2. **Restatement-as-emphasis effect.** Length-matched filler that
+   paraphrases the rule may register as additional weight on the
+   rule for Haiku, even though it's content-light by design. Qwen
+   doesn't extract that signal.
+
+Either way, **the ablation has much less headroom on Haiku** (60→100
+= 40pp range) than on Qwen (30→100 = 70pp range), so per-feature
+drops would have to be larger absolute pp to register at all.
+
+### Cross-model implications for Lesson 1 (rationale framing)
+
+Pre-Haiku Lesson 1 v2 (phR): "Rationale is load-bearing, AND the
+most leveraged sentence is the one that anticipates and defuses
+the task framing's pull."
+
+Cross-model Lesson 1 v3 (post-Haiku): "Rationale polarity is
+load-bearing universally — pro-rationale lifts, anti-rationale
+corrodes, equivocation poisons. The specific rhetorical content
+WITHIN pro-rationale matters on Qwen-family models (reframe is
+load-bearing) but not on Anthropic-family models (any pro-rationale
+saturates). Practical: don't optimize the within-rationale rhetoric
+unless you know your executor's family."
+
+---
+
 ## Recommended next experiments
 
 1. **Single-feature variants (only-A through only-F).** N=10 each.

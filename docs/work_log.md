@@ -29,6 +29,75 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-10 (later) — Cross-model rationale arc landed: mirror-image picture
+
+### What we did
+
+- Ran the full cross-model rationale arc on `claude-haiku-4-5-20251001`
+  via Claude Code CLI shell-out (Max plan auth). Four sweeps, 230
+  trials, ~75 min total wall (faster than the 3.2hr estimate due to
+  system-prompt caching).
+- Updated all four FINDINGS docs with actual cross-model numbers and
+  the synthesized framing.
+
+### Cross-model results (final)
+
+| phase | original Qwen finding | Haiku replication | verdict |
+|---|---|---|---|
+| **phS** anti-rationale | core: anti-rationale beats rule (0%); sub: ANTI_HARD has 15% retention | core: replicates (0%); sub: falsified (ANTI_HARD also 0%) | **partial — core survives** |
+| **phR** reframe load-bearing | V_no_reframe drops 20pp; specific feature matters | V_no_reframe = 100%; no feature is load-bearing | **falsified** |
+| **phT** rule precedence | R_imperative 100%, R_meta_preamble 0% | R_imperative 10%, R_meta_preamble 80% | **inverts** |
+| **phU** L9 decomposition | each L9 component ~60pp alone | components 0-20% alone; full+meta still 100% but meta carries the lift | **falsifies decomposition; combo replicates for different reason** |
+
+### What we decided
+
+- **Cross-model Lesson 9 v3 needs to be model-aware.** Qwen-family
+  attends to imperative register (capitalized absolutes, "MUST NOT");
+  Anthropic-family attends to authority claims (inline "this rule
+  overrides any rationale" or top-of-prompt meta-preamble). The
+  portable Loom rule kit needs BOTH — strip either lever and one
+  population loses 70-100pp of compliance lift.
+- **Higher placebo floor on Haiku** (60% vs Qwen 30%) means
+  rhetorical-feature ablations have ~half the dynamic range. The
+  Qwen "reframe is load-bearing" finding is not measurable on Haiku
+  not because reframe doesn't matter but because the floor is too
+  high for any single feature to be detectable in 30pp range.
+- **Production drift-warning text (M13.7d v3)** uses scope-qualifier
+  language — primarily an authority-claim. The phT data predicts v3
+  should work even better on Anthropic models than on the Qwen it
+  was tuned against. Worth re-running M13.7e on Haiku to confirm.
+
+### What's still open
+
+- **Sonnet replication** — still pending. Haiku is one Anthropic data
+  point; Sonnet would test whether the "Anthropic attends to authority
+  claims, not register" pattern holds across the Anthropic tier
+  spectrum.
+- **M13.7e Haiku counterfactual** — back on the table. Now a high-value
+  test given v3's authority-claim shape predicts strong Anthropic
+  performance.
+- **Loom prompt-engineering doc updates** — Lessons 1 and 9 need v3
+  rewrites with cross-model framing. The current docs frame these as
+  universal; they're not.
+- **CLAUDE.md / hook prompt audit** — existing structured-rule injection
+  in Loom's CLAUDE.md is largely Qwen-tuned. Cross-population auditing
+  pass would surface where authority-claim text is missing.
+
+### Pointers
+
+- Commits: `4846418` README pass; `2efcfee` harness ports + work_log
+  entry; this commit FINDINGS docs + work_log update.
+- Cross-model trial summaries: `runs-v2/ph{R,S,T,U}_s1_js_claude-haiku-4-5-20251001_*_run*_summary.json`
+  (230 files).
+- Sweep logs: `runs-v2/ph{R,S,T,U}_haiku_sweep.log`.
+- Updated findings docs:
+  - `FINDINGS-bakeoff-v2-anti-rationale.md` (phS — partial replication)
+  - `FINDINGS-bakeoff-v2-rhetorical-ablation.md` (phR — falsified)
+  - `FINDINGS-bakeoff-v2-rule-precedence.md` (phT — inverted)
+  - `FINDINGS-bakeoff-v2-imperative-followups.md` (phU — falsified decomposition)
+
+---
+
 ## 2026-05-10 — README pass + cross-model rationale arc port (Max via CLI)
 
 *[Assistant context reset partway through; resumed from summary.]*

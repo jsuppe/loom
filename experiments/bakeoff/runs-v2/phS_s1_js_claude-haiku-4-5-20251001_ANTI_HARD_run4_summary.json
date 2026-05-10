@@ -1,0 +1,17 @@
+{
+  "phase": "S_anti_rationale",
+  "cell": "ANTI_HARD",
+  "run_id": "4",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rationale_chars": 298,
+  "input_tokens": 8929,
+  "output_tokens": 879,
+  "model": "claude-haiku-4-5-20251001",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 11.4,
+  "wall_s": 11.9,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

@@ -1,0 +1,19 @@
+{
+  "phase": "U_imperative_followups",
+  "cell": "R_baseline_check",
+  "run_id": "1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "input_tokens": 8918,
+  "output_tokens": 5187,
+  "model": "claude-haiku-4-5-20251001",
+  "indexer": "ts-lsp-v2",
+  "llm_elapsed_s": 39.3,
+  "wall_s": 39.9,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}
