@@ -175,6 +175,82 @@ def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
     raise RuntimeError(f"ollama call failed after retries: {last_err}")
 
 
+# ---------------------------------------------------------------------------
+# Claude CLI shell-out (cross-model replication path; uses Max plan auth,
+# not API key). Returns the same shape as call_ollama() so callers don't
+# branch. Triggered when PHS_EXEC_MODEL starts with "claude-" or is one
+# of the bare aliases ("haiku", "sonnet", "opus").
+# ---------------------------------------------------------------------------
+
+_CLAUDE_SYSTEM_PROMPT = (
+    "You are a helpful coding assistant. When the user asks for code, "
+    "reply with the requested code in a fenced code block and nothing "
+    "outside it."
+)
+
+
+def call_claude(model: str, prompt: str, timeout: int = 600) -> dict:
+    # Run from a clean tempdir to avoid inheriting the loom project's
+    # CLAUDE.md and tool loadout. Disable tools entirely so the model
+    # cannot edit files agentically — we want a pure text completion
+    # comparable to call_ollama. Override the system prompt for the
+    # same reason. Each call still incurs ~8k tokens of CLI baseline
+    # context but no project-specific contamination.
+    clean_cwd = tempfile.mkdtemp(prefix="phS_claude_cwd_")
+    args = [
+        "claude", "-p", "--no-session-persistence",
+        "--output-format", "json", "--model", model,
+        "--tools", "",
+        "--system-prompt", _CLAUDE_SYSTEM_PROMPT,
+    ]
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    t0 = time.time()
+    try:
+        proc = subprocess.run(
+            args, input=prompt, cwd=clean_cwd,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            env=env, timeout=timeout,
+            shell=(sys.platform == "win32"),
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude CLI timed out after {timeout}s")
+    elapsed = time.time() - t0
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"claude CLI rc={proc.returncode}: {(proc.stderr or '')[-300:]}"
+        )
+    try:
+        d = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            f"claude CLI non-JSON output: {(proc.stdout or '')[-300:]}"
+        )
+    usage = d.get("usage", {}) or {}
+    # input_tokens here = NEW (uncached) input on this turn. Add
+    # cache_creation + cache_read so cross-runs are comparable to
+    # Ollama's prompt_eval_count.
+    in_tokens = (
+        (usage.get("input_tokens") or 0)
+        + (usage.get("cache_creation_input_tokens") or 0)
+        + (usage.get("cache_read_input_tokens") or 0)
+    )
+    return {
+        "response": d.get("result", ""),
+        "elapsed_s": elapsed,
+        "input_tokens": in_tokens,
+        "output_tokens": usage.get("output_tokens", 0),
+    }
+
+
+def _call_model(model: str, prompt: str, timeout: int = 600) -> dict:
+    """Dispatch to ollama vs claude CLI based on model name prefix."""
+    if model.startswith("claude") or model in ("haiku", "sonnet", "opus"):
+        return call_claude(model, prompt, timeout=timeout)
+    return call_ollama(model, prompt, timeout=timeout)
+
+
 def build_prompt(cell: str, retry_js: str, semantic_block: str) -> str:
     parts: list[str] = []
     parts.append(f"# Task: {TASK}\n")
@@ -280,14 +356,21 @@ def run_one(cell: str, run_id: str) -> dict:
 
     model = os.environ.get("PHS_EXEC_MODEL", "qwen2.5-coder:32b")
     cell_slug = cell.replace("+", "_").replace("-", "_")
-    out_path = OUT_DIR / f"phS_s1_js_{cell_slug}_run{run_id}_summary.json"
+    # Original Qwen baseline files are saved at the bare path for backward
+    # compatibility. New cross-model runs (haiku/sonnet/etc.) get the model
+    # name embedded in the filename so they coexist without clobbering.
+    if model.startswith("qwen2.5-coder"):
+        suffix = ""
+    else:
+        suffix = "_" + model.replace(":", "_").replace("/", "_")
+    out_path = OUT_DIR / f"phS_s1_js{suffix}_{cell_slug}_run{run_id}_summary.json"
 
     try:
-        llm = call_ollama(model, prompt)
+        llm = _call_model(model, prompt)
     except Exception as e:
         err = {"phase": "S_anti_rationale", "cell": cell, "run_id": run_id,
                "passed": 0, "total": 2,
-               "error": f"ollama call failed: {e}",
+               "error": f"model call failed ({model}): {e}",
                "wall_s": round(time.time() - t0, 1)}
         out_path.write_text(json.dumps(err, indent=2), encoding="utf-8")
         print(f"SUMMARY: {cell} ERROR: {e}")

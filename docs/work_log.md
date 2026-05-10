@@ -29,6 +29,96 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-10 — README pass + cross-model rationale arc port (Max via CLI)
+
+*[Assistant context reset partway through; resumed from summary.]*
+
+### What we did
+
+- **Documentation pass on README.md** — extended "What Loom does" from
+  7 to 10 bullets covering M11.5 intake hook, M12 research-mode kinds,
+  M10 semantic indexers, and M13 Driftgraph integration. Added a
+  "Headline finding 3" subsection with the locked m13_v1 result table
+  (v3: 100% recall / 12% FPR / F1 0.965) and Wilson 95% CIs. Added 6
+  Features bullets (research mode, intake hook, rationale tracking,
+  semantic indexers, Driftgraph integration, drift-warning eval
+  harness). Extended the Commands table with `related`,
+  `needs-rationale`, `intake`, `intake-stats`, `audit-rationale`,
+  `indexer-doctor`. Fixed the stale "ChromaDB" reference in the
+  D2 vs D3 callout.
+- **Synced GitHub repo description + topics.** New description: "🧵
+  Semantic traceability + research-mode capture for AI-assisted
+  development. Extract requirements & findings, link to code, detect
+  drift, drive small-model execution." Dropped `chromadb` topic
+  (factually wrong since M3); added `sqlite`, `claude-code`,
+  `drift-detection`, `small-model-execution`, `research-mode`.
+- **Ported phR / phS / phT / phU rationale-arc harnesses to support
+  the Claude CLI.** Each now has a `call_claude()` shell-out alongside
+  the existing `call_ollama()` plus a `_call_model()` dispatcher that
+  picks based on the `EXEC_MODEL` env var prefix. Pattern adapted
+  from `phG_rationale_smoke.py`. Uses `--tools ""` and a minimal
+  `--system-prompt` override from a clean tempdir cwd to avoid
+  inheriting the loom project's CLAUDE.md / tool loadout (~8k tokens
+  baseline overhead remains; ~33-45k baseline if not overridden).
+- **Patched output-filename pattern** to embed model name for
+  non-Qwen runs. Original `phS_s1_js_<cell>_run<N>_summary.json`
+  paths preserved for the canonical Qwen baselines; cross-model runs
+  land at `phS_s1_js_<model>_<cell>_run<N>_summary.json` so they
+  coexist without clobbering. Caught the clobber issue mid-flight
+  on the first sweep attempt — restored 6 V_full Qwen baseline
+  files from git before they were lost.
+
+### What we decided
+
+- **User runs cross-model on Max plan, not API key.** API would have
+  been ~$1 for the rationale arc, ~$5-10 for M13.7e counterfactual,
+  but Max is included in the existing subscription. Trade-off: Claude
+  CLI shell-out is 7-8x slower per call due to startup + cached system
+  context, vs ~$0 marginal cost.
+- **Honest ceiling on cross-model claim.** All four rationale-arc
+  findings (phR reframe, phS anti-rationale corrosion, phT R_imperative
+  override, phU L9 decomposition) were `qwen2.5-coder:32b`-only. Per
+  the existing FINDINGS docs, every one of them flags "Anthropic
+  Haiku / Sonnet / GPT-4 may show different feature priorities." This
+  cross-model run on Haiku 4.5 is the missing replication.
+- **Two commits.** README pass + GitHub sync as one bundle (the
+  documentation work). Harness ports + work_log entry as a separate
+  bundle (the methodology work).
+
+### What's still open
+
+- **Cross-model sweep itself** — phS / phU / phT / phR queued (smallest-
+  to-largest order per user request). Estimated total wall time ~3.2
+  hrs across all four phases. Will land at
+  `experiments/bakeoff/runs-v2/ph*_s1_js_claude-haiku-*_*.json`.
+- **FINDINGS doc updates** — once cross-model results land, the four
+  rationale-arc findings docs will need a "Cross-model replication"
+  subsection. If Haiku confirms the pattern → universality claim
+  strengthens. If Haiku diverges (e.g. handles equivocation better)
+  → findings stay Qwen-specific and we update framing accordingly.
+- **Sonnet replication** — Haiku gives one Anthropic data point; a
+  Sonnet replication would add a third tier. Higher confidence,
+  longer wall time (~5x).
+- **M13.7e Haiku counterfactual** — on hold per cost/time tradeoff.
+  ~2.7k Haiku calls would be heavy on Max (~30-90 min CLI overhead
+  alone, possible rate-limit pressure). API key would be the better
+  path for that one if/when added later.
+
+### Pointers
+
+- Commits: `4846418` README pass + GitHub sync; this commit harness
+  ports + work_log entry.
+- Modified harnesses: `phR_rhetorical_ablation_smoke.py`,
+  `phS_anti_rationale_smoke.py`, `phT_rule_precedence_smoke.py`,
+  `phU_imperative_followups_smoke.py` — each ~80 lines added for
+  `call_claude` / `_call_model` plus the filename patch.
+- Reference pattern: `experiments/bakeoff/v2_driver/phG_rationale_smoke.py`
+  (the original Anthropic shell-out, dating from M13 outbound work).
+- Findings captured: REQ-c0907768 (intake-hook capture of the
+  "use Max for rationale arc replication" decision).
+
+---
+
 ## 2026-05-07 (late) — Established work-log + memory protocol
 
 ### What we did
