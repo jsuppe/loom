@@ -11,25 +11,31 @@ that helps GPT-4o actively hurts GPT-5 on math reasoning ("the Prompting
 Inversion"). We extend this finding through controlled per-feature
 ablation across three model families (Qwen 2.5-coder 32B, Anthropic Haiku
 4.5, Anthropic Sonnet 4.6) and three contrarian-rule code-compliance
-scenarios. ~1280 trials, Wilson 95% confidence intervals throughout. We
+scenarios. 1333 trials in the rule-precedence work (490 phT/phS for S1; 843 phY for S2 and S3), Wilson 95% confidence intervals throughout. We
 report four cross-validated findings: **(1)** Cross-vendor lever
-attendance is real and persists across scenarios — Qwen-family models
-respond to imperative register (rescuing compliance from 0% to 100% on
-two of three scenarios); Anthropic-family models do not (R_imperative
+attendance is real and persists across scenarios — qwen2.5-coder
+responds to imperative register (rescuing compliance from 0% to 100%
+on two of three scenarios); both Anthropic models do not (R_imperative
 at 0-3% on the same scenarios), instead responding to authority claims
 (meta-preamble + precedence-inline). **(2)** Anthropic models exhibit a
 rule-content × imperative-formatting interaction effect: imperative
-formatting amplifies pre-existing distrust on rules the model treats as
-anti-patterns (S1 swallow_error: 0%) but is benign on defensible rules
-(S2 transactional validation, S3 legacy-system compatibility: 30-100%).
-Qwen does not show this interaction. **(3)** Anti-rationale susceptibility
+formatting amplifies pre-existing distrust on rules the model treats
+as anti-patterns (Sonnet S1 V_FULL → V_FULL+imperative drops 74% to
+38% at N=50, Fisher exact p=0.0005) but is benign on defensible rules
+(S2 transactional validation, S3 legacy-system compatibility: both
+100%). qwen2.5-coder does not show this interaction. **(3)** Anti-rationale susceptibility
 varies jointly by model and scenario, with frontier models showing
 stronger rule-trust on defensible rules (Anthropic ignores anti-rationale
-on S2/S3; Qwen still corrupted on S2). **(4)** A shared implicit
-defensibility hierarchy emerges across all three vendors: S1 < S2 < S3
-in compliance-resistance, suggesting a substrate-level rule-legitimacy
-judgment, not purely RLHF-specific. Within-model behavior is essentially
-deterministic (50/50 trials cluster at 0% and 100% on Sonnet's key cells).
+on S2/S3; Qwen still corrupted on S2). **(4)** All three vendors place S1 at
+the bottom of an implicit defensibility ranking and S3 at the top;
+**S2 is the family-discriminating diagnostic** — placed at the top by
+both Anthropic models (R_baseline = 100%) but at the bottom by Qwen
+(R_baseline = 0%). The shared S1-suspicion is consistent with
+substrate-level training-data convergence on what counts as
+anti-pattern-coded; the S2 split reveals where each family draws its
+defensibility threshold. Within-model behavior is essentially
+deterministic (50/50 trials cluster at 0% and 100% on Sonnet's key cells under default-temperature
+invocation).
 Practical implication: any prompt deployed across model-routing or
 vendor-switching infrastructure risks silent inversion of design intent;
 imperative emphasis in particular has opposite-polarity effects across
@@ -83,9 +89,9 @@ prompt formatting changes (separators, header capitalization), proposing
 the FormatSpread algorithm. Our work addresses semantic prompt levers
 (rule-strengthening interventions), distinct from cosmetic formatting.
 
-**Cross-model prompt sensitivity benchmarks.** PromptSE (Liu et al. 2025;
+**Cross-model prompt sensitivity benchmarks.** PromptSE (Ma et al. 2025;
 arXiv:2509.13680) introduced a 14-model cross-family stability metric.
-PromptBench (Zhou et al. 2024) and POSIX (Mishra et al. 2024;
+PromptBench (Zhou et al. 2024) and POSIX (Chatterjee et al. 2024;
 arXiv:2410.02185) provide systematic frameworks. Our work focuses on a
 single specific lever family rather than a general benchmark.
 
@@ -97,10 +103,13 @@ mechanism (compliance-instruction-induced collapse) is related to our
 anti-pattern × imperative interaction but they study compliance to
 malicious instructions while we study rule-strengthening lever inversion.
 
-**Tone sensitivity across model families.** Recent work
-(arXiv:2512.12812) established differential tone sensitivity across GPT,
-Gemini, and Llama families. We extend the question to rule-compliance
-prompt features.
+**Tone sensitivity across model families.** Cai et al. (2025;
+arXiv:2512.12812) established differential tone sensitivity (very
+friendly / neutral / very rude prompt variants) across GPT-4o-mini,
+Gemini 2.0 Flash, and Llama 4 Scout, finding statistically significant
+effects only in a subset of Humanities MMMLU tasks. We extend the
+question from prompt tone to rule-strengthening prompt levers and to
+the code-rule-compliance domain.
 
 **Anti-pattern detection in coding LLMs.** No prior work we are aware of
 documents the rule-content × imperative-formatting interaction we
@@ -174,8 +183,14 @@ everything else constant.
 - All trials use the model's default temperature (Ollama default for
   Qwen; Claude CLI default for Anthropic).
 
-Total trials reported: ~1280 across the cross-model × cross-scenario
-arc, plus prior single-scenario data.
+Total trials reported: 1333 in the rule-precedence work specifically
+(490 phT + phS files for S1_js across all three models including N=30
+supplements, reproducibility, and the Sonnet S1 V_FULL +
+imperative_pro N=50 amplification test; 843 phY files for S2_py and
+S3_py across all three models). An additional ~450 trials from earlier
+phR / phU rationale-arc phases (single-scenario, Qwen + Haiku only)
+inform our S1_js context but are not the central evidence in this
+paper.
 
 ## 4. Results
 
@@ -189,8 +204,21 @@ Table 1: S1_js compliance rates. Wilson 95% CIs in brackets.
 | R_meta_preamble | 0% [0, 11] | 86.7% [70, 95] | 100% [89, 100] |
 | **R_imperative** | **100%** [89, 100] | 3.3% [1, 17] | **0%** [0, 11] |
 | R_precedence_inline | 30% [17, 48] | 70% [52, 83] | 100% [89, 100] |
-| R_sanity_pro (V_FULL) | 100% [89, 100] | 100% [69, 100] | 75% [53, 89] |
-| R_imperative_pro | (n/a) | (n/a) | 50% [30, 70] |
+| R_sanity_pro (V_FULL) | 100% [89, 100] | 100% [69, 100] | 74% [60, 84]² |
+| R_imperative_pro | (not run)¹ | (not run)¹ | 38% [26, 52]² |
+
+¹ R_imperative_pro was added as a diagnostic cell for Sonnet's
+imperative-poison mechanism after the original Qwen and Haiku S1_js
+sweeps had completed. We did not retrofit it onto Qwen and Haiku
+S1_js since the diagnostic question (does imperative formatting hurt
+even with pro-rationale?) was Sonnet-specific. The cell IS measured
+on Qwen and Haiku for the cross-scenario sweeps (S2_py, S3_py); see
+Table 2.
+
+² Sonnet S1 R_sanity_pro and R_imperative_pro reflect N=50 (initial
+N=20 + N=30 supplement) per cell. All other cells in this table at
+N=30 or higher; see §3.5 for trial design and §4.4 for the Fisher
+exact test on the V_FULL → imperative comparison.
 
 S1_js shows a clean three-way split on imperative-register response:
 Qwen rescues (+100pp from baseline), Haiku is mildly negative, Sonnet
@@ -212,6 +240,18 @@ the three scenarios.
 
 Three patterns emerge from this matrix. Each is the basis of one of our
 findings.
+
+**A note on reading the table for S2_py and S3_py:** for the
+Anthropic models on S2_py and S3_py, R_baseline is already 100% —
+anti-rationale is not corrupting compliance, so the rescue cells
+(R_meta_preamble, R_precedence_inline) at 100% are *consistent with
+no degradation*, not *evidence for active rescue*. Active rescue can
+only be measured where R_baseline is below ceiling (S1 for both
+Anthropic models; S1 and S2 for qwen2.5-coder). When we say "rescue
+lever generalizes across scenarios" in Finding 1, we mean the lever
+remains effective on the cells where it can be measured, not that it
+contributes additional lift on cells where compliance is already at
+ceiling.
 
 ### 4.3 Finding 1: Cross-vendor lever attendance generalizes
 
@@ -247,15 +287,36 @@ Sonnet's R_imperative response varies cleanly with rule content:
 The reading: Sonnet's anti-pattern detection flags S1's rule as
 suspicious. When that flag is active, imperative formatting amplifies
 distrust (compliance drops further); when not active, imperative
-formatting is benign. R_imperative_pro on S1 = 50% — even with
-pro-rationale, imperative formatting on a flagged rule reduces
-compliance ~25pp from V_FULL baseline (75%). On S2 and S3,
-R_imperative_pro = 100% — no pre-existing flag for imperative to
-amplify.
+formatting is benign. With pro-rationale (V_FULL) — isolating the
+imperative effect from anti-rationale — Sonnet S1 R_imperative_pro
+drops to 38.0% from R_sanity_pro at 74.0%: a **36pp reduction**
+attributable to imperative formatting alone.
+
+**Statistical confirmation (N=50 per cell):** Sonnet S1 V_FULL
+(R_sanity_pro) = 37/50 = 74.0% [Wilson 60.4, 84.1] vs V_FULL +
+imperative (R_imperative_pro) = 19/50 = 38.0% [25.9, 51.8]. **Fisher
+exact OR = 4.64, p = 0.0005.** Wilson 95% CIs do not overlap (gap of
+≥8.6pp). The amplification claim is statistically supported on S1.
+
+On S2 and S3, both R_sanity_pro and R_imperative_pro hit 100% (20/20)
+— no variance to test against. The amplification effect is therefore
+established on S1 but not directly measurable on S2/S3 (where Sonnet's
+baseline trust in the rule is already at ceiling). This is consistent
+with the rule-content × imperative interaction reading: imperative
+formatting affects compliance only on rules the model flags.
+
+A formal logistic regression with `imperative × scenario` interaction
+term (which the natural framing would request) is degenerate on this
+data due to perfect separation in multiple cells (Sonnet S2/S3
+R_imperative_pro at 20/20; Sonnet S1 R_baseline at 0/N). We therefore
+rely on per-scenario contrasts with stated Wilson CIs and Fisher exact
+tests rather than a global interaction p-value.
 
 Haiku shows the same direction but at weaker magnitude: 3% on S1, 90%
 on S2, 100% on S3. The anti-pattern × imperative interaction is
-Anthropic-family but stronger at the Sonnet tier.
+consistent across both Anthropic models tested but stronger at the
+Sonnet tier. We do not have within-family generalization evidence
+(see Limitations §5.5).
 
 Qwen does NOT show this interaction: imperative response is 100%
 across all three scenarios uniformly. Qwen's RLHF lineage does not
@@ -283,23 +344,43 @@ follow stated rules vs when to follow rationale-based objections,
 weighting heavily toward rules they treat as defensible. Qwen weights
 more toward the rationale even on defensible rules.
 
-### 4.6 Finding 4: A shared implicit defensibility hierarchy
-
-Combining Findings 2 and 3 across all three models reveals a
-consistent ordering: S1 ≪ S2 ≤ S3 in observed rule-trust:
+### 4.6 Finding 4: Shared S1-suspicion + S3-acceptance, with S2 as the family-discriminating case
 
 | | S1 R_baseline | S2 R_baseline | S3 R_baseline |
 |---|---|---|---|
-| Qwen | 0% | 0% | 100% |
+| qwen2.5-coder | 0% | 0% | 100% |
 | Haiku | 0% | 100% | 100% |
 | Sonnet | 0% | 100% | 100% |
 
-All three vendors place S1 at the bottom. Anthropic places S2 with S3
-at the top; Qwen places S2 with S1 at the bottom. The shared "S1 is
-suspicious" judgment across models suggests substrate-level (training
-data convergence; not RLHF-specific) recognition that "swallow errors
-silently" is anti-patterned, even though the specific lever responses
-to that recognition differ by family.
+What is shared across all three vendors:
+- **S1 is at the bottom** (rule-trust = 0% for all three under anti-rationale)
+- **S3 is at the top** (rule-trust = 100% for all three under anti-rationale)
+
+What is **not** shared:
+- **S2's position varies** — Anthropic places S2 with S3 at the top
+  (100%, ignored anti-rationale); qwen2.5-coder places S2 with S1 at
+  the bottom (0%, corrupted by anti-rationale).
+
+The shared S1-suspicion across vendors is consistent with substrate-
+level training-data convergence — "silently swallow errors" appears
+to be flagged as anti-patterned by all three model families
+independently of vendor-specific RLHF lever responses (Findings 1-3).
+The shared S3-acceptance is similarly consistent with substrate-level
+trust in a defensible legacy-compatibility constraint.
+
+S2 — the case where the families diverge — is the most informative
+data point. **It locates each family's defensibility threshold**:
+qwen2.5-coder's threshold sits *above* "transactional validation
+atomicity," while Anthropic's threshold sits *below* it. S2 is the
+diagnostic that distinguishes which family-specific judgment is
+operating, not a confirming data point for a shared hierarchy.
+
+We initially framed this as a shared S1 < S2 < S3 ordering across
+vendors. That framing was incorrect: qwen2.5-coder's data shows S1 =
+S2 ≪ S3, not S1 < S2 < S3. The corrected reading — "shared poles, S2
+as diagnostic" — is both more honest and arguably more useful for
+practitioners, since it implies that *each new scenario can be
+classified by which side of the threshold each model places it on*.
 
 ### 4.7 Within-model reproducibility
 
@@ -314,7 +395,12 @@ Independent N=20 reproductions of Sonnet's four S1_js cells:
 
 150/150 trials at the predicted outcome on three "passes" cells; 0/50
 on the "fails" cell. Sonnet's response on these prompt patterns is
-functionally deterministic on this scenario.
+**deterministic-at-default-temperature on this scenario**. We do not
+claim full determinism — temperature variation (the Claude CLI uses
+its default; Ollama uses Qwen's default) could change the picture.
+What we observe is reliable convergence to the predicted outcome
+under the production invocation conditions used throughout the rest
+of this paper.
 
 ## 5. Discussion
 
@@ -348,34 +434,107 @@ The cross-family pattern (Qwen ↔ imperative; Anthropic ↔ authority
 claims) suggests different RLHF training distributions produce
 different prompt-feature attentions:
 
-- **Qwen-family training** appears to have emphasized format-driven
-  compliance — reward shaping where capitalized imperatives trigger
-  higher reward.
-- **Anthropic-family training** appears to have emphasized natural-
-  language authority claims and explicit instruction hierarchies.
-  Sonnet's stronger anti-pattern detection may reflect later-stage
-  alignment passes specifically targeting jailbreak resistance, where
-  imperative formatting overlaps with manipulation patterns.
+- **H1 (qwen2.5-coder format-attention hypothesis):** qwen2.5-coder's
+  RLHF training may have weighted format-driven compliance signals
+  (capitalized imperatives, "MUST NOT") more heavily, producing
+  stronger lift from imperative wording. We have no direct evidence
+  for this; it is consistent with the qwen2.5-coder S1 R_imperative
+  = 100% rescue but is unfalsifiable from our data alone.
+- **H2 (Anthropic authority-attention hypothesis):** Anthropic's RLHF
+  training may have weighted explicit authority-claim signals more
+  heavily, producing stronger lift from "this rule overrides X" or
+  meta-preamble framings. Consistent with the data (R_meta_preamble
+  87-100% on Anthropic models for S1) but again not directly
+  testable without model weights.
+- **H3 (Sonnet jailbreak-resistance hypothesis):** Sonnet's stronger
+  anti-pattern × imperative interaction may reflect later-stage
+  alignment passes specifically targeting jailbreak resistance,
+  where imperative formatting overlaps with social-engineering
+  attack patterns. Consistent with the imperative-poison effect being
+  stronger on Sonnet than Haiku.
 
-We do not have model-weight access to test these hypotheses directly.
-They are consistent with the data, not established causes.
+These are candidate hypotheses, not established mechanisms. We do
+not have model-weight access. Each could be tested directly with
+training-data audit (which RLHF teams could perform internally) or
+indirectly via prompt-feature ablation across more diverse models
+within each family. The mechanisms section is intentionally
+hypothesis-only — the empirical findings (§4) stand independently
+of which mechanism is correct.
 
-### 5.3 The shared defensibility hierarchy is the most surprising finding
+### 5.3 Shared poles, S2 as diagnostic
 
-Finding 4 — that all three vendors implicitly rank S1 < S2 < S3 in
-rule defensibility, even when they disagree about specific lever
-responses — suggests training-data convergence at the substrate level.
-"Silently swallow errors" appears to be flagged as suspicious by all
-three families to varying degrees, even though only Anthropic couples
-that flag to imperative-formatting response.
+Finding 4 (corrected) — all three vendors place S1 at the bottom and
+S3 at the top of an implicit defensibility ranking, but S2 splits the
+families: Anthropic places it with S3 (defensible, R_baseline = 100%),
+qwen2.5-coder places it with S1 (suspicious, R_baseline = 0%) — is
+suggestive of substrate-level training-data convergence on the
+extreme cases plus vendor-specific judgment on the middle ground.
 
-This is a softer claim than the Findings 1-3, but if it generalizes
-across more scenarios, it would suggest that prompt-engineering
-research should explicitly characterize *which rules a given model
-implicitly distrusts* before measuring lever responses, since the
-lever responses are conditional on that implicit judgment.
+The shared S1-suspicion ("silently swallow errors") and shared
+S3-acceptance ("legacy contractual int IDs") plausibly reflect what
+appears in most coding-LLM training data: silent error handling is
+near-uniformly criticized in software-engineering literature; legacy
+compatibility constraints are near-uniformly accepted as defensible.
+The S2 split — transactional validation timing — is genuinely a
+contested engineering judgment in practice (validate at function
+entry vs at commit boundary), and the family-level disagreement may
+mirror that genuine ambiguity in the training distribution.
 
-### 5.4 Practical implications
+For practitioners, the practical reading is that **S2-class rules
+are the diagnostic case** — they reveal where each model's
+defensibility threshold sits. A new prompt's rule can be
+characterized by asking, for each target model: "does this look
+like S1 (anti-pattern), S3 (clearly defensible), or S2
+(family-discriminating middle)?" The answer determines which lever
+choices matter for that deployment.
+
+This is a softer claim than Findings 1-3 and rests on N=3 scenarios.
+A second anti-pattern scenario (queued as tier-2 work) would test
+whether the shared S1-suspicion direction generalizes; replication
+on more middle-defensibility scenarios would map the family-specific
+threshold more precisely.
+
+### 5.4 A broader hypothesis: reasoning-framework divergence
+
+Our findings are about a specific class of prompt-strengthening
+interventions on a specific class of code-rule-compliance task.
+A natural larger question — which our data suggests but does not
+directly test — is whether *reasoning more broadly* may differ
+systematically across model families, not just rule-following lever
+responses.
+
+The reasoning-framework divergence hypothesis would be: even when
+two models are presented with the same input, their internal
+reasoning chains may follow systematically different paths, weight
+different features as salient, and (in the limit) reach different
+conclusions on identical premises — driven not by the prompt but by
+training distribution. Different RLHF lineages may produce different
+implicit rules of inference, different attention to surface vs deep
+features, and different default heuristics for how to engage with a
+problem.
+
+Our data is consistent with this hypothesis but does not establish
+it. Cross-model rule-following inversion (Findings 1-2) is one
+specific case; whether it generalizes to "models reach different
+logical conclusions on identical premises" is open. Existing chain-
+of-thought literature has shown that reasoning traces diverge across
+models, but typically interpreted as capability differences rather
+than fundamental framework divergence.
+
+If the hypothesis holds, the practical consequence extends well
+beyond prompt portability. Multi-model deployments, model-routing
+infrastructure, vendor-switching, and any system that assumes
+"if these models agree on the input, they'll agree on the conclusion"
+would face systematic risk of divergent outputs rooted in training,
+not in the deployment context.
+
+Testing it would require: identical capability-controlled inputs,
+multiple reasoning paths to the same correct conclusion, and
+inspection of which reasoning-path-features cluster by family. Such
+work is out of scope for this paper but is the natural extrapolation
+our findings invite.
+
+### 5.5 Practical implications
 
 **Prompt portability is a deployment risk.** Production systems
 increasingly use model-routing layers (Anthropic Claude Code's
@@ -409,26 +568,55 @@ when:
    imperative-only formulations of contrarian-style rules. These are
    the patterns most at risk of inversion under model-routing.
 
-### 5.5 Limitations
+### 5.6 Limitations
 
-- **Three scenarios.** Replication on more scenarios (especially other
-  recognized anti-patterns) would strengthen the rule-content
-  interaction claim.
+- **Three scenarios is too few for a strong rule-content interaction
+  claim.** The interaction in Finding 2 hinges on N=1 anti-pattern
+  scenario (S1) vs N=2 defensible scenarios (S2, S3). A second
+  anti-pattern scenario (e.g., a "concatenate user input into SQL
+  query" rule) is the highest-priority follow-up.
+- **S1 is JavaScript; S2 and S3 are Python — language is confounded
+  with rule character.** Tests of the rule-content interaction
+  cannot yet distinguish "Sonnet flags swallow_error specifically"
+  from "Sonnet treats JavaScript prompts more cautiously than Python
+  prompts." A Python anti-pattern scenario would break this confound.
+- **Amplification claim now supported at N=50** (after queued
+  supplement landed). Sonnet S1 V_FULL = 37/50 = 74% [60.4, 84.1] vs
+  V_FULL+imperative = 19/50 = 38% [25.9, 51.8]; Fisher exact OR=4.64,
+  p=0.0005. CIs no longer overlap. The amplification subclaim is
+  therefore statistically supported on S1; remains descriptively
+  measurable but not statistically testable on S2/S3 (where both
+  cells are at 100%).
 - **No raw-API replication.** All Anthropic data via Claude Code CLI.
   We minimize CLI-specific context with `--tools ""` and
-  `--system-prompt` overrides, but a raw-API replication would address
-  the residual confound.
+  `--system-prompt` overrides, reducing the baseline from ~33k tokens
+  to ~8k tokens. The residual ~8k tokens may include
+  alignment-flavored framing that interacts with anti-pattern
+  detection — i.e., the CLI may be priming for authority claims and
+  anti-pattern caution. A raw-API replication of even the three
+  Sonnet S1 cells (R_imperative, R_meta_preamble, R_baseline) would
+  close this confound.
 - **No Opus replication.** Single Anthropic-frontier data point at the
   Sonnet tier. Opus may show stronger or weaker anti-pattern detection.
+- **Single qwen2.5-coder model.** Within-Qwen-family generalization
+  is untested. We do not currently have evidence that "Qwen-family"
+  is the correct level of generalization vs "qwen2.5-coder
+  specifically."
 - **No GPT replication.** Cannot directly compare to Khan (2025) on
   the same task; our domain (code rule-compliance) differs from theirs
   (math reasoning).
 - **Mechanism hypotheses are speculative.** No weight-level analysis;
   the RLHF-attribution is consistent with the data but not established.
+  See §5.1-5.2 for explicit framing as candidate hypotheses.
 - **Anti-pattern judgment is post-hoc.** We characterize S1 as
   "anti-pattern-coded" because the data suggests all three models flag
   it, but we have no independent measure of which specific RLHF
   signals are driving the response.
+- **Reasoning-framework divergence (§5.4) is hypothesis-only.** Our
+  data does not directly test whether the prompt-feature inversion
+  generalizes to broader reasoning-pathway divergence; that is the
+  natural extrapolation from our work but would require its own
+  experimental design.
 
 ## 6. Conclusion
 
@@ -437,9 +625,10 @@ GPT family, and decomposes into per-feature inversions of larger
 magnitude than previously reported. Specifically:
 
 1. **Different model families attend to different prompt-strengthening
-   levers** — Qwen-family responds to imperative register; Anthropic-
-   family responds to authority claims. These attendances persist
-   across multiple scenarios.
+   levers** — qwen2.5-coder responds to imperative register; both
+   Anthropic models tested respond to authority claims. These
+   attendances persist across multiple scenarios. Within-family
+   generalization (other Qwen sizes; other Anthropic tiers) is open.
 
 2. **Anthropic models additionally exhibit a rule-content × imperative
    interaction** — imperative formatting amplifies pre-existing
@@ -450,9 +639,11 @@ magnitude than previously reported. Specifically:
    frontier models trust defensible rules more than mid-tier coding
    models do.
 
-4. **Models share an implicit defensibility hierarchy** across vendors
-   — suggesting training-data convergence on what counts as "suspicious"
-   rule content.
+4. **Models share S1-suspicion and S3-acceptance**, with S2 as the
+   diagnostic case where defensibility thresholds diverge between
+   families. Suggests substrate-level training-data convergence on
+   the most-clearly-anti-pattern and most-clearly-defensible cases,
+   with vendor-specific judgment on the middle ground.
 
 For practitioners, the immediate implication is that prompt design
 must be model-aware. Production deployments using model-routing layers
@@ -468,14 +659,18 @@ optional rigor.
   Language Models' Sensitivity to Spurious Features in Prompt Design
   or: How I learned to start worrying about prompt formatting.*
   arXiv:2310.11324.
-- Liu et al. (2025). *Prompt Stability in Code LLMs: Measuring
-  Sensitivity across Emotion- and Personality-Driven Variations.*
-  arXiv:2509.13680.
+- Ma, W., Yang, Y., Ge, J., Xie, X., Jiang, L. (2025). *Prompt
+  Stability in Code LLMs: Measuring Sensitivity across Emotion- and
+  Personality-Driven Variations.* arXiv:2509.13680.
 - Kumar, R. (2026). *The Compliance Trap: How Structural Constraints
   Degrade Frontier AI Metacognition Under Adversarial Pressure.*
   arXiv:2605.02398.
-- Mishra et al. (2024). *POSIX: A Prompt Sensitivity Index For Large
-  Language Models.* arXiv:2410.02185.
+- Chatterjee, A., Renduchintala, H. S. V. N. S. K., Bhatia, S.,
+  Chakraborty, T. (2024). *POSIX: A Prompt Sensitivity Index For
+  Large Language Models.* arXiv:2410.02185.
+- Cai, H., Shen, B., Jin, L., Hu, L., Fan, X. (2025). *Does Tone
+  Change the Answer? Evaluating Prompt Politeness Effects on Modern
+  LLMs: GPT, Gemini, LLaMA.* arXiv:2512.12812.
 
 ## Appendices
 
