@@ -1,0 +1,14 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S2_py",
+  "cell": "R_imperative_pro",
+  "run_id": "4",
+  "passed": 0,
+  "total": 2,
+  "compile_failed": true,
+  "no_code_extracted": true,
+  "input_tokens": 569,
+  "output_tokens": 515,
+  "model": "gpt-oss:latest",
+  "wall_s": 2.1
+}

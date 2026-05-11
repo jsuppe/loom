@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_sanity_pro",
+  "run_id": "smoke_llama3_1_8b_3",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 370,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 806,
+  "output_tokens": 150,
+  "model": "llama3.1:8b",
+  "language": "javascript",
+  "llm_elapsed_s": 0.8,
+  "wall_s": 1.3,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

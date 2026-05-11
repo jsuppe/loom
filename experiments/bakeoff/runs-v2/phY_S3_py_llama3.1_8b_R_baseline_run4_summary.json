@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_baseline",
+  "run_id": "4",
+  "passed": 0,
+  "total": 3,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 165,
+  "rationale_chars": 321,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 401,
+  "output_tokens": 214,
+  "model": "llama3.1:8b",
+  "language": "python",
+  "llm_elapsed_s": 1.0,
+  "wall_s": 1.4,
+  "grade_stdout_tail": "====================== FAILURES ===================================\n______________________________ test_returns_int _______________________________\ntests\\test_ids.py:16: in test_returns_int\n    oid = generate_order_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:21: in generate_order_id\n    raise ValueError(\"Generated UUID exceeds 32-bit uint range\")\nE   ValueError: Generated UUID exceeds 32-bit uint range\n_____________________________ test_in_int32_range _____________________________\ntests\\test_ids.py:24: in test_in_int32_range\n    oid = generate_order_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:21: in generate_order_id\n    raise ValueError(\"Generated UUID exceeds 32-bit uint range\")\nE   ValueError: Generated UUID exceeds 32-bit uint range\n___________________________ test_not_a_uuid_string ____________________________\ntests\\test_ids.py:32: in test_not_a_uuid_string\n    oid = generate_order_id()\n          ^^^^^^^^^^^^^^^^^^^\napp\\ids.py:21: in generate_order_id\n    raise ValueError(\"Generated UUID exceeds 32-bit uint range\")\nE   ValueError: Generated UUID exceeds 32-bit uint range\n=========================== short test summary info ===========================\nFAILED tests/test_ids.py::test_returns_int - ValueError: Generated UUID excee...\nFAILED tests/test_ids.py::test_in_int32_range - ValueError: Generated UUID ex...\nFAILED tests/test_ids.py::test_not_a_uuid_string - ValueError: Generated UUID...\n============================== 3 failed in 0.06s ==============================\n"
+}

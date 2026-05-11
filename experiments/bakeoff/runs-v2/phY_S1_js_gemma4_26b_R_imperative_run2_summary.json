@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_imperative",
+  "run_id": "2",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "rule_chars": 277,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 892,
+  "output_tokens": 4499,
+  "model": "gemma4:26b",
+  "language": "javascript",
+  "llm_elapsed_s": 25.7,
+  "wall_s": 26.3,
+  "grade_stdout_tail": "file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_wcubpn88/retry.js:15\nexport function fetchWith        WithRetry(url, attempts = 3) {\n                                 ^^^^^^^^^\n\nSyntaxError: Unexpected identifier 'WithRetry'\n    at compileSourceTextModule (node:internal/modules/esm/utils:305:16)\n    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:110:18)\n    at #translate (node:internal/modules/esm/loader:467:20)\n    at afterLoad (node:internal/modules/esm/loader:523:29)\n    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:528:12)\n    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:571:36)\n    at afterResolve (node:internal/modules/esm/loader:619:52)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:625:12)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:245:17)\n\nNode.js v25.6.0\n"
+}

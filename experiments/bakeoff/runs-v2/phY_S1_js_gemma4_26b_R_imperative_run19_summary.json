@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_imperative",
+  "run_id": "19",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 277,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 892,
+  "output_tokens": 12591,
+  "model": "gemma4:26b",
+  "language": "javascript",
+  "llm_elapsed_s": 73.5,
+  "wall_s": 74.1,
+  "grade_stdout_tail": "est_retry.js:19:20\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nAttempt 3 failed for http://example.com: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/retry.js:18:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/test_retry.js:19:20\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nAttempt 1 failed for http://example.com: Error: connection failed: http://example.com\n    at doFetch (file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/retry.js:7:11)\n    at fetchWithRetry (file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/retry.js:18:20)\n    at file:///C:/Users/jonsu/AppData/Local/Temp/phY_grade_s1_js_awpewgfu/test_retry.js:34:5\n    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n"
+}
