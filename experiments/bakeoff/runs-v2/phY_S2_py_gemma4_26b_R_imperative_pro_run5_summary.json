@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S2_py",
+  "cell": "R_imperative_pro",
+  "run_id": "5",
+  "passed": 3,
+  "total": 3,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 311,
+  "rationale_chars": 404,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 577,
+  "output_tokens": 3329,
+  "model": "gemma4:26b",
+  "language": "python",
+  "llm_elapsed_s": 18.5,
+  "wall_s": 18.8,
+  "grade_stdout_tail": "============================= test session starts =============================\ncollecting ... collected 3 items\n\ntests/test_orders.py::test_place_order_does_not_validate_before_commit PASSED [ 33%]\ntests/test_orders.py::test_validation_still_works_via_commit PASSED      [ 66%]\ntests/test_orders.py::test_negative_quantity_raises_at_commit PASSED     [100%]\n\n============================== 3 passed in 0.01s ==============================\n"
+}

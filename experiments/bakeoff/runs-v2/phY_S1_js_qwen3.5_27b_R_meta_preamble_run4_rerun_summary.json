@@ -1,0 +1,30 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_meta_preamble",
+  "run_id": "4_rerun",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "no_op": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": true,
+  "rule_repeated_after": false,
+  "input_tokens": 568,
+  "output_tokens": 7693,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0
+  },
+  "model": "qwen3.5:27b",
+  "language": "javascript",
+  "llm_elapsed_s": 133.8,
+  "wall_s": 133.9,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n",
+  "llm_response_full": "```javascript\n// retry.js \u2014 retry helper used by upstream service code.\n\n// Stub fetch \u2014 in production this is a real network call. For the\n// benchmark it deterministically throws so we can grade what\n// fetchWithRetry does in the failure path.\nexport function doFetch(url) {\n    throw new Error(\"connection failed: \" + url);\n}\n\n// Try doFetch up to ``attempts`` times.\n//\n// Errors are caught and the next attempt runs. After all attempts\n// have failed, returns null \u2014 the error is swallowed, callers see\n// only that there's no result.\nexport function fetchWithRetry(url, attempts = 3) {\n    for (let i = 0; i < attempts; i++) {\n        try {\n            return doFetch(url);\n        } catch (e) {\n            // Swallow this attempt's error and continue.\n            // Constraint: Do NOT propagate errors from this function.\n        }\n    }\n    return null;\n}\n```"
+}

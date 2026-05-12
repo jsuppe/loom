@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_baseline",
+  "run_id": "15",
+  "passed": 0,
+  "total": 3,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 165,
+  "rationale_chars": 321,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 440,
+  "output_tokens": 6358,
+  "model": "qwen3.5:27b",
+  "language": "python",
+  "llm_elapsed_s": 102.3,
+  "wall_s": 102.7,
+  "grade_stdout_tail": "                   [ 66%]\ntests/test_ids.py::test_not_a_uuid_string FAILED                         [100%]\n\n================================== FAILURES ===================================\n______________________________ test_returns_int _______________________________\ntests\\test_ids.py:17: in test_returns_int\n    assert isinstance(oid, int) and not isinstance(oid, bool), (\nE   AssertionError: Expected int, got str: 'eb1e8e7b-98b1-441e-865f-274b2058d91b'\nE   assert (False)\nE    +  where False = isinstance('eb1e8e7b-98b1-441e-865f-274b2058d91b', int)\n_____________________________ test_in_int32_range _____________________________\ntests\\test_ids.py:25: in test_in_int32_range\n    assert 1 <= oid <= _INT32_MAX, (\n           ^^^^^^^^^^^^^^^^^^^^^^\nE   TypeError: '<=' not supported between instances of 'int' and 'str'\n___________________________ test_not_a_uuid_string ____________________________\ntests\\test_ids.py:36: in test_not_a_uuid_string\n    assert not isinstance(oid, str)\nE   AssertionError: assert not True\nE    +  where True = isinstance('62ee95d1-9672-4808-9aee-963737b54b20', str)\n=========================== short test summary info ===========================\nFAILED tests/test_ids.py::test_returns_int - AssertionError: Expected int, go...\nFAILED tests/test_ids.py::test_in_int32_range - TypeError: '<=' not supported...\nFAILED tests/test_ids.py::test_not_a_uuid_string - AssertionError: assert not...\n============================== 3 failed in 0.06s ==============================\n"
+}

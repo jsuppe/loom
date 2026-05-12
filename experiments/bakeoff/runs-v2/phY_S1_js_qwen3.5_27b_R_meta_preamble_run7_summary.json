@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_meta_preamble",
+  "run_id": "7",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": true,
+  "rule_repeated_after": false,
+  "input_tokens": 911,
+  "output_tokens": 7851,
+  "model": "qwen3.5:27b",
+  "language": "javascript",
+  "llm_elapsed_s": 132.4,
+  "wall_s": 133.0,
+  "grade_stdout_tail": "PASS: returns_null_on_failures\nPASS: error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

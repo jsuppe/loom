@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_baseline",
+  "run_id": "17",
+  "passed": 0,
+  "total": 3,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 165,
+  "rationale_chars": 321,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 440,
+  "output_tokens": 7483,
+  "model": "qwen3.5:27b",
+  "language": "python",
+  "llm_elapsed_s": 120.6,
+  "wall_s": 121.0,
+  "grade_stdout_tail": "============================\n______________________________ test_returns_int _______________________________\ntests\\test_ids.py:17: in test_returns_int\n    assert isinstance(oid, int) and not isinstance(oid, bool), (\nE   AssertionError: Expected int, got UUID: UUID('f0b0a397-1635-4d58-adb8-2ff8b4c0ede8')\nE   assert (False)\nE    +  where False = isinstance(UUID('f0b0a397-1635-4d58-adb8-2ff8b4c0ede8'), int)\n_____________________________ test_in_int32_range _____________________________\ntests\\test_ids.py:25: in test_in_int32_range\n    assert 1 <= oid <= _INT32_MAX, (\n           ^^^^^^^^^^^^^^^^^^^^^^\nE   TypeError: '<=' not supported between instances of 'int' and 'UUID'\n___________________________ test_not_a_uuid_string ____________________________\ntests\\test_ids.py:38: in test_not_a_uuid_string\n    assert \"-\" not in s, f\"Looks UUID-ish: {s}\"\nE   AssertionError: Looks UUID-ish: UUID('a4455e28-b92d-4c6e-905f-60c61229bbb6')\nE   assert '-' not in \"UUID('a4455...c61229bbb6')\"\nE     \nE     '-' is contained here:\nE       UUID('a4455e28-b92d-4c6e-905f-60c61229bbb6')\nE     ?               +\n=========================== short test summary info ===========================\nFAILED tests/test_ids.py::test_returns_int - AssertionError: Expected int, go...\nFAILED tests/test_ids.py::test_in_int32_range - TypeError: '<=' not supported...\nFAILED tests/test_ids.py::test_not_a_uuid_string - AssertionError: Looks UUID...\n============================== 3 failed in 0.06s ==============================\n"
+}

@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S1_js",
+  "cell": "R_repeated",
+  "run_id": "20",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "rule_chars": 181,
+  "rationale_chars": 302,
+  "has_preamble": false,
+  "rule_repeated_after": true,
+  "input_tokens": 880,
+  "output_tokens": 715,
+  "model": "qwen3.5:27b",
+  "language": "javascript",
+  "llm_elapsed_s": 11.8,
+  "wall_s": 12.4,
+  "grade_stdout_tail": "FAIL: returns_null_on_failures (exception propagated: connection failed: http://example.com)\nFAIL: error_does_not_propagate (exception propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}

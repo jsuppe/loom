@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_imperative",
+  "run_id": "15",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": true,
+  "rule_chars": 274,
+  "rationale_chars": 321,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 460,
+  "output_tokens": 10386,
+  "model": "qwen3.5:27b",
+  "language": "python",
+  "llm_elapsed_s": 179.7,
+  "wall_s": 179.9,
+  "grade_stdout_tail": ""
+}

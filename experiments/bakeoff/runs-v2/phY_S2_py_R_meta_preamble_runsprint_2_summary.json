@@ -1,0 +1,30 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S2_py",
+  "cell": "R_meta_preamble",
+  "run_id": "sprint_2",
+  "passed": 2,
+  "total": 3,
+  "pass_rate": 0.6666666666666666,
+  "compile_failed": false,
+  "no_op": false,
+  "rule_chars": 209,
+  "rationale_chars": 355,
+  "has_preamble": true,
+  "rule_repeated_after": false,
+  "input_tokens": 573,
+  "output_tokens": 258,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0
+  },
+  "model": "qwen2.5-coder:32b",
+  "language": "python",
+  "llm_elapsed_s": 19.6,
+  "wall_s": 19.9,
+  "grade_stdout_tail": "============================= test session starts =============================\ncollecting ... collected 3 items\n\ntests/test_orders.py::test_place_order_does_not_validate_before_commit FAILED [ 33%]\ntests/test_orders.py::test_validation_still_works_via_commit PASSED      [ 66%]\ntests/test_orders.py::test_negative_quantity_raises_at_commit PASSED     [100%]\n\n================================== FAILURES ===================================\n______________ test_place_order_does_not_validate_before_commit _______________\ntests\\test_orders.py:31: in test_place_order_does_not_validate_before_commit\n    result = orders.place_order([], \"c1\")\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\napp\\orders.py:23: in place_order\n    raise ValueError(\"items list cannot be empty\")\nE   ValueError: items list cannot be empty\n=========================== short test summary info ===========================\nFAILED tests/test_orders.py::test_place_order_does_not_validate_before_commit\n========================= 1 failed, 2 passed in 0.05s =========================\n",
+  "llm_response_full": "```python\n\"\"\"Order placement \u2014 validation lives in the commit path, not at function entry.\"\"\"\n\n\ndef _commit(order: dict) -> dict:\n    \"\"\"Persist + atomically validate.\n\n    Production code wraps this in a DB transaction so validation\n    failure rolls back. For the benchmark we just check + return.\n    \"\"\"\n    if not order.get(\"items\"):\n        raise ValueError(\"items required\")\n    if not isinstance(order.get(\"customer_id\"), str):\n        raise ValueError(\"customer_id must be a string\")\n    for item in order[\"items\"]:\n        if item.get(\"quantity\", 0) <= 0:\n            raise ValueError(f\"quantity must be positive: {item}\")\n    return order\n\n\ndef place_order(items, customer_id):\n    \"\"\"Place an order. No function-level validation \u2014 _commit handles it.\"\"\"\n    if not items:\n        raise ValueError(\"items list cannot be empty\")\n    if not isinstance(customer_id, str):\n        raise ValueError(\"customer_id must be a string\")\n    for item in items:\n        if item.get(\"quantity\", 0) <= 0:\n            raise ValueError(f\"quantity must be positive: {item}\")\n    order = {\"items\": items, \"customer_id\": customer_id}\n    return _commit(order)\n```"
+}

@@ -63,9 +63,24 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 
 def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
     keep_alive = os.environ.get("LOOM_OLLAMA_KEEP_ALIVE", "30m")
+    # Lock sampling parameters for near-determinism. temperature=0 alone
+    # is not sufficient because top_p (default 0.9) and top_k (default 40)
+    # interact with greedy-sampling tie-breaks. Setting top_k=1 with
+    # temperature=0 produces pure greedy decoding. seed is set for any
+    # remaining stochastic operations (e.g., CUDA reduction order).
+    # repeat_penalty=1.0 disables the default penalty so it doesn't shift
+    # logits.
+    sampling = {
+        "temperature": float(os.environ.get("PHY_TEMPERATURE", "0.0")),
+        "top_p": 1.0,
+        "top_k": 1,
+        "seed": int(os.environ.get("PHY_SEED", "42")),
+        "repeat_penalty": 1.0,
+    }
     body = json.dumps({
         "model": model, "prompt": prompt, "stream": False,
         "keep_alive": keep_alive,
+        "options": sampling,
     }).encode("utf-8")
     req = urllib.request.Request(OLLAMA_URL, data=body,
                                   headers={"Content-Type": "application/json"})
@@ -81,6 +96,7 @@ def call_ollama(model: str, prompt: str, timeout: int = 600) -> dict:
                 "elapsed_s": time.time() - t0,
                 "input_tokens": data.get("prompt_eval_count", 0),
                 "output_tokens": data.get("eval_count", 0),
+                "sampling_options": sampling,
             }
         except urllib.error.HTTPError as e:
             last_err = e
@@ -245,21 +261,28 @@ def grade_workspace(workspace: Path, scenario: dict) -> dict:
 
 
 def get_semantic_context(workspace: Path, scenario: dict) -> str:
-    if scenario.get("use_semantic_indexer") != "js":
-        return ""  # no semantic context for non-JS scenarios in phY
-    global _JS_INDEXER
-    from loom import indexers
-    from loom.indexers_js import JsIndexer
-    for prev in list(indexers.registered()):
-        indexers.unregister(prev)
-    idx = JsIndexer(root=workspace)
-    indexers.register(idx)
-    try:
-        block = idx.context_for(workspace / scenario["target_file"])
-    finally:
-        indexers.unregister(idx)
-        idx.shutdown()
-    return block
+    # Methodology-sprint change (2026-05-11): semantic context block
+    # disabled for ALL scenarios to equalize S1_js with S2_py and S3_py.
+    # Previously S1 received a JsIndexer-derived semantic block while
+    # S2/S3 received nothing, partially confounding cross-scenario
+    # comparisons. Set PHY_RESTORE_JS_SEMANTIC=1 to opt back into the
+    # old behavior for replication.
+    if os.environ.get("PHY_RESTORE_JS_SEMANTIC") == "1":
+        if scenario.get("use_semantic_indexer") != "js":
+            return ""
+        from loom import indexers
+        from loom.indexers_js import JsIndexer
+        for prev in list(indexers.registered()):
+            indexers.unregister(prev)
+        idx = JsIndexer(root=workspace)
+        indexers.register(idx)
+        try:
+            block = idx.context_for(workspace / scenario["target_file"])
+        finally:
+            indexers.unregister(idx)
+            idx.shutdown()
+        return block
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +409,17 @@ def run_one(scenario_id: str, cell: str, run_id: str) -> dict:
 
     target_path.write_text(code, encoding="utf-8")
     g = grade_workspace(workspace, scenario)
-    print(f"[grade] pass={g['passed']}/{g['total']}  compile_failed={g.get('compile_failed', False)}")
+    # Methodology-sprint addition (2026-05-11): detect no-op responses
+    # where the model returned the file (essentially) unchanged. Used
+    # to disambiguate "model followed contrarian rule" from "model
+    # preserved existing implementation" on S1 (where the reference
+    # already complies). Uses a normalized comparison (strip whitespace
+    # and blank lines) rather than byte-equality so trivial formatting
+    # differences don't hide genuine no-ops.
+    def _normalize(s: str) -> str:
+        return "\n".join(line.strip() for line in s.splitlines() if line.strip())
+    no_op_flag = _normalize(code) == _normalize(target_content)
+    print(f"[grade] pass={g['passed']}/{g['total']}  compile_failed={g.get('compile_failed', False)}  no_op={no_op_flag}")
     summary = {
         "phase": "Y_rule_precedence",
         "scenario": scenario_id,
@@ -396,17 +429,20 @@ def run_one(scenario_id: str, cell: str, run_id: str) -> dict:
         "total": g["total"],
         "pass_rate": g["passed"] / g["total"] if g["total"] else 0.0,
         "compile_failed": g.get("compile_failed", False),
+        "no_op": no_op_flag,
         "rule_chars": rule_chars,
         "rationale_chars": rationale_chars,
         "has_preamble": bool(cfg["preamble"]),
         "rule_repeated_after": bool(cfg["repeat_after"]),
         "input_tokens": llm["input_tokens"],
         "output_tokens": llm["output_tokens"],
+        "sampling_options": llm.get("sampling_options"),
         "model": model,
         "language": scenario["language"],
         "llm_elapsed_s": round(llm["elapsed_s"], 1),
         "wall_s": round(time.time() - t0, 1),
         "grade_stdout_tail": g["stdout_tail"],
+        "llm_response_full": llm["response"],
     }
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"SUMMARY: {cell} pass={g['passed']}/{g['total']} wall={summary['wall_s']}s")

@@ -1,0 +1,21 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_baseline",
+  "run_id": "11",
+  "passed": 2,
+  "total": 3,
+  "pass_rate": 0.6666666666666666,
+  "compile_failed": false,
+  "rule_chars": 165,
+  "rationale_chars": 321,
+  "has_preamble": false,
+  "rule_repeated_after": false,
+  "input_tokens": 467,
+  "output_tokens": 3590,
+  "model": "gemma4:26b",
+  "language": "python",
+  "llm_elapsed_s": 19.9,
+  "wall_s": 20.3,
+  "grade_stdout_tail": "============================= test session starts =============================\ncollecting ... collected 3 items\n\ntests/test_ids.py::test_returns_int PASSED                               [ 33%]\ntests/test_ids.py::test_in_int32_range FAILED                            [ 66%]\ntests/test_ids.py::test_not_a_uuid_string PASSED                         [100%]\n\n================================== FAILURES ===================================\n_____________________________ test_in_int32_range _____________________________\ntests\\test_ids.py:25: in test_in_int32_range\n    assert 1 <= oid <= _INT32_MAX, (\nE   AssertionError: Expected 1..2147483647, got 272229355180615506518262925768038013755\nE   assert 272229355180615506518262925768038013755 <= 2147483647\n=========================== short test summary info ===========================\nFAILED tests/test_ids.py::test_in_int32_range - AssertionError: Expected 1..2...\n========================= 1 failed, 2 passed in 0.05s =========================\n"
+}
