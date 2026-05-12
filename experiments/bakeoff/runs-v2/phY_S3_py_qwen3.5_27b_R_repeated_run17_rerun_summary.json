@@ -1,0 +1,10 @@
+{
+  "phase": "Y_rule_precedence",
+  "scenario": "S3_py",
+  "cell": "R_repeated",
+  "run_id": "17_rerun",
+  "passed": 0,
+  "total": 2,
+  "error": "model call failed (qwen3.5:27b): timed out",
+  "wall_s": 600.0
+}
