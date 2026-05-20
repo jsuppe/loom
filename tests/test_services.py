@@ -1461,6 +1461,88 @@ class TestSync:
         assert not (Path(tmp_path) / "PROCESS-RULES.md").exists()
 
 
+class TestUnlink:
+    """Counterpart to TestLink — covers REQ-81a67c36 affordance."""
+
+    def test_no_impl_returns_unlinked_false_with_warning(self, store, tmp_path):
+        f = tmp_path / "ghost.py"
+        f.write_text("x = 1\n")
+        result = services.unlink(store, str(f))
+        assert result["unlinked"] is False
+        assert result["deleted"] is False
+        assert result["warnings"]
+
+    def test_whole_impl_unlink_removes_row(
+        self, store, fake_embedding, tmp_path,
+    ):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("def a(): pass\n")
+        link_result = services.link(store, str(f), req_ids=["REQ-a"])
+        impl_id = link_result["impl_id"]
+        assert store.get_implementation(impl_id) is not None
+
+        result = services.unlink(store, str(f))
+        assert result["unlinked"] is True
+        assert result["deleted"] is True
+        assert result["impl_id"] == impl_id
+        assert store.get_implementation(impl_id) is None
+
+    def test_per_req_unlink_keeps_others(
+        self, store, fake_embedding, tmp_path,
+    ):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        _mk_req(store, "REQ-b", "behavior", "b", fake_embedding)
+        f = tmp_path / "ab.py"
+        f.write_text("def ab(): pass\n")
+        link_result = services.link(
+            store, str(f), req_ids=["REQ-a", "REQ-b"],
+        )
+        impl_id = link_result["impl_id"]
+
+        result = services.unlink(store, str(f), req_id="REQ-a")
+        assert result["unlinked"] is True
+        assert result["deleted"] is False
+        remaining = [s["req_id"] for s in result["remaining_satisfies"]]
+        assert remaining == ["REQ-b"]
+        # Impl row still exists, with the shortened satisfies list.
+        impl = store.get_implementation(impl_id)
+        assert impl is not None
+        assert [s["req_id"] for s in impl.satisfies] == ["REQ-b"]
+
+    def test_per_req_unlink_deletes_when_last(
+        self, store, fake_embedding, tmp_path,
+    ):
+        # Last-req unlink on an impl with no specs/patterns → drop the row.
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("def a(): pass\n")
+        link_result = services.link(store, str(f), req_ids=["REQ-a"])
+        impl_id = link_result["impl_id"]
+
+        result = services.unlink(store, str(f), req_id="REQ-a")
+        assert result["unlinked"] is True
+        assert result["deleted"] is True
+        assert store.get_implementation(impl_id) is None
+
+    def test_unlink_unknown_req_returns_false_no_mutation(
+        self, store, fake_embedding, tmp_path,
+    ):
+        _mk_req(store, "REQ-a", "behavior", "a", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("def a(): pass\n")
+        link_result = services.link(store, str(f), req_ids=["REQ-a"])
+        impl_id = link_result["impl_id"]
+
+        result = services.unlink(store, str(f), req_id="REQ-ghost")
+        assert result["unlinked"] is False
+        assert result["deleted"] is False
+        # Impl untouched.
+        impl = store.get_implementation(impl_id)
+        assert impl is not None
+        assert [s["req_id"] for s in impl.satisfies] == ["REQ-a"]
+
+
 class TestSupersede:
     def test_unknown_req_raises(self, store):
         with pytest.raises(LookupError):
@@ -1478,9 +1560,42 @@ class TestSupersede:
         assert result["req_id"] == "REQ-x"
         assert result["value"] == "old way"
         assert result["affected_tests"] == []
+        assert result["affected_impls"] == []
         # Verify mutation persisted.
         req = store.get_requirement("REQ-x")
         assert req.superseded_at is not None
+
+    def test_supersede_lists_linked_impls(
+        self, store, fake_embedding, tmp_path,
+    ):
+        # REQ-51455681 closure: supersede should surface the impls that
+        # are now orphaned so the user has a punch list.
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "x.py"
+        f.write_text("def x(): pass\n")
+        services.link(store, str(f), req_ids=["REQ-x"])
+
+        result = services.supersede(store, "REQ-x")
+        assert len(result["affected_impls"]) == 1
+        impl_info = result["affected_impls"][0]
+        assert impl_info["file"] == str(f)
+        assert impl_info["satisfies_count"] == 1
+
+    def test_supersede_does_not_unlink(
+        self, store, fake_embedding, tmp_path,
+    ):
+        # REQ-51455681: deliberately no auto-unlink. The drift signal
+        # is the prompt; the user must act via `loom unlink`.
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "x.py"
+        f.write_text("def x(): pass\n")
+        link_result = services.link(store, str(f), req_ids=["REQ-x"])
+        impl_id = link_result["impl_id"]
+
+        services.supersede(store, "REQ-x")
+        # Impl row is still there — the user is supposed to decide
+        # whether to unlink, re-link, or leave for drift to surface.
+        assert store.get_implementation(impl_id) is not None
 
 
 class TestSetStatus:

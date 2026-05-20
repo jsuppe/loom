@@ -285,12 +285,36 @@ class TestImplementations:
             timestamp=datetime.now(timezone.utc).isoformat(),
             satisfies=[{"req_id": "REQ-001", "req_version": "v1"}]
         )
-        
+
         temp_store.add_implementation(impl, sample_embedding)
         impls = temp_store.get_implementations_for_requirement("REQ-001")
-        
+
         assert len(impls) == 1
         assert impls[0].id == "IMPL-001"
+
+    def test_delete_implementation_removes_row(
+        self, temp_store, sample_embedding,
+    ):
+        """REQ-81a67c36: delete_implementation drops the row."""
+        impl = Implementation(
+            id="IMPL-DEL",
+            file="src/dashboard.py",
+            lines="1-50",
+            content="def render_dashboard(): pass",
+            content_hash="abc123",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            satisfies=[{"req_id": "REQ-001", "req_version": "v1"}],
+        )
+        temp_store.add_implementation(impl, sample_embedding)
+        assert temp_store.get_implementation("IMPL-DEL") is not None
+
+        result = temp_store.delete_implementation("IMPL-DEL")
+        assert result is True
+        assert temp_store.get_implementation("IMPL-DEL") is None
+
+    def test_delete_implementation_missing_returns_false(self, temp_store):
+        """Deleting an impl that doesn't exist is a no-op, returns False."""
+        assert temp_store.delete_implementation("IMPL-GHOST") is False
 
 
 class TestDriftDetection:

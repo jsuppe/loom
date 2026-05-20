@@ -3068,6 +3068,148 @@ def link(
     }
 
 
+def unlink(
+    store: LoomStore,
+    file_path: str,
+    *,
+    lines: str | None = None,
+    req_id: str | None = None,
+) -> dict[str, Any]:
+    """Remove an implementation link or one of its req associations.
+
+    Counterpart to :func:`link`. Two modes:
+
+    * ``req_id is None`` — drop the entire Implementation row (all req,
+      spec, and pattern links go with it). Use when the file should no
+      longer be tracked at all.
+    * ``req_id`` given — remove that one requirement from the impl's
+      ``satisfies`` list, leaving the rest in place. If after removal
+      the impl has no remaining req/spec/pattern links, the impl row
+      is deleted too (an Implementation with nothing to satisfy is by
+      definition garbage).
+
+    Resolves the impl by ``(file_path, lines or "all")`` via
+    :func:`generate_impl_id` — the same key ``link()`` writes under.
+
+    Returns ``{unlinked, impl_id, file, lines, deleted,
+    remaining_satisfies, warnings}``. ``unlinked`` is True when at
+    least one link or row was removed; ``deleted`` is True when the
+    impl row itself was dropped (whole-impl unlink, or last-req unlink
+    on an impl with no specs/patterns). ``remaining_satisfies`` is
+    empty when ``deleted`` is True.
+
+    Returns ``{unlinked: False, warnings: [...]}`` (no raise) when the
+    impl doesn't exist or the requested req isn't in its satisfies
+    list — unlinking something that's already gone is not an error,
+    same shape ``link()`` uses for "nothing to do."
+    """
+    from .store import generate_impl_id
+
+    lines_key = lines or "all"
+    impl_id = generate_impl_id(file_path, lines_key)
+    impl = store.get_implementation(impl_id)
+
+    if impl is None:
+        return {
+            "unlinked": False,
+            "impl_id": impl_id,
+            "file": file_path,
+            "lines": lines_key,
+            "deleted": False,
+            "remaining_satisfies": [],
+            "warnings": [
+                f"no implementation found for {file_path} (lines={lines_key})",
+            ],
+        }
+
+    warnings: list[str] = []
+
+    # Whole-impl unlink: drop the row, done.
+    if req_id is None:
+        removed_req_ids = [s["req_id"] for s in (impl.satisfies or [])]
+        store.delete_implementation(impl_id)
+        for rid in removed_req_ids:
+            _record_event(
+                store, "implementation_unlinked",
+                file=file_path, lines=lines_key,
+                req_id=rid, impl_id=impl_id, mode="whole_impl",
+            )
+        return {
+            "unlinked": True,
+            "impl_id": impl_id,
+            "file": file_path,
+            "lines": lines_key,
+            "deleted": True,
+            "remaining_satisfies": [],
+            "warnings": warnings,
+        }
+
+    # Per-req unlink: filter the satisfies list, re-upsert if anything
+    # remains, else drop the row.
+    before = impl.satisfies or []
+    after = [s for s in before if s.get("req_id") != req_id]
+    if len(after) == len(before):
+        return {
+            "unlinked": False,
+            "impl_id": impl_id,
+            "file": file_path,
+            "lines": lines_key,
+            "deleted": False,
+            "remaining_satisfies": before,
+            "warnings": [
+                f"impl {impl_id} does not satisfy {req_id}",
+            ],
+        }
+
+    nothing_left = (
+        not after
+        and not (impl.satisfies_specs or [])
+        and not (impl.satisfies_patterns or [])
+    )
+
+    if nothing_left:
+        store.delete_implementation(impl_id)
+        _record_event(
+            store, "implementation_unlinked",
+            file=file_path, lines=lines_key,
+            req_id=req_id, impl_id=impl_id, mode="last_req",
+        )
+        return {
+            "unlinked": True,
+            "impl_id": impl_id,
+            "file": file_path,
+            "lines": lines_key,
+            "deleted": True,
+            "remaining_satisfies": [],
+            "warnings": warnings,
+        }
+
+    # Some links remain — rewrite the impl with the shortened
+    # satisfies list. The embedding doesn't depend on satisfies, so
+    # reuse what we already have to avoid a recompute round-trip.
+    impl.satisfies = after
+    existing = store.implementations.get(ids=[impl_id], include=["embeddings"])
+    embedding = existing["embeddings"][0] if existing.get("embeddings") else None
+    if embedding is None:
+        from .embedding import get_embedding
+        embedding = get_embedding(impl.content)
+    store.add_implementation(impl, embedding)
+    _record_event(
+        store, "implementation_unlinked",
+        file=file_path, lines=lines_key,
+        req_id=req_id, impl_id=impl_id, mode="partial",
+    )
+    return {
+        "unlinked": True,
+        "impl_id": impl_id,
+        "file": file_path,
+        "lines": lines_key,
+        "deleted": False,
+        "remaining_satisfies": after,
+        "warnings": warnings,
+    }
+
+
 VALID_STATUSES = (
     "pending", "in_progress", "implemented", "verified",
     "superseded", "archived",
@@ -3244,7 +3386,17 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
     """Mark a requirement as superseded.
 
     Returns:
-        {req_id, value, affected_tests: [test_id]}
+        {req_id, value, affected_tests: [test_id],
+         affected_impls: [{impl_id, file, lines, satisfies_count}]}
+
+    ``affected_impls`` lists every Implementation row that links to this
+    requirement at the moment of supersession. The supersede itself does
+    not auto-unlink them (REQ-51455681 dogfood finding: the workflow
+    deliberately keeps the orphan links so the ``superseded`` drift
+    signal fires; callers are expected to decide whether to ``unlink``
+    or re-``link`` to a successor). ``satisfies_count`` is the number of
+    other reqs the same impl satisfies — when it's 1, a per-req
+    ``unlink`` will delete the whole impl row.
 
     Raises:
         LookupError: req_id not found.
@@ -3259,6 +3411,21 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
     if req.superseded_at:
         raise ValueError(f"Already superseded at {req.superseded_at}")
 
+    # Capture impls BEFORE the supersede so we can surface them as the
+    # cleanup punch list. They stay linked after — the superseded drift
+    # signal is the point — but the caller (and CLI) gets the list so a
+    # user can act on it with `loom unlink`.
+    impls_before = store.get_implementations_for_requirement(req_id)
+    affected_impls = [
+        {
+            "impl_id": impl.id,
+            "file": impl.file,
+            "lines": impl.lines,
+            "satisfies_count": len(impl.satisfies or []),
+        }
+        for impl in impls_before
+    ]
+
     store.supersede_requirement(req_id)
 
     spec_store = TestSpecStore(store.data_dir)
@@ -3269,6 +3436,7 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
         "req_id": req_id,
         "value": req.value,
         "affected_tests": affected,
+        "affected_impls": affected_impls,
     }
 
 

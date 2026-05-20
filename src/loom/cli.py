@@ -434,6 +434,50 @@ def cmd_indexer_doctor(args):
     return 0 if data["ok"] else 1
 
 
+def cmd_unlink(args):
+    """Remove an implementation link.
+
+    With ``--req``, drops only that requirement from the impl's
+    satisfies list. Without, drops the whole Implementation row.
+    """
+    store = LoomStore(args.project)
+    req_id = getattr(args, "req", None)
+
+    try:
+        result = services.unlink(
+            store, args.file,
+            lines=getattr(args, "lines", None),
+            req_id=req_id,
+        )
+    except (LookupError, ValueError) as e:
+        print(str(e))
+        return 1
+
+    if not result["unlinked"]:
+        for w in result["warnings"]:
+            print(w)
+        return 1
+
+    target = f"{args.file}"
+    if result["lines"] and result["lines"] != "all":
+        target = f"{target}:{result['lines']}"
+    if result["deleted"]:
+        if req_id is None:
+            print(f"✓ unlinked {target} (impl row removed)")
+        else:
+            print(f"✓ unlinked {req_id} from {target} "
+                  f"(last link — impl row removed)")
+    else:
+        print(f"✓ unlinked {req_id} from {target}")
+        if result["remaining_satisfies"]:
+            print(f"   still satisfies: "
+                  f"{', '.join(s['req_id'] for s in result['remaining_satisfies'])}")
+
+    for w in result["warnings"]:
+        print(f"   warning: {w}")
+    return 0
+
+
 def cmd_link(args):
     """Link code to requirements and/or specifications."""
     store = LoomStore(args.project)
@@ -795,6 +839,35 @@ def cmd_supersede(args):
             print(f"  - {test_id}")
         print()
         print("Run `loom sync` to update TEST_SPEC.md")
+
+    # Surface impls still linked to the now-superseded req so the user
+    # has a clean cleanup punch list. Closes the workflow loop named in
+    # REQ-51455681. We deliberately do NOT auto-unlink — the user may
+    # want to re-link to a successor instead, and the `superseded` drift
+    # signal still has value as a review prompt until that decision is
+    # made.
+    affected_impls = result.get("affected_impls") or []
+    if affected_impls:
+        print()
+        print(f"⚠️  Implementations still linked ({len(affected_impls)}):")
+        for impl in affected_impls:
+            lines_suffix = (
+                f":{impl['lines']}"
+                if impl.get("lines") and impl["lines"] != "all"
+                else ""
+            )
+            extra = ""
+            if impl.get("satisfies_count", 0) > 1:
+                extra = f" (also satisfies {impl['satisfies_count'] - 1} other req(s))"
+            print(f"  - {impl['file']}{lines_suffix}{extra}")
+        print()
+        print("Each linked file will now report `superseded` drift on "
+              "`loom check`. To clear:")
+        print(f"  • `loom unlink <file> --req {args.req_id}` to drop the link")
+        print(f"  • `loom link <file> --req REQ-successor` to re-link to a "
+              "successor")
+        print("  • leave as-is to keep the drift signal visible until "
+              "you've decided")
 
     return 0
 
@@ -2635,6 +2708,18 @@ def main():
                              "regressed (M12.6). Without this flag, link_type "
                              "auto-selects from each req's kind.")
 
+    # unlink — counterpart to link; closes the supersession workflow loop
+    # surfaced by REQ-51455681 + REQ-81a67c36 dogfood findings.
+    p_unlink = sp("unlink", help="Remove an implementation link")
+    p_unlink.add_argument("file", help="File whose link should be removed")
+    p_unlink.add_argument("--lines",
+                          help="Line range (default: 'all', matching how the "
+                               "link was originally written)")
+    p_unlink.add_argument("--req",
+                          help="Drop only this requirement from the impl's "
+                               "satisfies list. Without --req, the whole "
+                               "Implementation row is removed.")
+
     # status
     p_status = sp("status", help="Show status")
     p_status.add_argument("--json", "-j", action="store_true", help="Output as JSON")
@@ -3144,6 +3229,7 @@ def main():
         "check": cmd_check,
         "context": cmd_context,
         "link": cmd_link,
+        "unlink": cmd_unlink,
         "status": cmd_status,
         "query": cmd_query,
         "list": cmd_list,

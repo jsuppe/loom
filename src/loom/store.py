@@ -198,6 +198,18 @@ class _SQLiteCollection:
             f"SELECT COUNT(*) FROM {self.table}"
         ).fetchone()[0]
 
+    def delete(self, ids: List[str]) -> int:
+        """Delete rows by id. Returns the number of rows actually removed."""
+        if not ids:
+            return 0
+        placeholders = ",".join("?" * len(ids))
+        cur = self.conn.execute(
+            f"DELETE FROM {self.table} WHERE id IN ({placeholders})",
+            ids,
+        )
+        self.conn.commit()
+        return cur.rowcount
+
 
 @dataclass
 class Requirement:
@@ -930,6 +942,20 @@ class LoomStore:
             documents=[impl.content]
         )
     
+    def delete_implementation(self, impl_id: str) -> bool:
+        """Remove an implementation row entirely. Returns True if a row
+        was deleted, False if no such impl existed.
+
+        Counterpart to ``add_implementation``. Use when an
+        implementation link is no longer correct (the requirement was
+        retired, the file was renamed, the link was a mistake). For
+        partial unlinking — removing just one req_id from an impl that
+        satisfies multiple reqs — use ``services.unlink`` which handles
+        the satisfies-list bookkeeping and only deletes the impl row
+        when nothing else points at it.
+        """
+        return self.implementations.delete([impl_id]) > 0
+
     def get_implementation(self, impl_id: str) -> Optional[Implementation]:
         """Get an implementation by ID."""
         result = self.implementations.get(ids=[impl_id], include=["metadatas"])
