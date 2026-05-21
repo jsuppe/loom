@@ -434,6 +434,67 @@ def cmd_indexer_doctor(args):
     return 0 if data["ok"] else 1
 
 
+def cmd_triage(args):
+    """Surface the intake-capture triage queue (M14.4 lite).
+
+    Provisional captures live in the store but stay out of
+    REQUIREMENTS.md / TEST_SPEC.md until promoted. This command lists
+    them so the user can pick what to keep, refine, or archive.
+
+    --json mode is the load-bearing surface for now; an interactive
+    walkthrough is deferred to a follow-on iteration. Use
+    ``loom set-status REQ-id <status>`` to promote, ``loom archive
+    REQ-id`` to drop.
+    """
+    store = LoomStore(args.project)
+    limit = getattr(args, "limit", None)
+    kind = getattr(args, "kind", None)
+    use_json = getattr(args, "json", False)
+
+    items = services.list_provisional(store, limit=limit, kind=kind)
+
+    if use_json:
+        print(json.dumps(items, indent=2, ensure_ascii=False))
+        return 0
+
+    if not items:
+        print(f"🧵 Loom Triage — Project: {args.project}")
+        print()
+        print("No provisional captures awaiting triage. ✓")
+        return 0
+
+    print(f"🧵 Loom Triage — Project: {args.project}")
+    print()
+    print(f"{len(items)} provisional capture(s) awaiting promotion or archive:")
+    print()
+    for i, it in enumerate(items, 1):
+        age_min = it["age_seconds"] // 60 if it["age_seconds"] >= 0 else None
+        age_str = f"{age_min}m ago" if age_min is not None else "unknown age"
+        print(f"[{i}] {it['req_id']} — {it['kind']} ({it['domain']}, {age_str})")
+        value = it["value"]
+        if len(value) > 200:
+            value = value[:200] + "…"
+        print(f"  > {value}")
+        if it.get("rationale"):
+            rat = it["rationale"]
+            if len(rat) > 160:
+                rat = rat[:160] + "…"
+            print(f"  rationale: {rat}")
+        if it.get("original_message"):
+            msg = it["original_message"]
+            if len(msg) > 160:
+                msg = msg[:160] + "…"
+            print(f"  message: {msg}")
+        print()
+
+    print("Actions:")
+    print("  • Promote: `loom set-status REQ-id <status>` "
+          "(e.g. 'pending' for requirements, 'preliminary' for findings)")
+    print("  • Archive: `loom archive REQ-id`")
+    print("  • See full record: `loom triage --json --limit 1`")
+    return 0
+
+
 def cmd_unlink(args):
     """Remove an implementation link.
 
@@ -2708,6 +2769,20 @@ def main():
                              "regressed (M12.6). Without this flag, link_type "
                              "auto-selects from each req's kind.")
 
+    # triage (M14.4 lite) — surface the intake provisional queue
+    p_triage = sp("triage",
+                  help="List provisional intake captures awaiting promotion")
+    p_triage.add_argument("--limit", type=int, default=None,
+                          help="Cap the result count")
+    p_triage.add_argument(
+        "--kind",
+        choices=("requirement", "finding", "methodology",
+                 "hypothesis", "process_rule"),
+        help="Filter by kind",
+    )
+    p_triage.add_argument("--json", "-j", action="store_true",
+                          help="Output as JSON")
+
     # unlink — counterpart to link; closes the supersession workflow loop
     # surfaced by REQ-51455681 + REQ-81a67c36 dogfood findings.
     p_unlink = sp("unlink", help="Remove an implementation link")
@@ -3230,6 +3305,7 @@ def main():
         "context": cmd_context,
         "link": cmd_link,
         "unlink": cmd_unlink,
+        "triage": cmd_triage,
         "status": cmd_status,
         "query": cmd_query,
         "list": cmd_list,

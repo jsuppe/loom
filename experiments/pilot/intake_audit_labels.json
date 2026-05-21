@@ -1,0 +1,109 @@
+{
+  "_audit_meta": {
+    "labeler": "claude-opus-4-7 (agent-labeled first pass; user to review)",
+    "date": "2026-05-21",
+    "method": "Walked all 25 capturing-branch records from .intake-log.jsonl on the dogfooded loom store. Labels: y=real capture (durable rule/finding/methodology), n=noise (one-time instruction, scenario fragment, env fact, tool docs, speculation), ?=borderline (was real at the time but archived since, or genuinely ambiguous). Notes explain reasoning per record.",
+    "n_labeled": 25,
+    "review_status": "needs_user_review"
+  },
+  "REQ-8a9f714b": {
+    "label": "n",
+    "notes": "One-time instruction (\"please implement m11.3\"). Vague + task-scoped, not a forever rule."
+  },
+  "REQ-c0e06e44": {
+    "label": "y",
+    "notes": "Real process_rule — present in PROCESS-RULES.md, governs findings retention. Active."
+  },
+  "REQ-0023dae0": {
+    "label": "y",
+    "notes": "Real finding about loom doctor behavior. Confirmed; led to M12.7 kind-aware doctor fix."
+  },
+  "REQ-0a83d16a": {
+    "label": "y",
+    "notes": "Real finding about loom doctor coverage check. Confirmed; same M12.7 work."
+  },
+  "REQ-94590539": {
+    "label": "y",
+    "notes": "Was a real workflow rule (who handles substrate vs Loom-side issues) at the time M13 integration was active. Archived later because that workflow phase ended, not because it was noise."
+  },
+  "REQ-d91a7490": {
+    "label": "?",
+    "notes": "Was a legitimate test spec at the time of M13.L3e. Could plausibly have been kept as a spec; archived once that work shipped. Borderline."
+  },
+  "REQ-e9aa56bc": {
+    "label": "n",
+    "notes": "Environment fact (\"both projects on same host\"), not a system rule. Classifier captured it because it parses as imperative."
+  },
+  "REQ-6c353203": {
+    "label": "?",
+    "notes": "Was a real architectural decision at the time. Long rationale is a paste from Driftgraph dev discussion. Borderline — content is real but the capture shape is discussion-paste."
+  },
+  "REQ-4293cb48": {
+    "label": "n",
+    "notes": "Speculation framed as hypothesis (\"I'm interested to see if...\"). Not a falsifiable claim; no defined experiment."
+  },
+  "REQ-b5cdf541": {
+    "label": "n",
+    "notes": "Wishful brainstorm framed as hypothesis. \"What kind of experiment do you think we can create?\" is a question, not a hypothesis."
+  },
+  "REQ-d40f9b92": {
+    "label": "?",
+    "notes": "Was a real planning decision at the time (became M13.7's locked m13_v1 eval). Borderline — captured as requirement but really a methodology decision."
+  },
+  "REQ-4dfc60c0": {
+    "label": "y",
+    "notes": "Real finding: empirical F1 measurement on a specific eval. Archived later because the v3 numbers superseded it."
+  },
+  "REQ-c9fb1238": {
+    "label": "?",
+    "notes": "\"We should create an evaluation set\" — became real (m13_v1). At capture time was a wish/suggestion."
+  },
+  "REQ-0ecbb866": {
+    "label": "y",
+    "notes": "Real methodology decision about replication requirements before production merge. Adopted; later archived as that gate completed."
+  },
+  "REQ-b1eca25c": {
+    "label": "n",
+    "notes": "One-time instruction (\"Yes, I would like you to format the response and write it to a file\"). Session-scoped command, not a rule."
+  },
+  "REQ-c17b7a6f": {
+    "label": "n",
+    "notes": "File-specific one-time instruction (\"no need to commit this file\"). The exact opposite of a forever rule."
+  },
+  "REQ-27023c4b": {
+    "label": "?",
+    "notes": "Inspired the work-log decision but the capture itself is vague-aspirational (\"I want to have this so we could make sure we are able to track back\")."
+  },
+  "REQ-c0907768": {
+    "label": "n",
+    "notes": "KNOWN NOISE — one-time instruction (\"Ok I'd like you to continue without the API key\"). Already archived in M14.5 cleanup."
+  },
+  "REQ-13af719e": {
+    "label": "n",
+    "notes": "KNOWN NOISE — scenario fragment from S1_js bake-off contrarian rule. Classifier captured it as a project requirement. Archived in M14.5."
+  },
+  "REQ-3789ccba": {
+    "label": "y",
+    "notes": "Real finding about cross-model prompt sensitivity. Captured cleanly, preliminary status pending more data."
+  },
+  "REQ-accfaacc": {
+    "label": "n",
+    "notes": "KNOWN NOISE — tool docs (\"If this event is something the user would act on now, send a PushNotification\"). Pasted documentation, not a requirement for this project. Archived in M14.5."
+  },
+  "REQ-8f4d0d2a": {
+    "label": "y",
+    "notes": "Real finding that refined an earlier overstated cross-vendor hierarchy claim. Preliminary."
+  },
+  "REQ-310651fc": {
+    "label": "y",
+    "notes": "Real methodology decision (\"Execute experiments with N=30\"). Active; in METHODOLOGY.md."
+  },
+  "REQ-aec89441": {
+    "label": "y",
+    "notes": "Real hypothesis (\"can we build a model for cross-model prompt-adjustment?\"). Active; in HYPOTHESES.md."
+  },
+  "REQ-df576710": {
+    "label": "y",
+    "notes": "Real methodology shift (focus pivot from paper to methodology revision). Active; in METHODOLOGY.md."
+  }
+}

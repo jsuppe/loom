@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loom import services
+from loom.intake_filters import screen_message
 from loom.store import LoomStore
 
 
@@ -315,10 +316,32 @@ def _today_auto_link_count(store: LoomStore) -> int:
     return count
 
 
-def _record(store: LoomStore, rec: dict) -> None:
+_MESSAGE_LOG_MAX_CHARS = 500
+
+
+def _record(
+    store: LoomStore,
+    rec: dict,
+    *,
+    message: Optional[str] = None,
+) -> None:
     """Append a JSON record to the intake log. Best-effort; logging
-    must never break the intake path."""
+    must never break the intake path.
+
+    ``message`` is the original user message that triggered this
+    intake event; when provided it's stored on the record (truncated
+    to ``_MESSAGE_LOG_MAX_CHARS``) so M14 audits can correlate captures
+    back to the input that fooled or satisfied the classifier.
+    Backward-compatible: older records without this field still load
+    and aggregate correctly.
+    """
     rec.setdefault("ts", datetime.now(timezone.utc).isoformat())
+    if message is not None:
+        if len(message) > _MESSAGE_LOG_MAX_CHARS:
+            rec["message"] = message[:_MESSAGE_LOG_MAX_CHARS] + "…"
+            rec["message_truncated"] = True
+        else:
+            rec["message"] = message
     try:
         log = _intake_log_path(store)
         log.parent.mkdir(parents=True, exist_ok=True)
@@ -434,6 +457,13 @@ def process_message(
     classification = cls["output"]
     cls_latency = cls["latency_ms"]
 
+    # Bake `message` into every log record this call writes, so M14
+    # audits can correlate captures back to the input that triggered
+    # them. Closure over `message` keeps every call site uniform —
+    # nothing to forget at a new branch.
+    def record(rec: dict) -> None:
+        _record(store, rec, message=message)
+
     # Default outcome — overridden below per branch.
     outcome: dict[str, Any] = {
         "branch": "noop",
@@ -445,24 +475,25 @@ def process_message(
         "softener_triggered": False,
         "budget_exceeded": False,
         "domain_whitelist_blocked": False,
+        "filtered_reason": None,  # M14.2: set when the screen rejects
         "classifier_latency_ms": cls_latency,
     }
 
     # Not requirement-shaped, parse failure, or classifier error.
     if cls["error"]:
-        _record(store, {
+        record({
             "branch": "noop", "reason": "classifier_error",
             "error": cls["error"], "classifier_latency_ms": cls_latency,
         })
         return outcome
     if classification is None:
-        _record(store, {
+        record({
             "branch": "noop", "reason": "parse_failed",
             "classifier_latency_ms": cls_latency,
         })
         return outcome
     if not classification.get("is_requirement"):
-        _record(store, {
+        record({
             "branch": "noop", "reason": "not_requirement",
             "classifier_latency_ms": cls_latency,
         })
@@ -475,6 +506,38 @@ def process_message(
     if kind not in _VALID_KINDS:
         kind = "requirement"
     outcome["kind"] = kind
+
+    # M14.3 — when LOOM_INTAKE_PROVISIONAL=1, intake captures land in
+    # the universal "provisional" bucket instead of the per-kind
+    # default. Provisional reqs are excluded from REQUIREMENTS.md /
+    # TEST_SPEC.md until promoted with `loom set-status REQ-x
+    # <accepted-status>`. Opt-in for now (default off) — flip to
+    # default-on once the triage UX (M14.4 follow-on) is in place.
+    intake_status = (
+        "provisional"
+        if os.environ.get("LOOM_INTAKE_PROVISIONAL") == "1"
+        else None
+    )
+
+    # M14.2 — lexical screen for the noise modes the M11.5 P0
+    # calibration didn't cover: session-scoped instructions, pasted
+    # scenario/tool docs, speculation framed as hypothesis. Skips
+    # entirely for kind in {finding, methodology} (100% precision in
+    # the M14.1 audit). Opt-out via LOOM_INTAKE_SCREEN=0 for any
+    # downstream user who wants the pre-M14 behavior back.
+    if os.environ.get("LOOM_INTAKE_SCREEN", "1") != "0":
+        verdict, screen_reason = screen_message(message, classification)
+        if verdict == "skip":
+            outcome["branch"] = "noop"
+            outcome["filtered_reason"] = screen_reason
+            record({
+                "branch": "noop", "reason": "filtered",
+                "filter_reason": screen_reason,
+                "classifier_latency_ms": cls_latency,
+                "classifier_kind": kind,
+                "classifier_value": classification.get("value"),
+            })
+            return outcome
 
     # Guardrails before deciding the branch.
     softener = _has_softener(classification["value"])
@@ -503,7 +566,7 @@ def process_message(
             min_score=services.RATIONALE_LINK_MIN_SCORE,
         )
     except Exception as e:
-        _record(store, {
+        record({
             "branch": "noop", "reason": "find_related_failed",
             "error": str(e),
         })
@@ -524,7 +587,7 @@ def process_message(
         outcome["reminder"] = _format_reminder(
             "duplicate", {"req_id": predicted_id, "kind": kind},
         )
-        _record(store, {
+        record({
             "branch": "duplicate",
             "captured_req_id": predicted_id,
             "classifier_latency_ms": cls_latency,
@@ -568,6 +631,7 @@ def process_message(
                 msg_id=msg_id,
                 session=session,
                 kind=kind,
+                status=intake_status,
             )
         except ValueError as e:
             # Extract validation rejected — fall back to propose so
@@ -579,7 +643,7 @@ def process_message(
                 f"rejected it: {e}. Candidates:\n"
                 + _format_reminder("propose", payload).split("\n", 1)[1]
             )
-            _record(store, {
+            record({
                 "branch": "propose", "reason": "extract_rejected",
                 "error": str(e),
                 "classifier_latency_ms": cls_latency,
@@ -598,7 +662,7 @@ def process_message(
             "rationale_links": link_ids,
             "kind": kind,
         })
-        _record(store, {
+        record({
             "branch": "auto_link",
             "captured_req_id": result["req_id"],
             "rationale_links": link_ids,
@@ -623,7 +687,7 @@ def process_message(
         outcome["reminder"] = _format_reminder(
             "propose", {"candidates": candidates, "kind": kind},
         )
-        _record(store, {
+        record({
             "branch": "propose",
             "classifier_latency_ms": cls_latency,
             "candidates_top_score": candidates[0]["score"],
@@ -647,6 +711,7 @@ def process_message(
                 msg_id=msg_id,
                 session=session,
                 kind=kind,
+                status=intake_status,
             )
         except ValueError as e:
             outcome["branch"] = "noop"
@@ -654,7 +719,7 @@ def process_message(
                 f"Loom detected a {_kind_noun(kind)} but extract "
                 f"rejected it: {e}"
             )
-            _record(store, {
+            record({
                 "branch": "noop", "reason": "extract_rejected",
                 "error": str(e), "kind": kind,
             })
@@ -665,7 +730,7 @@ def process_message(
             "captured_with_rationale",
             {"req_id": result["req_id"], "kind": kind},
         )
-        _record(store, {
+        record({
             "branch": "captured_with_rationale",
             "captured_req_id": result["req_id"],
             "classifier_latency_ms": cls_latency,
@@ -678,7 +743,7 @@ def process_message(
 
     outcome["branch"] = "rationale_needed"
     outcome["reminder"] = _format_reminder("rationale_needed", {"kind": kind})
-    _record(store, {
+    record({
         "branch": "rationale_needed",
         "classifier_latency_ms": cls_latency,
         "candidates_top_score": None,

@@ -25,6 +25,7 @@ milestone 4.2 and mcp_server/README.md for the full plan.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -844,6 +845,27 @@ def doctor(store: LoomStore) -> dict[str, Any]:
             f"{drift_count} implementation(s) linked to superseded requirements"
         )
 
+    # M14.4 lite — surface the provisional backlog so users notice the
+    # triage queue without having to remember to check. Threshold is
+    # configurable via LOOM_PROVISIONAL_BACKLOG_WARN (default 10).
+    provisional = [
+        r for r in store.list_requirements(include_superseded=False)
+        if r.status == "provisional"
+    ]
+    provisional_count = len(provisional)
+    provisional_threshold = int(
+        os.environ.get("LOOM_PROVISIONAL_BACKLOG_WARN", "10")
+    )
+    checks["provisional"] = {
+        "count": provisional_count,
+        "threshold": provisional_threshold,
+    }
+    if provisional_count > provisional_threshold:
+        warnings.append(
+            f"{provisional_count} provisional intake captures awaiting triage "
+            f"(threshold {provisional_threshold}). Run `loom triage` to review."
+        )
+
     # 5. Test spec coverage (M12.7: scope to kind=requirement only —
     #    findings, methodology, hypothesis, process_rules don't have
     #    test specs in the same sense; counting them as "missing"
@@ -1227,6 +1249,7 @@ def extract(
     rationale: str | None = None,
     rationale_links: list[str] | None = None,
     kind: str = "requirement",
+    status: str | None = None,
 ) -> dict[str, Any]:
     """Add a single requirement.
 
@@ -1281,8 +1304,19 @@ def extract(
     # M12.2b: when rationale IS provided, use the kind-appropriate
     # default ("preliminary" for findings, "proposed" for hypotheses /
     # methodology / process_rule, "pending" for requirements).
+    # M14.3: callers (notably the intake hook under
+    # LOOM_INTAKE_PROVISIONAL=1) may force status= directly — that
+    # overrides both the rationale-needed and per-kind-default paths.
     has_rationale_source = bool(rationale) or bool(cleaned_links)
-    if has_rationale_source:
+    if status is not None:
+        valid = valid_statuses_for(kind)
+        if status not in valid:
+            raise ValueError(
+                f"Invalid status {status!r} for kind {kind!r}. "
+                f"Valid: {', '.join(valid)}"
+            )
+        initial_status = status
+    elif has_rationale_source:
         initial_status = DEFAULT_STATUS_BY_KIND.get(kind, "pending")
     else:
         initial_status = "rationale_needed"
@@ -3214,6 +3248,7 @@ VALID_STATUSES = (
     "pending", "in_progress", "implemented", "verified",
     "superseded", "archived",
     "rationale_needed",  # M11.1: visible debt for reqs without rationale or links
+    "provisional",       # M14.3: captured by intake, awaiting promotion; hidden from docs
 )
 
 # M12.1: orthogonal to status. Tells you what *kind* of captured
@@ -3239,27 +3274,28 @@ VALID_KINDS = (
 #                 (proposed → testing → confirmed | falsified)
 #   process_rule: workflow-rule lifecycle
 #                 (proposed → active → deprecated)
-# Three states are universal across all kinds:
+# Four states are universal across all kinds:
 #   superseded         — replaced by a later capture (M0)
 #   archived           — soft-deleted, recoverable (M2.3)
 #   rationale_needed   — visible debt for missing rationale (M11.1)
+#   provisional        — captured by intake, awaiting promotion (M14.3)
 VALID_STATUSES_BY_KIND: dict[str, tuple[str, ...]] = {
     "requirement": VALID_STATUSES,
     "finding": (
         "preliminary", "confirmed", "falsified", "refined",
-        "superseded", "archived", "rationale_needed",
+        "superseded", "archived", "rationale_needed", "provisional",
     ),
     "methodology": (
         "proposed", "adopted", "deprecated",
-        "superseded", "archived", "rationale_needed",
+        "superseded", "archived", "rationale_needed", "provisional",
     ),
     "hypothesis": (
         "proposed", "testing", "confirmed", "falsified",
-        "superseded", "archived", "rationale_needed",
+        "superseded", "archived", "rationale_needed", "provisional",
     ),
     "process_rule": (
         "proposed", "active", "deprecated",
-        "superseded", "archived", "rationale_needed",
+        "superseded", "archived", "rationale_needed", "provisional",
     ),
 }
 
@@ -3357,9 +3393,12 @@ def sync(
     # per-kind file (e.g. an archived hypothesis produces an empty
     # HYPOTHESES.md). store.list_requirements only filters by
     # superseded_at, not by status=='archived'.
+    # M14.3: same fix for "provisional" — a kind whose only entries
+    # are provisional intake captures shouldn't get its own per-kind
+    # file emitted.
     all_reqs = [
         r for r in store.list_requirements(include_superseded=False)
-        if r.status != "archived"
+        if r.status not in ("archived", "provisional")
     ]
     kinds_present = {r.kind for r in all_reqs}
     kind_paths: dict[str, str] = {}
@@ -3659,6 +3698,99 @@ def stale(
         })
 
     out.sort(key=lambda r: r["last_referenced"] or r["timestamp"])
+    return out
+
+
+def list_provisional(
+    store: LoomStore,
+    *,
+    limit: int | None = None,
+    kind: str | None = None,
+) -> list[dict[str, Any]]:
+    """Surface the intake-capture triage queue (M14.4 lite).
+
+    Provisional requirements are intake-captured items waiting for the
+    user to either promote to the per-kind default status (via
+    ``loom set-status REQ-id <status>``) or archive (via
+    ``loom archive REQ-id``). They live in the store but are hidden
+    from REQUIREMENTS.md / TEST_SPEC.md until promoted (M14.3).
+
+    Each entry includes the captured req's value/rationale plus the
+    original triggering message from ``.intake-log.jsonl`` (when the
+    record was written after the M14.1 logging change). Records from
+    before that change carry ``original_message=None``.
+
+    Returns most-recent-first. Optional ``kind`` filter narrows to a
+    single typological kind; ``limit`` caps the result count.
+
+    Result shape::
+
+        [{req_id, kind, domain, value, status, rationale,
+          rationale_links, timestamp, original_message,
+          intake_branch, intake_kind, classifier_latency_ms,
+          age_seconds}, ...]
+    """
+    from datetime import datetime, timezone
+
+    # Build an index of intake-log records keyed by captured_req_id so
+    # we can attach context to each provisional. Best-effort — a
+    # missing or unreadable log doesn't break the listing.
+    log_index: dict[str, dict[str, Any]] = {}
+    try:
+        from .intake import _intake_log_path
+        log_path = _intake_log_path(store)
+        if log_path.exists():
+            import json as _json
+            for raw in log_path.read_text(encoding="utf-8").splitlines():
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    rec = _json.loads(raw)
+                except _json.JSONDecodeError:
+                    continue
+                rid = rec.get("captured_req_id")
+                if rid:
+                    # Last write wins — captures the most-recent log
+                    # entry for that req (re-captures with same id are
+                    # rare but possible).
+                    log_index[rid] = rec
+    except OSError:
+        pass
+
+    now = datetime.now(timezone.utc)
+    out: list[dict[str, Any]] = []
+    for req in store.list_requirements(include_superseded=False):
+        if req.status != "provisional":
+            continue
+        if kind is not None and req.kind != kind:
+            continue
+        try:
+            ts = datetime.fromisoformat(req.timestamp.replace("Z", "+00:00"))
+            age = int((now - ts).total_seconds())
+        except (ValueError, AttributeError):
+            age = -1
+        rec = log_index.get(req.id, {})
+        out.append({
+            "req_id": req.id,
+            "kind": req.kind,
+            "domain": req.domain,
+            "value": req.value,
+            "status": req.status,
+            "rationale": req.rationale,
+            "rationale_links": req.rationale_links or [],
+            "timestamp": req.timestamp,
+            "age_seconds": age,
+            # Intake-log enrichment (None when no log record found):
+            "original_message": rec.get("message"),
+            "intake_branch": rec.get("branch"),
+            "intake_kind": rec.get("kind"),
+            "classifier_latency_ms": rec.get("classifier_latency_ms"),
+        })
+    # Most-recent first.
+    out.sort(key=lambda r: r["timestamp"], reverse=True)
+    if limit is not None:
+        out = out[:limit]
     return out
 
 

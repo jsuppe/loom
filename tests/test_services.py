@@ -1460,6 +1460,178 @@ class TestSync:
         from pathlib import Path
         assert not (Path(tmp_path) / "PROCESS-RULES.md").exists()
 
+    def test_provisional_hidden_from_requirements_doc(
+        self, store, tmp_path,
+    ):
+        # M14.3: provisional captures live in the store but stay out
+        # of the published REQUIREMENTS.md.
+        services.extract(
+            store, domain="behavior", value="real requirement", rationale="r",
+        )
+        services.extract(
+            store, domain="behavior", value="provisional one", rationale="r",
+            status="provisional",
+        )
+        services.sync(store, str(tmp_path))
+        from pathlib import Path
+        content = (Path(tmp_path) / "REQUIREMENTS.md").read_text(encoding="utf-8")
+        assert "real requirement" in content
+        assert "provisional one" not in content
+
+    def test_provisional_only_kind_does_not_get_per_kind_doc(
+        self, store, tmp_path,
+    ):
+        # M14.3: a kind whose only entries are provisional should NOT
+        # produce a per-kind file (same shape as the M12.7c
+        # archived-only-kind fix).
+        services.extract(
+            store, domain="experimental", value="provisional finding",
+            rationale="r", kind="finding", status="provisional",
+        )
+        result = services.sync(store, str(tmp_path))
+        assert "finding" not in result["kind_paths"]
+        from pathlib import Path
+        assert not (Path(tmp_path) / "FINDINGS.md").exists()
+
+
+class TestListProvisional:
+    """M14.4 lite — services.list_provisional surfaces the triage queue."""
+
+    def test_empty_store_returns_empty(self, store):
+        assert services.list_provisional(store) == []
+
+    def test_only_provisional_reqs_returned(self, store):
+        # Mix: one provisional, one normal. Only the provisional shows.
+        services.extract(
+            store, domain="behavior", value="real one", rationale="r",
+        )
+        prov = services.extract(
+            store, domain="behavior", value="provisional one", rationale="r",
+            status="provisional",
+        )
+        items = services.list_provisional(store)
+        assert len(items) == 1
+        assert items[0]["req_id"] == prov["req_id"]
+        assert items[0]["status"] == "provisional"
+
+    def test_kind_filter(self, store):
+        services.extract(
+            store, domain="behavior", value="req prov", rationale="r",
+            status="provisional",
+        )
+        services.extract(
+            store, domain="experimental", value="finding prov", rationale="r",
+            kind="finding", status="provisional",
+        )
+        only_req = services.list_provisional(store, kind="requirement")
+        only_find = services.list_provisional(store, kind="finding")
+        assert len(only_req) == 1
+        assert only_req[0]["kind"] == "requirement"
+        assert len(only_find) == 1
+        assert only_find[0]["kind"] == "finding"
+
+    def test_limit_caps_result(self, store):
+        for i in range(5):
+            services.extract(
+                store, domain="behavior", value=f"prov {i}", rationale="r",
+                status="provisional",
+            )
+        items = services.list_provisional(store, limit=2)
+        assert len(items) == 2
+
+    def test_ordered_most_recent_first(self, store):
+        import time
+        services.extract(
+            store, domain="behavior", value="older", rationale="r",
+            status="provisional",
+        )
+        # Sleep so the second extract gets a later timestamp.
+        time.sleep(0.01)
+        services.extract(
+            store, domain="behavior", value="newer", rationale="r",
+            status="provisional",
+        )
+        items = services.list_provisional(store)
+        assert items[0]["value"] == "newer"
+        assert items[1]["value"] == "older"
+
+
+class TestDoctorProvisionalWarning:
+    """M14.4 lite — doctor warns on a large provisional backlog."""
+
+    def test_no_warning_when_under_threshold(self, store, monkeypatch):
+        monkeypatch.setenv("LOOM_PROVISIONAL_BACKLOG_WARN", "10")
+        for i in range(3):
+            services.extract(
+                store, domain="behavior", value=f"prov {i}", rationale="r",
+                status="provisional",
+            )
+        result = services.doctor(store)
+        assert result["checks"]["provisional"]["count"] == 3
+        assert not any("provisional" in w.lower() for w in result["warnings"])
+
+    def test_warning_fires_when_over_threshold(self, store, monkeypatch):
+        monkeypatch.setenv("LOOM_PROVISIONAL_BACKLOG_WARN", "2")
+        for i in range(5):
+            services.extract(
+                store, domain="behavior", value=f"prov {i}", rationale="r",
+                status="provisional",
+            )
+        result = services.doctor(store)
+        assert result["checks"]["provisional"]["count"] == 5
+        assert result["checks"]["provisional"]["threshold"] == 2
+        assert any(
+            "provisional" in w.lower() and "triage" in w.lower()
+            for w in result["warnings"]
+        )
+
+
+class TestExtractStatusKwarg:
+    """M14.3 — services.extract accepts an explicit status."""
+
+    def test_explicit_status_overrides_default(self, store):
+        result = services.extract(
+            store, domain="behavior", value="x", rationale="r",
+            status="provisional",
+        )
+        req = store.get_requirement(result["req_id"])
+        assert req.status == "provisional"
+
+    def test_explicit_status_overrides_rationale_needed(self, store):
+        # Without rationale, the default is "rationale_needed". An
+        # explicit status= argument should override that too.
+        result = services.extract(
+            store, domain="behavior", value="x",
+            status="provisional",
+        )
+        req = store.get_requirement(result["req_id"])
+        assert req.status == "provisional"
+
+    def test_invalid_status_for_kind_raises(self, store):
+        # "in_progress" is requirement-only; not in the finding enum.
+        with pytest.raises(ValueError, match="status"):
+            services.extract(
+                store, domain="experimental", value="x", rationale="r",
+                kind="finding", status="in_progress",
+            )
+
+    def test_provisional_valid_for_all_kinds(self, store):
+        for kind, domain in [
+            ("requirement", "behavior"),
+            ("finding", "experimental"),
+            ("methodology", "experimental"),
+            ("hypothesis", "experimental"),
+            ("process_rule", "operational"),
+        ]:
+            result = services.extract(
+                store, domain=domain, value=f"x-{kind}", rationale="r",
+                kind=kind, status="provisional",
+            )
+            req = store.get_requirement(result["req_id"])
+            assert req.status == "provisional", (
+                f"kind={kind} should accept provisional"
+            )
+
 
 class TestUnlink:
     """Counterpart to TestLink — covers REQ-81a67c36 affordance."""

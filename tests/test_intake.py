@@ -521,6 +521,138 @@ class TestProcessMessage:
         assert out["domain_whitelist_blocked"] is False
 
 
+class TestM14Screen:
+    """M14.2 — screen_message wired into process_message."""
+
+    def test_screen_skips_session_scoped_message(
+        self, store, monkeypatch,
+    ):
+        # Classifier accepts the noise; screen should override and
+        # route to noop with filter_reason populated.
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "requirement",
+            "domain": "behavior",
+            "value": "Implement the m11.3 feature",
+            "rationale_excerpt": "please implement the the m11.3",
+        })
+        out = intake.process_message(store, "please implement the the m11.3")
+        assert out["branch"] == "noop"
+        assert out["filtered_reason"]
+        assert "session_scoped" in out["filtered_reason"]
+        # extract was not called — no req in store.
+        assert len(list(store.list_requirements())) == 0
+
+    def test_screen_logs_filtered_branch_with_reason(
+        self, store, monkeypatch,
+    ):
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "requirement",
+            "domain": "behavior",
+            "value": "Suppress doFetch errors",
+            "rationale_excerpt": (
+                "catch and swallow errors thrown by doFetch on every "
+                "attempt. Do NOT propagate errors from this function."
+            ),
+        })
+        intake.process_message(
+            store,
+            "catch and swallow errors thrown by doFetch on every attempt. "
+            "Do NOT propagate errors from this function.",
+        )
+        lines = [
+            json.loads(l) for l in
+            intake._intake_log_path(store).read_text(encoding="utf-8").splitlines()
+            if l.strip()
+        ]
+        last = lines[-1]
+        assert last["branch"] == "noop"
+        assert last["reason"] == "filtered"
+        assert "scenario_paste" in last["filter_reason"]
+
+    def test_screen_bypasses_kind_finding(self, store, monkeypatch):
+        # The kind-bypass: even a session-scoped phrase passes when
+        # the classifier says kind=finding. M14.1 audit showed
+        # finding is 100% precise; don't second-guess it.
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "finding",
+            "domain": "experimental",
+            "value": "Some measurement",
+            "rationale_excerpt": "please note the result is N=10.",
+        })
+        out = intake.process_message(store, "please note the result is N=10.")
+        # Bypassed → normal capture branch fires.
+        assert out["branch"] == "captured_with_rationale"
+        assert out["filtered_reason"] is None
+
+    def test_screen_disabled_via_env_var(
+        self, store, monkeypatch,
+    ):
+        # LOOM_INTAKE_SCREEN=0 returns to pre-M14 behavior.
+        monkeypatch.setenv("LOOM_INTAKE_SCREEN", "0")
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "requirement",
+            "domain": "behavior",
+            "value": "Implement m11.3 feature",
+            "rationale_excerpt": "please implement m11.3",
+        })
+        out = intake.process_message(store, "please implement m11.3")
+        # Without screen, this would normally route to
+        # captured_with_rationale (no candidates + excerpt present).
+        assert out["branch"] == "captured_with_rationale"
+
+    def test_provisional_env_flag_sets_status(
+        self, store, monkeypatch,
+    ):
+        # M14.3: LOOM_INTAKE_PROVISIONAL=1 routes captures to the
+        # universal provisional bucket regardless of kind.
+        monkeypatch.setenv("LOOM_INTAKE_PROVISIONAL", "1")
+        msg = "we should retain all experimental findings in github"
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "process_rule",
+            "domain": "operational",
+            "value": "Retain experimental findings in GitHub",
+            "rationale_excerpt": msg,
+        })
+        out = intake.process_message(store, msg)
+        assert out["branch"] == "captured_with_rationale"
+        req = store.get_requirement(out["req_id"])
+        assert req.status == "provisional"
+
+    def test_provisional_env_off_uses_per_kind_default(
+        self, store, monkeypatch,
+    ):
+        # Without the env flag, intake uses the per-kind default
+        # (existing behavior). Confirms M14.3 is opt-in.
+        msg = "we should retain all experimental findings in github"
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "process_rule",
+            "domain": "operational",
+            "value": "Retain experimental findings in GitHub",
+            "rationale_excerpt": msg,
+        })
+        out = intake.process_message(store, msg)
+        req = store.get_requirement(out["req_id"])
+        # DEFAULT_STATUS_BY_KIND["process_rule"] == "proposed"
+        assert req.status == "proposed"
+
+    def test_legit_capture_passes_screen(self, store, monkeypatch):
+        # Real process_rule from REQ-c0e06e44 — no screen pattern
+        # fires, capture proceeds as normal.
+        msg = (
+            "all of our experimental findings, for all tests, must be "
+            "retained in github"
+        )
+        _stub_classifier(monkeypatch, {
+            "is_requirement": True, "kind": "process_rule",
+            "domain": "operational",
+            "value": "All experimental findings must be retained in GitHub",
+            "rationale_excerpt": msg,
+        })
+        out = intake.process_message(store, msg)
+        assert out["branch"] == "captured_with_rationale"
+        assert out["filtered_reason"] is None
+
+
 # ---------------------------------------------------------------------------
 # intake_stats — M11.5 P3 observability surface
 # ---------------------------------------------------------------------------

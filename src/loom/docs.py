@@ -190,9 +190,13 @@ def generate_requirements_doc(
     # through. The doc generator must surface neither — archived items
     # would otherwise show up as "Active <kind>: N+1" with the archived
     # one rendered as if active.
+    # M14.3: also hide "provisional" — intake-captured items waiting
+    # for the user to promote them via `loom set-status`. They live
+    # in the store (visible to `loom triage` / `loom doctor`) but
+    # don't pollute the published REQUIREMENTS.md.
     reqs = [
         r for r in all_reqs
-        if r.kind == kind and r.status != "archived"
+        if r.kind == kind and r.status not in ("archived", "provisional")
     ]
     superseded_all = [
         r for r in store.list_requirements(include_superseded=True)
@@ -367,7 +371,8 @@ def generate_test_spec_doc(store: LoomStore, output_dir: Path, specs: Dict[str, 
     private_ids = private_ids or set()
     reqs = store.list_requirements(include_superseded=False)
     # M12.7b: same archived-leak fix as generate_requirements_doc.
-    reqs = [r for r in reqs if r.status != "archived"]
+    # M14.3: also hide provisional captures (awaiting promotion).
+    reqs = [r for r in reqs if r.status not in ("archived", "provisional")]
     specs = specs or {}
 
     if public_mode:
