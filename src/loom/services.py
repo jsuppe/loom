@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .paths import normalize_file_path
 from .store import LoomStore
 
 EVENTS_FILENAME = ".loom-events.jsonl"
@@ -324,22 +325,23 @@ def trace(store: LoomStore, target: str) -> dict[str, Any]:
             ),
         }
 
-    # File-path branch. Resolve to absolute so we match regardless of how
-    # the caller spelled the path, matching cmd_trace's original behavior.
+    # File-path branch. M17.1: normalize before lookup so abs/rel/
+    # mixed-slash inputs all hit the same stored row. Resolve first
+    # so "does this file exist?" is correct regardless of cwd, then
+    # canonicalize to the relative form the store holds.
     filepath = Path(target).resolve()
     if not filepath.exists():
         raise LookupError(f"File not found: {target}")
 
-    # Same O(matches) treatment as services.context — use Chroma's `where`
-    # filter on `file` instead of scanning every impl. See that function
-    # for the trade-off around relative-stored paths.
-    resolved_str = str(filepath)
+    stored_path = normalize_file_path(filepath)
     metadatas = store.implementations.get(
-        where={"file": resolved_str}, include=["metadatas"],
+        where={"file": stored_path}, include=["metadatas"],
     ).get("metadatas", [])
-    if not metadatas and resolved_str != target:
+    # Pre-M17.1 stores may still hold absolute paths; fall back to
+    # the resolved-absolute form so this works during/after migration.
+    if not metadatas:
         metadatas = store.implementations.get(
-            where={"file": target}, include=["metadatas"],
+            where={"file": str(filepath)}, include=["metadatas"],
         ).get("metadatas", [])
 
     file_impls = []
@@ -1527,15 +1529,31 @@ def check(
     from .store import generate_impl_id
 
     # Resolve early so a missing file fails fast (without a stray read).
-    if not __import__("pathlib").Path(file_path).exists():
+    fs_path = Path(file_path)
+    if not fs_path.exists():
         raise LookupError(f"File not found: {file_path}")
 
-    impl_id = generate_impl_id(file_path, lines or "all")
+    # M17.1 — canonicalize for ID lookup. Stored impls were created
+    # with the same normalization, so absolute/relative/mixed-slash
+    # inputs all resolve to the same impl_id. Falls back to the raw
+    # absolute string so pre-migration stores (or tests that
+    # constructed impls directly with non-normalized paths) still
+    # resolve.
+    stored_path = normalize_file_path(fs_path)
+    impl_id = generate_impl_id(stored_path, lines or "all")
     impl = store.get_implementation(impl_id)
+    if impl is None:
+        fallback_id = generate_impl_id(str(fs_path), lines or "all")
+        if fallback_id != impl_id:
+            fallback = store.get_implementation(fallback_id)
+            if fallback is not None:
+                impl = fallback
+                impl_id = fallback_id
+                stored_path = fallback.file
 
     if not impl:
         return {
-            "file": file_path,
+            "file": stored_path,
             "lines": lines,
             "linked": False,
             "drift_detected": False,
@@ -1584,18 +1602,18 @@ def check(
     if drift_found:
         _record_event(
             store, "drift_detected",
-            file=file_path, lines=lines,
+            file=stored_path, lines=lines,
             req_ids=[r["req_id"] for r in results if r["drifted"]],
             signals=[k for k, v in drift_signals.items() if v],
         )
     else:
         _record_event(
             store, "check_clean",
-            file=file_path, lines=lines,
+            file=stored_path, lines=lines,
         )
 
     return {
-        "file": file_path,
+        "file": stored_path,
         "lines": lines,
         "linked": True,
         "drift_detected": drift_found,
@@ -1694,19 +1712,16 @@ def context(store: LoomStore, file_path: str) -> dict[str, Any]:
     if not filepath.exists():
         raise LookupError(f"File not found: {file_path}")
 
-    # Query by exact string match on both the resolved absolute path and
-    # the caller's original spelling. Impls stored with relative paths
-    # whose resolved form happens to match `filepath` won't be found —
-    # that's an accepted trade to keep this O(matches) instead of O(N).
-    # Callers that need bulletproof path matching should store absolute
-    # paths at link time (spec_link already does; link should too).
-    resolved_str = str(filepath)
+    # M17.1 — query by the canonical stored form (POSIX-relative when
+    # inside the project root). Falls back to the resolved-absolute
+    # string so pre-migration stores still work during the transition.
+    stored_path = normalize_file_path(filepath)
     metadatas = store.implementations.get(
-        where={"file": resolved_str}, include=["metadatas"],
+        where={"file": stored_path}, include=["metadatas"],
     ).get("metadatas", [])
-    if not metadatas and resolved_str != file_path:
+    if not metadatas:
         metadatas = store.implementations.get(
-            where={"file": file_path}, include=["metadatas"],
+            where={"file": str(filepath)}, include=["metadatas"],
         ).get("metadatas", [])
 
     req_entries: dict[str, dict[str, Any]] = {}
@@ -2970,7 +2985,11 @@ def link(
         raise ValueError("link() requires either file_path or symbol=")
 
     content = _read_file_content(file_path, lines)
-    impl_id = generate_impl_id(file_path, lines or "all")
+    # M17.1 — normalize for storage + ID. Read uses the original
+    # path (filesystem-resolvable from cwd); storage uses the
+    # POSIX-relative form so the impl row round-trips across machines.
+    stored_path = normalize_file_path(file_path)
+    impl_id = generate_impl_id(stored_path, lines or "all")
     content_hash = generate_content_hash(content)
 
     # M12.6 — validate explicit link_type up front. Auto-detect (None)
@@ -3062,7 +3081,7 @@ def link(
 
     impl = Implementation(
         id=impl_id,
-        file=file_path,
+        file=stored_path,
         lines=lines or "all",
         content=content,
         content_hash=content_hash,
@@ -3086,7 +3105,7 @@ def link(
     for s in satisfies:
         _record_event(
             store, "implementation_linked",
-            file=file_path, lines=lines or "all",
+            file=stored_path, lines=lines or "all",
             req_id=s["req_id"], impl_id=impl_id,
             link_type=s.get("link_type", "satisfies"),
         )
@@ -3094,7 +3113,7 @@ def link(
     return {
         "linked": True,
         "impl_id": impl_id,
-        "file": file_path,
+        "file": stored_path,
         "lines": lines or "all",
         "satisfies": satisfies,
         "satisfies_specs": satisfies_specs,
@@ -3140,19 +3159,35 @@ def unlink(
     from .store import generate_impl_id
 
     lines_key = lines or "all"
-    impl_id = generate_impl_id(file_path, lines_key)
+    # M17.1 — same normalization as link/check so abs/rel/mixed-slash
+    # all resolve to the same impl_id. If the file doesn't exist on
+    # disk anymore (deleted impl cleanup), normalize_file_path still
+    # works on a non-existent path — Path.resolve() doesn't require
+    # existence. Fallback to the raw absolute form preserves
+    # backward compat with pre-migration impls.
+    stored_path = normalize_file_path(file_path)
+    impl_id = generate_impl_id(stored_path, lines_key)
     impl = store.get_implementation(impl_id)
+    if impl is None:
+        from pathlib import Path as _Path
+        fallback_id = generate_impl_id(str(_Path(file_path).resolve()), lines_key)
+        if fallback_id != impl_id:
+            fallback = store.get_implementation(fallback_id)
+            if fallback is not None:
+                impl = fallback
+                impl_id = fallback_id
+                stored_path = fallback.file
 
     if impl is None:
         return {
             "unlinked": False,
             "impl_id": impl_id,
-            "file": file_path,
+            "file": stored_path,
             "lines": lines_key,
             "deleted": False,
             "remaining_satisfies": [],
             "warnings": [
-                f"no implementation found for {file_path} (lines={lines_key})",
+                f"no implementation found for {stored_path} (lines={lines_key})",
             ],
         }
 
@@ -3165,13 +3200,13 @@ def unlink(
         for rid in removed_req_ids:
             _record_event(
                 store, "implementation_unlinked",
-                file=file_path, lines=lines_key,
+                file=stored_path, lines=lines_key,
                 req_id=rid, impl_id=impl_id, mode="whole_impl",
             )
         return {
             "unlinked": True,
             "impl_id": impl_id,
-            "file": file_path,
+            "file": stored_path,
             "lines": lines_key,
             "deleted": True,
             "remaining_satisfies": [],
@@ -3186,7 +3221,7 @@ def unlink(
         return {
             "unlinked": False,
             "impl_id": impl_id,
-            "file": file_path,
+            "file": stored_path,
             "lines": lines_key,
             "deleted": False,
             "remaining_satisfies": before,
@@ -3205,13 +3240,13 @@ def unlink(
         store.delete_implementation(impl_id)
         _record_event(
             store, "implementation_unlinked",
-            file=file_path, lines=lines_key,
+            file=stored_path, lines=lines_key,
             req_id=req_id, impl_id=impl_id, mode="last_req",
         )
         return {
             "unlinked": True,
             "impl_id": impl_id,
-            "file": file_path,
+            "file": stored_path,
             "lines": lines_key,
             "deleted": True,
             "remaining_satisfies": [],
@@ -3230,13 +3265,13 @@ def unlink(
     store.add_implementation(impl, embedding)
     _record_event(
         store, "implementation_unlinked",
-        file=file_path, lines=lines_key,
+        file=stored_path, lines=lines_key,
         req_id=req_id, impl_id=impl_id, mode="partial",
     )
     return {
         "unlinked": True,
         "impl_id": impl_id,
-        "file": file_path,
+        "file": stored_path,
         "lines": lines_key,
         "deleted": False,
         "remaining_satisfies": after,
@@ -4086,7 +4121,10 @@ def spec_link(
         start, end = (int(x) for x in lines.split("-"))
         content = "\n".join(content.splitlines()[start - 1:end])
 
-    impl_id = generate_impl_id(str(filepath), lines_str)
+    # M17.1 — same normalization as link() so spec_link impls round-trip
+    # across machines too.
+    stored_path = normalize_file_path(filepath)
+    impl_id = generate_impl_id(stored_path, lines_str)
     existing = store.get_implementation(impl_id)
 
     if existing:
@@ -4095,7 +4133,7 @@ def spec_link(
             "impl_id": impl_id,
             "spec_id": spec_id,
             "parent_req": spec.parent_req,
-            "file": str(filepath),
+            "file": stored_path,
             "lines": lines_str,
             "reused": True,
             "already_linked": already_linked,
@@ -4103,7 +4141,7 @@ def spec_link(
 
     impl = Implementation(
         id=impl_id,
-        file=str(filepath),
+        file=stored_path,
         lines=lines_str,
         content=content,
         content_hash=generate_content_hash(content),
@@ -4117,7 +4155,7 @@ def spec_link(
         "impl_id": impl_id,
         "spec_id": spec_id,
         "parent_req": spec.parent_req,
-        "file": str(filepath),
+        "file": stored_path,
         "lines": lines_str,
         "reused": False,
         "already_linked": False,

@@ -1360,14 +1360,18 @@ class TestLink:
         # an Implementation directly with a satisfies entry that
         # omits link_type — services.check / trace must default to
         # "satisfies" rather than crashing or returning None.
+        # M17.1: also use normalize_file_path so the test impl_id
+        # matches what services.check now generates on lookup.
         from loom.store import Implementation, generate_content_hash, generate_impl_id
+        from loom.paths import normalize_file_path
         _mk_req(store, "REQ-old", "behavior", "old", fake_embedding)
         f = tmp_path / "legacy.py"
         content = "legacy = True\n"
         f.write_text(content)
+        stored = normalize_file_path(f)
         impl = Implementation(
-            id=generate_impl_id(str(f), "all"),
-            file=str(f),
+            id=generate_impl_id(stored, "all"),
+            file=stored,
             lines="all",
             content=content,
             content_hash=generate_content_hash(content),
@@ -1633,6 +1637,92 @@ class TestExtractStatusKwarg:
             )
 
 
+class TestM17PathNormalization:
+    """M17.1 — abs/rel/mixed-slash inputs all hit the same impl row."""
+
+    def test_link_stores_relative_path(
+        self, store, fake_embedding, tmp_path, monkeypatch,
+    ):
+        # Make tmp_path look like a git project root.
+        (tmp_path / ".git").mkdir()
+        monkeypatch.chdir(tmp_path)
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        sub = tmp_path / "src" / "foo.py"
+        sub.parent.mkdir()
+        sub.write_text("pass\n")
+        # Link via absolute path.
+        result = services.link(store, str(sub), req_ids=["REQ-x"])
+        # Stored form should be POSIX-relative.
+        assert result["file"] == "src/foo.py"
+        impl = store.get_implementation(result["impl_id"])
+        assert impl.file == "src/foo.py"
+
+    def test_check_via_relative_finds_abs_link(
+        self, store, fake_embedding, tmp_path, monkeypatch,
+    ):
+        (tmp_path / ".git").mkdir()
+        monkeypatch.chdir(tmp_path)
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        # Link with absolute path.
+        services.link(store, str(f), req_ids=["REQ-x"])
+        # Check with relative path — should find the same impl.
+        data = services.check(store, "a.py")
+        assert data["linked"] is True
+        assert data["requirements"][0]["req_id"] == "REQ-x"
+
+    def test_check_via_abs_finds_rel_link(
+        self, store, fake_embedding, tmp_path, monkeypatch,
+    ):
+        (tmp_path / ".git").mkdir()
+        monkeypatch.chdir(tmp_path)
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        # Link with relative path (cwd is project root).
+        services.link(store, "a.py", req_ids=["REQ-x"])
+        # Check with absolute — same impl found.
+        data = services.check(store, str(f))
+        assert data["linked"] is True
+
+    def test_unlink_via_relative_drops_abs_link(
+        self, store, fake_embedding, tmp_path, monkeypatch,
+    ):
+        (tmp_path / ".git").mkdir()
+        monkeypatch.chdir(tmp_path)
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n")
+        link_result = services.link(store, str(f), req_ids=["REQ-x"])
+        impl_id = link_result["impl_id"]
+        result = services.unlink(store, "a.py")
+        assert result["unlinked"] is True
+        assert store.get_implementation(impl_id) is None
+
+    def test_path_outside_root_stored_absolute(
+        self, store, fake_embedding, tmp_path, monkeypatch,
+    ):
+        # File lives outside the "project root" — store as absolute
+        # (the rare cross-repo link case).
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        (proj / ".git").mkdir()
+        outside = tmp_path / "elsewhere" / "shared.py"
+        outside.parent.mkdir()
+        outside.write_text("pass\n")
+        monkeypatch.chdir(proj)
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.link(store, str(outside), req_ids=["REQ-x"])
+        # Should still be absolute (POSIX form). The relative path
+        # would have ".." which we avoid.
+        assert "/" in result["file"]
+        assert ".." not in result["file"]
+        # Look it up by the same absolute — round-trip.
+        data = services.check(store, str(outside))
+        assert data["linked"] is True
+
+
 class TestUnlink:
     """Counterpart to TestLink — covers REQ-81a67c36 affordance."""
 
@@ -1750,7 +1840,8 @@ class TestSupersede:
         result = services.supersede(store, "REQ-x")
         assert len(result["affected_impls"]) == 1
         impl_info = result["affected_impls"][0]
-        assert impl_info["file"] == str(f)
+        # M17.1: stored paths are POSIX-form.
+        assert impl_info["file"] == f.as_posix()
         assert impl_info["satisfies_count"] == 1
 
     def test_supersede_does_not_unlink(
@@ -3380,7 +3471,8 @@ class TestLinkSymbol:
             req_ids=["REQ-x"],
         )
         assert result["linked"] is True
-        assert result["file"] == str(f)
+        # M17.1: stored paths are POSIX-form, regardless of platform.
+        assert result["file"] == f.as_posix()
 
         impl = store.get_implementation(result["impl_id"])
         assert impl.symbol_ticket == "fake://app::commit"
