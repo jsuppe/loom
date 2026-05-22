@@ -1873,8 +1873,14 @@ class TestSetStatus:
 
     def test_valid_status_updates(self, store, fake_embedding):
         _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
-        result = services.set_status(store, "REQ-x", "implemented")
-        assert result == {"req_id": "REQ-x", "status": "implemented"}
+        # M15: set_status returns an extra `path` key (the fast-forward
+        # traversal). pending → implemented walks through in_progress.
+        result = services.set_status(
+            store, "REQ-x", "implemented", reason="test",
+        )
+        assert result["req_id"] == "REQ-x"
+        assert result["status"] == "implemented"
+        assert result["path"] == ["in_progress", "implemented"]
         assert store.get_requirement("REQ-x").status == "implemented"
 
     # ---- M12.2b: per-kind lifecycle states ----

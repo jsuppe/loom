@@ -847,6 +847,36 @@ def doctor(store: LoomStore) -> dict[str, Any]:
             f"{drift_count} implementation(s) linked to superseded requirements"
         )
 
+    # M15.3 — stale-pending kind=requirement alarm. Catches reqs that
+    # have been sitting at status=pending for >30 days with no linked
+    # implementations — usually a sign of triage debt (the M14.4
+    # triage flow couldn't promote them because they have no signal).
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc)
+    stale_pending = []
+    for r in store.list_requirements(include_superseded=False):
+        if r.kind != "requirement" or r.status != "pending":
+            continue
+        try:
+            _ts = datetime.fromisoformat(r.timestamp.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        if (_now - _ts).days <= 30:
+            continue
+        if store.get_implementations_for_requirement(r.id):
+            continue
+        stale_pending.append(r.id)
+    checks["stale_pending"] = {
+        "count": len(stale_pending),
+        "ids": stale_pending[:5],
+    }
+    if stale_pending:
+        warnings.append(
+            f"{len(stale_pending)} requirement(s) pending >30d with no "
+            f"linked code (M15.3). Run `loom set-status REQ-x archived "
+            "--reason \"...\"` or link them to active work."
+        )
+
     # M14.4 lite — surface the provisional backlog so users notice the
     # triage queue without having to remember to check. Threshold is
     # configurable via LOOM_PROVISIONAL_BACKLOG_WARN (default 10).
@@ -2572,6 +2602,39 @@ def metrics(
         elif days > 30:
             over30 += 1
 
+    # M15.3 — pending-age distribution per kind. Lets users see how
+    # long captures have been sitting at the per-kind default
+    # (`pending` for requirements, `proposed` for methodology, etc.).
+    # Anchor on `timestamp` (creation), not last_referenced — what we
+    # care about is "how long has this been pending."
+    initial_statuses = set(DEFAULT_STATUS_BY_KIND.values()) | {
+        "pending", "rationale_needed",
+    }
+    pending_age: dict[str, dict[str, Any]] = {}
+    for req in active:
+        if req.status not in initial_statuses:
+            continue
+        try:
+            ts = datetime.fromisoformat(req.timestamp.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        days = (now - ts).days
+        bucket = pending_age.setdefault(req.kind, {"ages": []})
+        bucket["ages"].append(days)
+    pending_age_out: dict[str, dict[str, Any]] = {}
+    for kind, b in pending_age.items():
+        ages = sorted(b["ages"])
+        n = len(ages)
+        p50 = ages[n // 2] if n else 0
+        p95 = ages[int(n * 0.95)] if n else 0
+        pending_age_out[kind] = {
+            "count": n,
+            "p50_days": p50,
+            "p95_days": p95,
+            "max_days": ages[-1] if ages else 0,
+            "count_over_30d": sum(1 for a in ages if a > 30),
+        }
+
     return {
         "since_days": since_days,
         "requirements": {
@@ -2609,6 +2672,8 @@ def metrics(
             "over_60d": over60,
             "over_90d": over90,
         },
+        # M15.3 — pending-age distribution per kind.
+        "pending_age": pending_age_out,
     }
 
 
@@ -3110,6 +3175,29 @@ def link(
             link_type=s.get("link_type", "satisfies"),
         )
 
+    # M15.2 — auto-advance hook: first link on a pending or
+    # rationale_needed kind=requirement bumps it to in_progress.
+    # Silently skips reqs already past in_progress, evidences-links
+    # (since evidences ARE the work-done indicator for findings, not
+    # a code-link), and non-requirement kinds.
+    for s in satisfies:
+        if s.get("link_type") == "evidences":
+            continue
+        req = store.get_requirement(s["req_id"])
+        if req is None or req.kind != "requirement":
+            continue
+        if req.status in ("pending", "rationale_needed"):
+            try:
+                set_status(
+                    store, s["req_id"], "in_progress",
+                    reason=f"auto: first link to {stored_path}",
+                    _trigger="link",
+                )
+            except (ValueError, LookupError):
+                # Auto-advance is best-effort. A failure here doesn't
+                # roll back the link itself.
+                pass
+
     return {
         "linked": True,
         "impl_id": impl_id,
@@ -3354,6 +3442,80 @@ def valid_statuses_for(kind: str) -> tuple[str, ...]:
     return VALID_STATUSES_BY_KIND.get(kind, VALID_STATUSES_BY_KIND["requirement"])
 
 
+# M15 — strict transition graph for kind=requirement only. Other kinds
+# (finding/methodology/hypothesis/process_rule) keep free set-status per
+# D2: their state models research-arc semantics, not code progression.
+# Edges are encoded as `from_state → {legal_to_states}`. Multi-hop
+# transitions get fast-forwarded by _fast_forward_path. See
+# docs/lifecycle.md for the full transition diagram.
+_REQ_TRANSITIONS: dict[str, set[str]] = {
+    "pending":          {"in_progress", "rationale_needed", "superseded", "archived"},
+    "rationale_needed": {"pending", "in_progress", "superseded", "archived"},
+    "in_progress":      {"pending", "implemented", "superseded", "archived"},
+    "implemented":      {"in_progress", "verified", "superseded", "archived"},
+    "verified":         {"implemented", "superseded", "archived"},
+    "archived":         {"pending"},  # M2.3 recovery path
+    "superseded":       set(),         # terminal
+    "provisional":      {"pending", "in_progress", "rationale_needed",
+                         "superseded", "archived"},  # M14.3 promotion
+}
+
+
+_REQ_TERMINAL_STATES = frozenset({"superseded", "archived"})
+
+
+def _fast_forward_path(from_status: str, to_status: str) -> list[str]:
+    """Return the BFS-shortest path of statuses from `from_status` to
+    `to_status` through the requirement transition graph. The
+    starting state is excluded; the target is included.
+
+    Returns ``[]`` when no path exists (target unreachable). A single-
+    hop transition returns a one-element list ``[to_status]``.
+
+    BFS excludes ``superseded`` and ``archived`` as intermediate
+    hops unless the target IS one of those: a regression from
+    ``verified`` to ``pending`` should walk the lifecycle chain
+    (verified→implemented→in_progress→pending), not detour through
+    archive. Direct moves to/from terminal states are still legal
+    via the universal-escape and archive-recovery edges.
+
+    Used by set_status for kind=requirement to record an event per
+    intermediate hop so the audit trail shows the actual traversal,
+    not just the start/end points.
+    """
+    if from_status == to_status:
+        return []
+    if from_status not in _REQ_TRANSITIONS:
+        return []
+    from collections import deque
+    visited: set[str] = {from_status}
+    queue: deque[tuple[str, list[str]]] = deque([(from_status, [])])
+    while queue:
+        node, path = queue.popleft()
+        for nxt in _REQ_TRANSITIONS.get(node, set()):
+            if nxt in visited:
+                continue
+            # Skip terminal states as intermediate hops — they should
+            # only ever be the endpoint, not a routing detour.
+            if nxt in _REQ_TERMINAL_STATES and nxt != to_status:
+                continue
+            new_path = path + [nxt]
+            if nxt == to_status:
+                return new_path
+            visited.add(nxt)
+            queue.append((nxt, new_path))
+    return []
+
+
+def _is_transition_legal(from_status: str, to_status: str) -> bool:
+    """True iff there's a path through _REQ_TRANSITIONS from
+    from_status to to_status (or they're equal — a no-op set-status
+    is always legal)."""
+    if from_status == to_status:
+        return True
+    return bool(_fast_forward_path(from_status, to_status))
+
+
 # M12.7 — per-kind valid domains. The doctor's domain consistency
 # check used to flag any domain outside the requirement-kind set
 # (behavior/ui/data/architecture/terminology) as "non-standard",
@@ -3514,7 +3676,14 @@ def supersede(store: LoomStore, req_id: str) -> dict[str, Any]:
     }
 
 
-def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
+def set_status(
+    store: LoomStore,
+    req_id: str,
+    status: str,
+    *,
+    reason: str | None = None,
+    _trigger: str = "manual",
+) -> dict[str, Any]:
     """Set a requirement's lifecycle status (M12.2b: per-kind enum).
 
     The valid status set depends on the requirement's `kind`
@@ -3524,27 +3693,80 @@ def set_status(store: LoomStore, req_id: str, status: str) -> dict[str, Any]:
     Three states are universal across all kinds: `superseded`,
     `archived`, `rationale_needed`.
 
-    Returns: {req_id, status}.
+    M15 — for ``kind == "requirement"`` the transition is validated
+    against ``_REQ_TRANSITIONS``. Multi-hop targets get fast-forwarded
+    (each intermediate hop recorded as its own ``status_changed``
+    event with the supplied ``reason``/``_trigger``). Unreachable
+    targets raise ``ValueError``. Other kinds keep free transitions
+    (the existing M12.2b behavior).
+
+    M15.4 — ``reason`` is soft-required for manual calls (emit
+    ``DeprecationWarning`` when missing). Auto-advance hooks pass
+    ``_trigger=`` instead, which suppresses the warning.
+
+    Returns: {req_id, status, path: [str]} — ``path`` lists every hop
+    applied (length 0 for a no-op, 1 for adjacent, >1 for fast-forward).
 
     Raises:
-        ValueError: status not valid for the req's kind.
+        ValueError: status not valid for the req's kind, OR target
+                    unreachable from current state (kind=requirement).
         LookupError: req_id not found.
     """
+    import warnings
+
     req = store.get_requirement(req_id)
     if req is None:
         raise LookupError(f"Requirement {req_id} not found")
+
     valid = valid_statuses_for(req.kind)
     if status not in valid:
         raise ValueError(
             f"Invalid status {status!r} for kind={req.kind!r}. "
             f"Valid: {', '.join(valid)}"
         )
-    # Bypass store.set_requirement_status's hard-coded enum (which
-    # only knows the requirement-kind statuses) and update directly.
-    # The validation above is the kind-aware check.
-    if store.update_requirement(req_id, {"status": status}) is None:
-        raise LookupError(f"Requirement {req_id} not found")
-    return {"req_id": req_id, "status": status}
+
+    # M15.4 — soft-warn on manual calls without a reason. Auto-advance
+    # hooks supply _trigger so they're exempt from the warning. Hard
+    # require in M15.next.
+    if _trigger == "manual" and reason is None:
+        warnings.warn(
+            "set_status without reason= is deprecated; will be "
+            "required in a future milestone (M15.next). Pass "
+            "reason=\"...\" to silence this warning.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+    current = req.status
+    if current == status:
+        # No-op — still legal, no event written.
+        return {"req_id": req_id, "status": status, "path": []}
+
+    # M15 — strict graph for kind=requirement.
+    if req.kind == "requirement":
+        path = _fast_forward_path(current, status)
+        if not path:
+            raise ValueError(
+                f"Cannot transition requirement {req_id} from "
+                f"{current!r} to {status!r}: no path in the lifecycle "
+                f"graph. See docs/lifecycle.md for legal edges."
+            )
+    else:
+        # Other kinds — single-hop, no graph enforcement.
+        path = [status]
+
+    prev = current
+    for hop in path:
+        if store.update_requirement(req_id, {"status": hop}) is None:
+            raise LookupError(f"Requirement {req_id} not found")
+        _record_event(
+            store, "status_changed",
+            req_id=req_id, from_status=prev, to_status=hop,
+            reason=reason, trigger=_trigger,
+        )
+        prev = hop
+
+    return {"req_id": req_id, "status": status, "path": path}
 
 
 def set_kind(store: LoomStore, req_id: str, kind: str) -> dict[str, Any]:
@@ -3734,6 +3956,133 @@ def stale(
 
     out.sort(key=lambda r: r["last_referenced"] or r["timestamp"])
     return out
+
+
+def verified_eligible(
+    store: LoomStore,
+    *,
+    days: int | None = None,
+) -> list[dict[str, Any]]:
+    """List kind=requirement entries eligible for promotion to
+    ``verified``. Eligibility: status == "implemented" AND no
+    ``drift_detected`` events on this req for the last ``days``.
+
+    Default window: ``LOOM_VERIFIED_STABLE_DAYS`` env var, falling
+    back to 14. Lazy — does not write any state; just reads the
+    events log + requirements.
+
+    Result shape (per req):
+        {req_id, value, kind, status, last_referenced,
+         days_stable, drift_events_in_window: int}
+
+    Implementation reads ``<data_dir>/.loom-events.jsonl`` rather
+    than scanning the entire requirements collection per call.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if days is None:
+        days = int(os.environ.get("LOOM_VERIFIED_STABLE_DAYS", "14"))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # Collect drift_detected events per req inside the window.
+    drift_by_req: dict[str, int] = {}
+    events_path = Path(store.data_dir) / ".loom-events.jsonl"
+    if events_path.exists():
+        import json as _json
+        for raw in events_path.read_text(encoding="utf-8").splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = _json.loads(raw)
+            except _json.JSONDecodeError:
+                continue
+            if rec.get("event") != "drift_detected":
+                continue
+            try:
+                ts = datetime.fromisoformat(
+                    rec.get("ts", "").replace("Z", "+00:00"),
+                )
+            except (ValueError, AttributeError):
+                continue
+            if ts < cutoff:
+                continue
+            for rid in rec.get("req_ids") or []:
+                drift_by_req[rid] = drift_by_req.get(rid, 0) + 1
+
+    eligible: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
+    for req in store.list_requirements(include_superseded=False):
+        if req.kind != "requirement":
+            continue
+        if req.status != "implemented":
+            continue
+        if drift_by_req.get(req.id, 0) > 0:
+            continue
+        # Compute days since last_referenced (proxy for "how long
+        # has this been quiet?"). Falls back to creation timestamp.
+        anchor_str = req.last_referenced or req.timestamp
+        try:
+            anchor = datetime.fromisoformat(
+                anchor_str.replace("Z", "+00:00"),
+            )
+            days_stable = (now - anchor).days
+        except (ValueError, AttributeError):
+            days_stable = -1
+        eligible.append({
+            "req_id": req.id,
+            "value": req.value,
+            "kind": req.kind,
+            "status": req.status,
+            "last_referenced": req.last_referenced,
+            "days_stable": days_stable,
+            "drift_events_in_window": 0,
+            "stable_threshold_days": days,
+        })
+    eligible.sort(key=lambda r: -r["days_stable"])
+    return eligible
+
+
+def verify_stable(
+    store: LoomStore,
+    *,
+    days: int | None = None,
+    apply: bool = False,
+) -> dict[str, Any]:
+    """Batch-promote ``implemented`` reqs to ``verified`` when they
+    have been drift-free for ``days`` (default 14, env-overridable).
+
+    Returns ``{eligible: [...], applied: int, days: int, dry_run: bool}``.
+    ``eligible`` is the same shape as ``verified_eligible``.
+
+    ``apply=False`` (the default) returns the candidates without
+    writing — same UX as the M17.1 migration script.
+
+    When ``apply=True``, each eligible req gets ``set_status`` called
+    with ``trigger="verify_stable"`` so the event log distinguishes
+    automated promotion from manual.
+    """
+    if days is None:
+        days = int(os.environ.get("LOOM_VERIFIED_STABLE_DAYS", "14"))
+    candidates = verified_eligible(store, days=days)
+    applied = 0
+    if apply:
+        for c in candidates:
+            try:
+                set_status(
+                    store, c["req_id"], "verified",
+                    reason=f"auto: drift-free for {c['days_stable']} days",
+                    _trigger="verify_stable",
+                )
+                applied += 1
+            except (ValueError, LookupError):
+                pass
+    return {
+        "eligible": candidates,
+        "applied": applied,
+        "days": days,
+        "dry_run": not apply,
+    }
 
 
 def list_provisional(
@@ -4332,7 +4681,8 @@ def test_add(
 
 
 def test_verify(store: LoomStore, req_id: str) -> dict[str, Any]:
-    """Mark a test as verified. Returns {req_id, last_verified}.
+    """Mark a test as verified. Returns {req_id, last_verified,
+    status_advanced: bool}.
 
     Raises:
         LookupError: no test spec for this req.
@@ -4343,7 +4693,32 @@ def test_verify(store: LoomStore, req_id: str) -> dict[str, Any]:
     if not spec_store.mark_verified(req_id):
         raise LookupError(f"No test spec found for {req_id}")
     spec = spec_store.get_spec(req_id)
-    return {"req_id": req_id, "last_verified": spec.last_verified}
+
+    # M15.2 — auto-advance hook: a passing test verification on a
+    # kind=requirement bumps in_progress → implemented (or fast-
+    # forwards from pending/rationale_needed through in_progress).
+    # Reqs already at implemented or verified stay put. Non-
+    # requirement kinds aren't auto-advanced.
+    status_advanced = False
+    req = store.get_requirement(req_id)
+    if req and req.kind == "requirement" and req.status in (
+        "pending", "rationale_needed", "in_progress"
+    ):
+        try:
+            result = set_status(
+                store, req_id, "implemented",
+                reason="auto: test spec verified",
+                _trigger="test_verify",
+            )
+            status_advanced = bool(result["path"])
+        except (ValueError, LookupError):
+            pass
+
+    return {
+        "req_id": req_id,
+        "last_verified": spec.last_verified,
+        "status_advanced": status_advanced,
+    }
 
 
 def test_list(

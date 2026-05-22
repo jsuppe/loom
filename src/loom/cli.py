@@ -1739,12 +1739,61 @@ def cmd_refine(args):
 def cmd_set_status(args):
     """Set the implementation status of a requirement."""
     store = LoomStore(args.project)
+    reason = getattr(args, "reason", None)
     try:
-        result = services.set_status(store, args.req_id, args.status)
+        result = services.set_status(
+            store, args.req_id, args.status, reason=reason,
+        )
     except (LookupError, ValueError) as e:
         print(f"❌ {e}")
         return 1
-    print(f"✅ {result['req_id']} → {result['status']}")
+    path = result.get("path") or []
+    if len(path) > 1:
+        # Fast-forward — show the traversal so the user knows what
+        # intermediate states got recorded.
+        traversal = " → ".join([path[0], *path[1:]])
+        print(f"✅ {result['req_id']} → {result['status']} "
+              f"(fast-forwarded through {traversal})")
+    else:
+        print(f"✅ {result['req_id']} → {result['status']}")
+    return 0
+
+
+def cmd_verify_stable(args):
+    """Promote drift-free implemented reqs to verified (M15.2)."""
+    store = LoomStore(args.project)
+    use_json = getattr(args, "json", False)
+    days = getattr(args, "days", None)
+    apply = getattr(args, "apply", False)
+
+    result = services.verify_stable(store, days=days, apply=apply)
+
+    if use_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+
+    eligible = result["eligible"]
+    if not eligible:
+        print(f"🧵 Loom verify-stable — no implemented requirements "
+              f"are drift-free for {result['days']}d.")
+        return 0
+
+    print(f"🧵 Loom verify-stable — Project: {args.project}")
+    print()
+    print(f"{len(eligible)} implemented requirement(s) drift-free for "
+          f"≥{result['days']}d:")
+    print()
+    for c in eligible:
+        value = c["value"]
+        if len(value) > 100:
+            value = value[:100] + "…"
+        print(f"  {c['req_id']} (stable {c['days_stable']}d)")
+        print(f"    > {value}")
+    print()
+    if apply:
+        print(f"✓ Promoted {result['applied']} requirement(s) to verified.")
+    else:
+        print("Dry-run — no changes written. Add --apply to promote.")
     return 0
 
 
@@ -2945,6 +2994,33 @@ def main():
             "accept superseded|archived|rationale_needed."
         ),
     )
+    p_set_status.add_argument(
+        "--reason",
+        help=(
+            "Why this status change (M15.4). Persisted to the "
+            "status_changed event in .loom-events.jsonl. Soft-required "
+            "in M15; will be hard-required in M15.next."
+        ),
+    )
+
+    # verify-stable (M15.2) — batch-promote drift-free implemented reqs
+    # to verified
+    p_verify_stable = sp(
+        "verify-stable",
+        help="Promote implemented requirements to verified when they have "
+             "been drift-free for N days (default 14)",
+    )
+    p_verify_stable.add_argument(
+        "--days", type=int, default=None,
+        help="Stability window in days (default LOOM_VERIFIED_STABLE_DAYS or 14)",
+    )
+    p_verify_stable.add_argument(
+        "--apply", action="store_true",
+        help="Commit the promotion. Default is dry-run.",
+    )
+    p_verify_stable.add_argument(
+        "--json", "-j", action="store_true", help="Output as JSON",
+    )
 
     # set-kind (M12.1) — reclassify a captured req's kind
     p_set_kind = sp("set-kind", help="Reclassify a requirement's kind (M12.1)")
@@ -3324,6 +3400,7 @@ def main():
         "trace": cmd_trace,
         "refine": cmd_refine,
         "set-status": cmd_set_status,
+        "verify-stable": cmd_verify_stable,
         "set-kind": cmd_set_kind,
         "warrant": cmd_warrant,
         "incomplete": cmd_incomplete,
