@@ -69,6 +69,68 @@ def _extract_file_path(tool_name: str, tool_input: dict) -> str | None:
     return None
 
 
+def _line_range_for_match(file_text: str, needle: str) -> tuple[int, int] | None:
+    """Return the 1-indexed (start_line, end_line) of the first occurrence
+    of ``needle`` in ``file_text``, or None on miss."""
+    if not needle:
+        return None
+    idx = file_text.find(needle)
+    if idx < 0:
+        return None
+    start_line = file_text.count("\n", 0, idx) + 1
+    end_line = start_line + needle.count("\n")
+    return (start_line, end_line)
+
+
+def _extract_edit_range(
+    tool_name: str, tool_input: dict, file_path: str,
+) -> str | None:
+    """M16.2 — for Edit/MultiEdit, compute the line-range of the edit by
+    locating ``old_string`` in the file. Returns ``"start-end"`` or
+    ``"start"`` for single-line edits, or None when the range can't be
+    determined (file missing, old_string not found, or tool not
+    supported).
+
+    Tool coverage (per D3): Edit + MultiEdit only. Write defaults to
+    whole-file (lines='all' is correct). NotebookEdit cells aren't
+    lines. Just-log per D2 — this only writes the range to the hook
+    log; never calls `loom link`.
+
+    MultiEdit returns the UNION span (min start across edits to max
+    end) so downstream can express the modified region as one range.
+    """
+    if tool_name not in {"Edit", "MultiEdit"}:
+        return None
+    try:
+        file_text = Path(file_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if tool_name == "Edit":
+        old = tool_input.get("old_string") or ""
+        span = _line_range_for_match(file_text, old)
+        if span is None:
+            return None
+        s, e = span
+        return str(s) if s == e else f"{s}-{e}"
+
+    # MultiEdit — compute union across the edits[] array
+    edits = tool_input.get("edits") or []
+    if not edits:
+        return None
+    spans: list[tuple[int, int]] = []
+    for edit in edits:
+        old = (edit or {}).get("old_string") or ""
+        span = _line_range_for_match(file_text, old)
+        if span is not None:
+            spans.append(span)
+    if not spans:
+        return None
+    union_start = min(s for s, _ in spans)
+    union_end = max(e for _, e in spans)
+    return str(union_start) if union_start == union_end else f"{union_start}-{union_end}"
+
+
 def _resolve_project_name() -> str:
     """Mirror scripts/loom `get_project_name` so logging lands in the same dir."""
     if env := os.environ.get("LOOM_PROJECT"):
@@ -114,8 +176,9 @@ def main() -> int:
 
     def _finish(*, tool: str, file: str | None, fired: bool,
                 bytes_out: int, reqs: int, specs: int, drift: bool,
-                skipped: str | None) -> None:
-        _record({
+                skipped: str | None,
+                edit_range: str | None = None) -> None:
+        entry = {
             "ts": ts,
             "tool": tool,
             "file": file,
@@ -126,7 +189,13 @@ def main() -> int:
             "drift": drift,
             "fired": fired,
             "skipped": skipped,
-        })
+        }
+        # M16.2 — only emit edit_range when we computed one (Edit/MultiEdit
+        # only, file readable, old_string locatable). Absent field on
+        # older or N/A entries — backward-compatible.
+        if edit_range is not None:
+            entry["edit_range"] = edit_range
+        _record(entry)
 
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -150,6 +219,12 @@ def main() -> int:
                 reqs=0, specs=0, drift=False, skipped="no_file_path")
         return 0
 
+    # M16.2 — best-effort line-range extraction for Edit/MultiEdit.
+    # Computed once here so every _finish callsite below logs it
+    # uniformly. None for Write/NotebookEdit or when old_string isn't
+    # locatable. Pure log entry — no auto-link side-effect (D2).
+    edit_range = _extract_edit_range(tool_name, tool_input, file_path)
+
     # `loom context` reads only ChromaDB metadata — no embedding, no Ollama.
     cmd = _find_loom_bin() + ["context", file_path]
     _log(f"running: {' '.join(cmd)}")
@@ -162,13 +237,15 @@ def main() -> int:
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         _log(f"loom invocation failed: {e}")
         _finish(tool=tool_name, file=file_path, fired=False, bytes_out=0,
-                reqs=0, specs=0, drift=False, skipped="cli_unavailable")
+                reqs=0, specs=0, drift=False, skipped="cli_unavailable",
+                edit_range=edit_range)
         return 0
 
     if proc.returncode == 1:
         _log(f"loom error: {proc.stdout.strip() or proc.stderr.strip()}")
         _finish(tool=tool_name, file=file_path, fired=False, bytes_out=0,
-                reqs=0, specs=0, drift=False, skipped="cli_error")
+                reqs=0, specs=0, drift=False, skipped="cli_error",
+                edit_range=edit_range)
         return 0
 
     try:
@@ -176,7 +253,8 @@ def main() -> int:
     except json.JSONDecodeError:
         _log(f"could not parse loom output: {proc.stdout[:200]}")
         _finish(tool=tool_name, file=file_path, fired=False, bytes_out=0,
-                reqs=0, specs=0, drift=False, skipped="parse_error")
+                reqs=0, specs=0, drift=False, skipped="parse_error",
+                edit_range=edit_range)
         return 0
 
     reqs = data.get("requirements", []) or []
@@ -190,7 +268,8 @@ def main() -> int:
 
     if not data.get("linked"):
         _finish(tool=tool_name, file=file_path, fired=False, bytes_out=0,
-                reqs=0, specs=0, drift=False, skipped="no_link")
+                reqs=0, specs=0, drift=False, skipped="no_link",
+                edit_range=edit_range)
         return 0
 
     summary = data.get("summary") or ""
@@ -235,7 +314,8 @@ def main() -> int:
         print(message, file=sys.stderr)
         _finish(tool=tool_name, file=file_path, fired=True, bytes_out=bytes_out,
                 reqs=len(reqs), specs=len(specs),
-                drift=(drift or graph_drift), skipped=None)
+                drift=(drift or graph_drift), skipped=None,
+                edit_range=edit_range)
         return 2
 
     response = {
@@ -247,7 +327,8 @@ def main() -> int:
     }
     print(json.dumps(response))
     _finish(tool=tool_name, file=file_path, fired=True, bytes_out=bytes_out,
-            reqs=len(reqs), specs=len(specs), drift=drift, skipped=None)
+            reqs=len(reqs), specs=len(specs), drift=drift, skipped=None,
+            edit_range=edit_range)
     return 0
 
 

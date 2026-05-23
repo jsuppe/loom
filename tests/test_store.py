@@ -390,7 +390,8 @@ class TestDocGeneration:
             path = generate_requirements_doc(temp_store, Path(out_dir))
             content = path.read_text(encoding="utf-8")
 
-            assert "`src/projects.py` (lines 10-25)" in content
+            # M16.1 — line ranges render as `path:start-end` (no "lines" placeholder)
+            assert "`src/projects.py:10-25`" in content
             assert "**Status:** pending" in content
 
     def test_requirements_doc_shows_none_when_no_implementations(self, temp_store, sample_embedding):
@@ -448,7 +449,8 @@ class TestDocGeneration:
 
             assert "## Traceability Matrix" in content
             assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
-            assert "| REQ-001 | behavior | — | `src/projects.py` | — |" in content
+            # M16.1 — matrix Files column also renders line ranges
+            assert "| REQ-001 | behavior | — | `src/projects.py:10-25` | — |" in content
 
     def test_test_spec_doc_shows_covered_code(self, temp_store, sample_embedding):
         """Generated TEST_SPEC.md shows linked code under test specs."""
@@ -492,7 +494,8 @@ class TestDocGeneration:
             content = path.read_text(encoding="utf-8")
 
             assert "**Covered code:**" in content
-            assert "`src/projects.py` (lines 10-25)" in content
+            # M16.1 — line ranges render as `path:start-end` (no "lines" placeholder)
+            assert "`src/projects.py:10-25`" in content
 
     def test_test_spec_doc_shows_uncovered_code(self, temp_store, sample_embedding):
         """TEST_SPEC.md shows 'Uncovered code' for impls without test specs."""
@@ -526,7 +529,8 @@ class TestDocGeneration:
             content = path.read_text(encoding="utf-8")
 
             assert "**Uncovered code:**" in content
-            assert "`src/projects.py` (lines 10-25)" in content
+            # M16.1 — line ranges render as `path:start-end` (no "lines" placeholder)
+            assert "`src/projects.py:10-25`" in content
 
     def test_requirements_doc_shows_spec_tier(self, temp_store, sample_embedding):
         """REQUIREMENTS.md shows specs under each requirement, with impls nested under specs."""
@@ -572,9 +576,11 @@ class TestDocGeneration:
 
             assert "**Specifications (1):**" in content
             assert "`SPEC-001`" in content
-            assert "`src/projects.py` (lines 10-25)" in content
+            # M16.1 — line ranges render as `path:start-end` (no "lines" placeholder)
+            assert "`src/projects.py:10-25`" in content
             # Traceability matrix shows spec ID
-            assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py` | — |" in content
+            # M16.1 — matrix Files column also renders line ranges
+            assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py:10-25` | — |" in content
 
     # M11.2 — rationale linkage rendering
 

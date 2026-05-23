@@ -21,12 +21,13 @@ from pathlib import Path
 import pytest
 
 from loom.docs import (
+    _format_impl_location,
     _normalize_for_compare,
     _write_doc_if_changed,
     generate_requirements_doc,
     generate_test_spec_doc,
 )
-from loom.store import LoomStore, Requirement
+from loom.store import Implementation, LoomStore, Requirement
 
 
 @pytest.fixture
@@ -110,6 +111,46 @@ class TestWriteDocIfChanged:
         wrote = _write_doc_if_changed(target, "body two\n")
         assert wrote is True
         assert target.read_text(encoding="utf-8") == "body two\n"
+
+
+class TestFormatImplLocation:
+    """M16.1 — line-range rendering helper."""
+
+    def _impl(self, file_path: str, lines: str) -> Implementation:
+        return Implementation(
+            id="IMPL-x",
+            file=file_path,
+            lines=lines,
+            content="",
+            content_hash="",
+            timestamp="2026-01-01T00:00:00Z",
+            satisfies=[],
+        )
+
+    def test_file_level_renders_path_only(self):
+        impl = self._impl("src/loom/store.py", "all")
+        assert _format_impl_location(impl) == "`src/loom/store.py`"
+
+    def test_ranged_renders_path_with_colon_range(self):
+        impl = self._impl("src/loom/store.py", "42-87")
+        assert _format_impl_location(impl) == "`src/loom/store.py:42-87`"
+
+    def test_single_line_renders_as_given(self):
+        # If the caller stored a single line like "42", surface it as-is.
+        impl = self._impl("src/loom/store.py", "42")
+        assert _format_impl_location(impl) == "`src/loom/store.py:42`"
+
+    def test_empty_lines_treated_as_all(self):
+        # Defensive: missing/empty lines should not render as ":"
+        impl = self._impl("src/loom/store.py", "")
+        assert _format_impl_location(impl) == "`src/loom/store.py`"
+
+    def test_no_lines_all_placeholder_in_output(self):
+        # Regression guard — the pre-M16 "(lines all)" noise is gone.
+        impl = self._impl("src/loom/store.py", "all")
+        out = _format_impl_location(impl)
+        assert "(lines all)" not in out
+        assert "lines all" not in out
 
 
 class TestGeneratorsIdempotent:

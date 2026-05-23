@@ -111,3 +111,127 @@ def test_existing_unlinked_file_logs_no_link(tmp_log, project_name, tmp_path):
     assert e["reqs"] == 0 and e["specs"] == 0
     # Hook should not emit additionalContext when nothing is linked.
     assert res.stdout.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# M16.2 — edit-range auto-capture (Edit/MultiEdit)
+# ---------------------------------------------------------------------------
+
+
+def test_edit_with_locatable_old_string_logs_range(
+    tmp_log, project_name, tmp_path,
+):
+    # File has a multi-line block; old_string spans lines 2-3.
+    f = tmp_path / "code.py"
+    f.write_text(
+        "line one\n"
+        "def foo():\n"
+        "    return 42\n"
+        "line four\n",
+        encoding="utf-8",
+    )
+    res = _run_hook(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": str(f),
+                "old_string": "def foo():\n    return 42",
+                "new_string": "def foo():\n    return 99",
+            },
+        },
+        tmp_log, project_name,
+    )
+    assert res.returncode == 0
+    entries = _read_log(tmp_log)
+    assert len(entries) == 1
+    # Edit range covers lines 2-3 of the original file.
+    assert entries[0].get("edit_range") == "2-3"
+
+
+def test_edit_with_single_line_old_string_logs_single_line(
+    tmp_log, project_name, tmp_path,
+):
+    f = tmp_path / "code.py"
+    f.write_text("a\nb\nc\n", encoding="utf-8")
+    res = _run_hook(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": str(f),
+                "old_string": "b",
+                "new_string": "B",
+            },
+        },
+        tmp_log, project_name,
+    )
+    assert res.returncode == 0
+    e = _read_log(tmp_log)[0]
+    # Single-line range renders without "-".
+    assert e.get("edit_range") == "2"
+
+
+def test_edit_with_unfindable_old_string_omits_edit_range(
+    tmp_log, project_name, tmp_path,
+):
+    f = tmp_path / "code.py"
+    f.write_text("a\nb\nc\n", encoding="utf-8")
+    res = _run_hook(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": str(f),
+                "old_string": "zzz_never_in_file",
+                "new_string": "Z",
+            },
+        },
+        tmp_log, project_name,
+    )
+    assert res.returncode == 0
+    e = _read_log(tmp_log)[0]
+    # Range absent when not locatable (no false "1-1" or "all").
+    assert "edit_range" not in e
+
+
+def test_multiedit_logs_union_span(tmp_log, project_name, tmp_path):
+    # Two edits — one at line 2, one at line 5. Union span is 2-5.
+    f = tmp_path / "code.py"
+    f.write_text(
+        "line1\nfoo\nline3\nline4\nbar\nline6\n", encoding="utf-8",
+    )
+    res = _run_hook(
+        {
+            "tool_name": "MultiEdit",
+            "tool_input": {
+                "file_path": str(f),
+                "edits": [
+                    {"old_string": "foo", "new_string": "FOO"},
+                    {"old_string": "bar", "new_string": "BAR"},
+                ],
+            },
+        },
+        tmp_log, project_name,
+    )
+    assert res.returncode == 0
+    e = _read_log(tmp_log)[0]
+    assert e.get("edit_range") == "2-5"
+
+
+def test_write_tool_does_not_log_edit_range(
+    tmp_log, project_name, tmp_path,
+):
+    # Write is whole-file; no edit_range expected.
+    f = tmp_path / "code.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    res = _run_hook(
+        {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(f),
+                "content": "x = 2\n",
+            },
+        },
+        tmp_log, project_name,
+    )
+    assert res.returncode == 0
+    e = _read_log(tmp_log)[0]
+    assert "edit_range" not in e

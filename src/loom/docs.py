@@ -48,6 +48,20 @@ def _write_doc_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def _format_impl_location(impl) -> str:
+    """Format an Implementation's (file, lines) for doc rendering (M16.1).
+
+    File-level links (`lines == "all"`) render as just the path.
+    Ranged links render as `path:start-end` (GitHub permalink style).
+    The literal placeholder ``(lines all)`` from the pre-M16 renderer
+    is dropped — it added noise without information.
+    """
+    lines = impl.lines
+    if not lines or lines == "all":
+        return f"`{impl.file}`"
+    return f"`{impl.file}:{lines}`"
+
+
 def _format_spec_block(store: LoomStore, req_id: str, superseded_req_ids: Set[str]) -> List[str]:
     """Format the Specifications section under a requirement, with each spec's implementations."""
     specs = store.get_specifications_for_requirement(req_id)
@@ -61,7 +75,7 @@ def _format_spec_block(store: LoomStore, req_id: str, superseded_req_ids: Set[st
             spec_impls = store.get_implementations_for_specification(spec.id)
             if spec_impls:
                 for impl in spec_impls:
-                    lines.append(f"    - `{impl.file}` (lines {impl.lines})")
+                    lines.append(f"    - {_format_impl_location(impl)}")
             else:
                 lines.append(f"    - *No implementation linked*")
     else:
@@ -75,7 +89,7 @@ def _format_spec_block(store: LoomStore, req_id: str, superseded_req_ids: Set[st
     if direct_impls:
         lines.append("- **Direct implementation links (consider adding specs):**")
         for impl in direct_impls:
-            loc = f"`{impl.file}` (lines {impl.lines})"
+            loc = _format_impl_location(impl)
             drifted = any(
                 s["req_id"] in superseded_req_ids
                 for s in impl.satisfies
@@ -97,7 +111,7 @@ def _format_impl_links(store: LoomStore, req_id: str, superseded_req_ids: Set[st
 
     lines = ["- **Implementations:**"]
     for impl in impls:
-        loc = f"`{impl.file}` (lines {impl.lines})"
+        loc = _format_impl_location(impl)
         drifted = any(
             s["req_id"] in superseded_req_ids
             for s in impl.satisfies
@@ -372,7 +386,7 @@ def generate_requirements_doc(
             specs_str = "—"
 
         if impls:
-            files = ", ".join(f"`{impl.file}`" for impl in impls)
+            files = ", ".join(_format_impl_location(impl) for impl in impls)
         else:
             files = "—"
 
@@ -472,7 +486,7 @@ def generate_test_spec_doc(store: LoomStore, output_dir: Path, specs: Dict[str, 
                 if impls:
                     lines.append("**Covered code:**")
                     for impl in impls:
-                        lines.append(f"- `{impl.file}` (lines {impl.lines})")
+                        lines.append(f"- {_format_impl_location(impl)}")
                     lines.append("")
                 if spec.automated:
                     lines.append("*Automated: Yes*")
@@ -491,7 +505,7 @@ def generate_test_spec_doc(store: LoomStore, output_dir: Path, specs: Dict[str, 
                 if impls:
                     lines.append("**Uncovered code:**")
                     for impl in impls:
-                        lines.append(f"- `{impl.file}` (lines {impl.lines})")
+                        lines.append(f"- {_format_impl_location(impl)}")
                     lines.append("")
                 lines.append("```")
                 lines.append("TODO: Define test steps and expected outcome")
