@@ -1,0 +1,27 @@
+{
+  "_description": "M18.2 — agreed sampling defaults for bake-off harnesses. Per-model overlays override defaults. Harnesses record actual params used; _methodology.sampling_drift() flags disagreement (warning, not fatal).",
+  "_version": 1,
+  "_last_updated": "2026-05-22",
+  "defaults": {
+    "temperature": 0,
+    "top_p": 1,
+    "seed": 42,
+    "max_tokens": 4096
+  },
+  "by_model": {
+    "qwen3.5:latest": {
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 42,
+      "max_tokens": 4096
+    },
+    "claude-haiku-4-5-20251001": {
+      "temperature": 0,
+      "max_tokens": 4096
+    },
+    "claude-sonnet-4-6": {
+      "temperature": 0,
+      "max_tokens": 4096
+    }
+  }
+}

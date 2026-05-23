@@ -47,8 +47,14 @@ if hasattr(sys.stdout, "reconfigure"):
 
 sys.path.insert(0, str(LOOM_DIR / "src"))
 sys.path.insert(0, str(BAKEOFF_DIR / "v2_driver"))
+sys.path.insert(0, str(BAKEOFF_DIR))
 
 from _scenarios import SCENARIOS, CELL_CONFIG, META_PREAMBLE  # noqa: E402
+from _methodology import (  # noqa: E402
+    is_noop,
+    retain_output,
+    sampling_drift,
+)
 
 # Optional JS semantic indexer — imported lazily.
 _JS_INDEXER = None
@@ -167,8 +173,87 @@ def call_claude(model: str, prompt: str, timeout: int = 600) -> dict:
     }
 
 
+def call_anthropic_api(model: str, prompt: str, timeout: int = 600) -> dict:
+    """Raw Anthropic Messages API call (M18.4 — removes the CLI
+    system-context confound from the bake-off postmortem).
+
+    Used when ``ANTHROPIC_API_KEY`` is set AND either:
+      * ``PHY_PREFER_API=1`` is set, OR
+      * ``model`` starts with ``anthropic-api:`` (explicit selector).
+
+    The ``anthropic-api:`` prefix is stripped before sending to the
+    API — model id submitted is e.g. ``claude-sonnet-4-6``.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY required for raw-API call")
+    actual_model = model.removeprefix("anthropic-api:")
+    sampling = {
+        "temperature": float(os.environ.get("PHY_TEMPERATURE", "0.0")),
+        "max_tokens": int(os.environ.get("PHY_MAX_TOKENS", "4096")),
+    }
+    payload = json.dumps({
+        "model": actual_model,
+        "messages": [{"role": "user", "content": prompt}],
+        **sampling,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    backoffs = [5, 15]
+    last_err: Exception | None = None
+    t0 = time.time()
+    for attempt in range(len(backoffs) + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+            content_blocks = body.get("content", []) or []
+            text = "\n".join(
+                b.get("text", "") for b in content_blocks
+                if b.get("type") == "text"
+            )
+            usage = body.get("usage", {}) or {}
+            return {
+                "response": text,
+                "elapsed_s": time.time() - t0,
+                "input_tokens": usage.get("input_tokens", 0),
+                "output_tokens": usage.get("output_tokens", 0),
+                "sampling_options": sampling,
+                "transport": "anthropic-raw-api",
+            }
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code not in (429, 500, 502, 503, 504) or attempt == len(backoffs):
+                raise RuntimeError(f"Anthropic API call failed: {e}")
+        except urllib.error.URLError as e:
+            last_err = e
+            if attempt == len(backoffs):
+                raise RuntimeError(f"Anthropic API call failed: {e}")
+        time.sleep(backoffs[attempt])
+    raise RuntimeError(f"Anthropic API call failed after retries: {last_err}")
+
+
 def _call_model(model: str, prompt: str, timeout: int = 600) -> dict:
-    if model.startswith("claude") or model in ("haiku", "sonnet", "opus"):
+    # M18.4 — when ANTHROPIC_API_KEY is set and either PHY_PREFER_API=1
+    # or the model carries the anthropic-api: prefix, use the raw API
+    # path (no CLI system-context, no Max-plan injection).
+    is_claude = (
+        model.startswith("claude")
+        or model.startswith("anthropic-api:")
+        or model in ("haiku", "sonnet", "opus")
+    )
+    if is_claude and os.environ.get("ANTHROPIC_API_KEY") and (
+        os.environ.get("PHY_PREFER_API") == "1"
+        or model.startswith("anthropic-api:")
+    ):
+        return call_anthropic_api(model, prompt, timeout=timeout)
+    if is_claude:
         return call_claude(model, prompt, timeout=timeout)
     return call_ollama(model, prompt, timeout=timeout)
 
@@ -409,17 +494,35 @@ def run_one(scenario_id: str, cell: str, run_id: str) -> dict:
 
     target_path.write_text(code, encoding="utf-8")
     g = grade_workspace(workspace, scenario)
-    # Methodology-sprint addition (2026-05-11): detect no-op responses
-    # where the model returned the file (essentially) unchanged. Used
-    # to disambiguate "model followed contrarian rule" from "model
-    # preserved existing implementation" on S1 (where the reference
-    # already complies). Uses a normalized comparison (strip whitespace
-    # and blank lines) rather than byte-equality so trivial formatting
-    # differences don't hide genuine no-ops.
-    def _normalize(s: str) -> str:
-        return "\n".join(line.strip() for line in s.splitlines() if line.strip())
-    no_op_flag = _normalize(code) == _normalize(target_content)
+    # M18.1 — use shared no-op detection. Disambiguates "followed
+    # contrarian rule" from "returned file unchanged" on scenarios
+    # whose reference already complies.
+    no_op_flag = is_noop(code, target_content)
     print(f"[grade] pass={g['passed']}/{g['total']}  compile_failed={g.get('compile_failed', False)}  no_op={no_op_flag}")
+
+    # M18.3 — write the raw LLM response to a per-trial file under
+    # raw_outputs/. The summary keeps a relative pointer (raw_output_path)
+    # so post-hoc re-grading can find it without re-running the model.
+    # The old llm_response_full field is dropped from the summary
+    # (callers can read the file). LOOM_NO_RAW_OUTPUT=1 opts out for
+    # cheap CI sweeps — pointer becomes None.
+    trial_id = (
+        f"phY_{scenario_id}{model_suffix}_{cell_slug}_run{run_id}"
+    )
+    raw_path = retain_output(OUT_DIR, trial_id, llm["response"])
+
+    # M18.2 — full sampling params recorded, with drift check against
+    # the global lockfile. Drift is a warning, not fatal — the lock
+    # is the agreement, not the enforcer.
+    sampling_recorded = {
+        "model": model,
+        **(llm.get("sampling_options") or {}),
+    }
+    drift_msgs = sampling_drift(sampling_recorded)
+    if drift_msgs:
+        for m in drift_msgs:
+            print(f"[lock] WARN sampling drift — {m}")
+
     summary = {
         "phase": "Y_rule_precedence",
         "scenario": scenario_id,
@@ -436,13 +539,22 @@ def run_one(scenario_id: str, cell: str, run_id: str) -> dict:
         "rule_repeated_after": bool(cfg["repeat_after"]),
         "input_tokens": llm["input_tokens"],
         "output_tokens": llm["output_tokens"],
+        # M18.2 — full sampling + drift info
         "sampling_options": llm.get("sampling_options"),
+        "sampling_recorded": sampling_recorded,
+        "sampling_drift": drift_msgs,
+        # M18.4 — distinguish raw-API from CLI shell-out
+        "transport": llm.get("transport", "cli_or_ollama"),
         "model": model,
         "language": scenario["language"],
         "llm_elapsed_s": round(llm["elapsed_s"], 1),
         "wall_s": round(time.time() - t0, 1),
         "grade_stdout_tail": g["stdout_tail"],
-        "llm_response_full": llm["response"],
+        # M18.3 — pointer to the retained raw output. None when
+        # LOOM_NO_RAW_OUTPUT=1.
+        "raw_output_path": (
+            str(raw_path.relative_to(OUT_DIR)) if raw_path else None
+        ),
     }
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"SUMMARY: {cell} pass={g['passed']}/{g['total']} wall={summary['wall_s']}s")
