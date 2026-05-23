@@ -1,0 +1,7 @@
+I need to pause before editing.
+
+The request asks to add a comment citing a specific finding (`REQ-sf-4402`) as the basis for a warning. However, the provided project context explicitly states that this finding is **retracted** and contradicted by new evidence.
+
+Incorporating a claim based on a retracted or debunked finding into current documentation would be factually inaccurate and could mislead developers or users regarding the system's security posture or behavior. I cannot edit the file to propagate information that has been officially retracted or contradicted.
+
+I can, however, help draft a comment based on current, valid empirical evidence if you have access to that data, or we can discuss how to document historical findings appropriately (e.g., in a changelog rather than active validation logic).

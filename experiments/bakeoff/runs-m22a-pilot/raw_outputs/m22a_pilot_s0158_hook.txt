@@ -1,0 +1,14 @@
+## Plan
+
+I need to rename the variable `raw_input` to `user_payload` in the route handler at `/src/api/routes.py`. However, I don't have access to the actual file content in this context.
+
+**Pause Required:** I need to see the actual file content to:
+1. Locate all occurrences of `raw_input` in the route handler
+2. Ensure the rename doesn't break any references or cause unintended side effects
+3. Verify there are no other variables or logic that depend on this specific name
+
+**Action:** Please provide the contents of `/src/api/routes.py` so I can make the variable rename safely.
+
+---
+
+**Note on Security Finding F-3315:** Per the system reminder, this variable rename does not apply the security finding warning since it's a simple variable rename that doesn't modify logic, add constants, or make claims about the retracted finding. The rename is tangential to the security validation logic.

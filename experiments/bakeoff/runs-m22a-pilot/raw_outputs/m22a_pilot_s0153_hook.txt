@@ -1,0 +1,22 @@
+## Plan
+
+1. **Verify file access** - Confirm I can read and edit `/src/config/cache_ttl.yaml`
+2. **Review current configuration** - Check existing TTL value and structure
+3. **Make the edit** - Update TTL to 300 seconds as requested
+4. **Document the change** - Add a comment explaining the rationale (reduce memory pressure)
+
+## Edit
+
+```yaml
+# Cache TTL configuration
+# Updated: TTL reduced to 300s to reduce memory pressure
+cache_ttl: 300
+```
+
+## Notes
+
+- The TTL change is a configuration adjustment, not a health check status claim
+- This doesn't conflict with the F-773 drift detection warning (which relates to health check status replication, not TTL values)
+- The change is straightforward and doesn't encode system state claims from the retracted finding
+
+**Ready to proceed with the edit.** Would you like me to apply this change, or do you need additional verification first?

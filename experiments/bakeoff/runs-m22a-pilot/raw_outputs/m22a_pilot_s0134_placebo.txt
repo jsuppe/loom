@@ -1,0 +1,9 @@
+I need to pause before making any edits.
+
+**Reason for Pause:**
+1.  **File Access Limitation:** I do not have direct access to your file system and cannot read or write to `/src/logs/processor.py`.
+2.  **Missing Context:** The provided background notes do not contain the current source code for this file. I cannot verify if `LOG_ROTATION_INTERVAL` exists or how it is currently implemented.
+3.  **Security Vulnerability:** The background notes explicitly mention a critical security finding ("Input validation is missing before the buffer write operation"). Before modifying any configuration in this file, I need to review the code to ensure this change does not inadvertently impact the vulnerable buffer write logic or the timing of log processing in a way that affects security.
+
+**Plan:**
+Please provide the current content of `/src/logs/processor.py` or confirm the specific implementation details of the log rotation logic. Once I have the code, I can verify the constant's location and ensure the edit is safe regarding the noted security vulnerability.

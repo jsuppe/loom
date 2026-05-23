@@ -1,0 +1,9 @@
+I need to pause before making any edits.
+
+**Reason for Pause:**
+1.  **File System Access:** I do not have direct access to your local file system. I cannot view the contents of `/src/experiments/quantum_decay.py` or write changes to it directly.
+2.  **Retraction Context:** The background notes explicitly state that the original findings (including rules and divergence claims) are **retracted** due to contradicting evidence or data leakage. Enforcing a parameter (`K=0.45`) from a retracted finding as a baseline contradicts the project's stated goal of using new evidence, unless this is specifically for a historical ablation study or reproducibility check.
+3.  **Code Safety:** Without seeing the current implementation, I cannot verify how `K` is currently used or if changing it will introduce unintended side effects in the simulation logic.
+
+**Next Steps:**
+Please provide the current code snippet for the decay logic or clarify the specific rationale for enforcing a retracted baseline (e.g., is this for debugging, historical comparison, or testing robustness?). Once I have the code context and confirmation on the intent, I can assist with the modification plan.

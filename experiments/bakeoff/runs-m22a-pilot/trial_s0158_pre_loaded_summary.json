@@ -1,0 +1,8 @@
+{
+  "study": "m22a-pilot",
+  "scenario_id": "s0158",
+  "arm": "pre_loaded",
+  "model": "qwen3.5:latest",
+  "error": "TimeoutError: timed out",
+  "wall_s": 300.0
+}

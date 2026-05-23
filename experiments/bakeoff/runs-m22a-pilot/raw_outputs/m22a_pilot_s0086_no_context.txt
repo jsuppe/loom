@@ -1,0 +1,23 @@
+## Pause Required
+
+I need clarification before making edits to `/src/experiments/quantum_decay.py` because:
+
+1. **File contents unknown**: I cannot see the current file structure, existing decay constant values, or simulation logic.
+
+2. **Context missing**: I don't know:
+   - What the current baseline decay constant is
+   - How the decay constant is currently parameterized
+   - Whether K=0.45 should replace an existing value or be added as a new baseline
+   - If there are related configuration files or constants
+
+3. **Potential impacts**: I need to understand:
+   - Whether this change affects other experiments or dependencies
+   - If there are version control or testing requirements
+   - What the expected behavior should be after the change
+
+**Please provide:**
+- The current file contents or a summary of its structure
+- Any relevant configuration or documentation
+- Specific requirements for how K=0.45 should be enforced (e.g., hardcoded, configurable, conditional)
+
+Once I have this information, I can make an appropriate edit that maintains code integrity and meets your requirements.

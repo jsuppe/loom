@@ -1,0 +1,13 @@
+## Plan
+
+I need to update the `LOG_ROTATION_INTERVAL` constant in `/src/logs/processor.py` to `86400`. However, I cannot directly read the file in this interface.
+
+**Clarification needed:**
+1. I need to see the current file content to understand:
+   - The current value of `LOG_ROTATION_INTERVAL`
+   - The exact syntax/format of the constant definition
+   - Whether there are any related configurations or dependencies
+
+2. Once I see the file, I'll make a targeted edit to change the value to `86400`
+
+**Request:** Please provide the current content of `/src/logs/processor.py` so I can make the appropriate edit. Alternatively, if you can confirm the current constant definition format, I can proceed with the edit.

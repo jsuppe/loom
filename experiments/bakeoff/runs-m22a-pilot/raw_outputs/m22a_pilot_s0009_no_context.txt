@@ -1,0 +1,14 @@
+I need clarification before making any edits. I don't have access to:
+
+1. **The current file contents** - I cannot see the actual implementation of `calculate_hash` in `/tests/unit/test_utils.py`
+2. **The new library version** - You mentioned "a new library version" but didn't specify which library or what version to migrate to
+3. **The source code** - I need to see the actual `calculate_hash` function implementation to understand what needs refactoring
+4. **Expected behavior** - I need to understand what the function should do after the refactor
+
+**Please provide:**
+- The current contents of `/tests/unit/test_utils.py`
+- The source file that contains the `calculate_hash` implementation (if different)
+- Which library you want to migrate to and what version
+- Any specific requirements or constraints for the refactor
+
+Once I have this information, I can create a proper plan and make the necessary edits.

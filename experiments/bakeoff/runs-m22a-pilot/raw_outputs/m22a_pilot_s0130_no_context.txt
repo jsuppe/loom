@@ -1,0 +1,13 @@
+## Pause for Clarification
+
+I need more information before I can provide an accurate answer or make edits:
+
+1. **What connection pooler implementation is being used?** (e.g., SQLAlchemy, psycopg2, Redis, custom, etc.)
+
+2. **What is the current code in `/src/db/connection.py`?** I cannot see the file contents to assess the current failover configuration.
+
+3. **What database system is being used?** (PostgreSQL, MySQL, Redis, etc.)
+
+4. **What is the desired failover behavior?** (e.g., automatic retry on connection failure, failover to secondary replica, circuit breaker pattern, etc.)
+
+Please share the relevant code or clarify the setup so I can provide an accurate assessment and appropriate edits.

@@ -1,0 +1,11 @@
+## Plan
+
+I need to see the current content of `/src/utils/data_loader.py` to understand the existing docstring and make the appropriate edits.
+
+**Clarification needed:**
+
+1. Please provide the current content of `/src/utils/data_loader.py`, or at least the docstring for the `load_data` function.
+2. Confirm what the current claim about "Dataset X's completeness" says, so I can accurately remove it.
+3. Confirm the exact wording you'd like to use to clarify that sensor columns are optional.
+
+Once I have this information, I can provide the specific edit.

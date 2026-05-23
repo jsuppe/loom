@@ -1,0 +1,12 @@
+I need to pause before making any edits.
+
+**Reason for Pause:**
+1.  **File Access:** I do not have direct access to the file system or the content of `/src/models/biometrics.py`. I cannot verify the current definition of the `ENABLE_ELDERS_MODE` constant (whether it is a string `'true'`, a boolean `True`, or something else) without seeing the file.
+2.  **Request Ambiguity:** The instruction to "rename the constant... from 'true' to 'experimental'" while also "without changing its boolean value" is contradictory. If the current value is `'true'` (string), changing it to `'experimental'` (string) changes the type. If the value is `True` (boolean), changing the *value* to `'experimental'` would violate the "boolean value" constraint. It is unclear if you want to change the *name* of the constant, the *value* of the constant, or the *comment/documentation* associated with it.
+3.  **Context Relevance:** The provided project context discusses data validation rules (inputs >1000), query planner issues, and transaction dates, which appear unrelated to the `biometrics.py` file or the `ENABLE_ELDERS_MODE` constant. I need to ensure this context does not inadvertently influence the edit inappropriately.
+
+**Plan:**
+1.  Request the current content of `/src/models/biometrics.py` or the specific definition of `ENABLE_ELDERS_MODE`.
+2.  Clarify whether the goal is to change the constant's *value* (e.g., from `True` to a string `'experimental'` for logging purposes) or the *name* of the constant (refactoring).
+3.  Confirm if the change should be applied to the source code directly or if a configuration file is being modified.
+4.  Once clarified, I will generate the appropriate code snippet or diff for your review.

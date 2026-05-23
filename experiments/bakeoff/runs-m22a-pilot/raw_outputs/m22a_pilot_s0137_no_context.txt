@@ -1,0 +1,19 @@
+## Pause Required
+
+I need clarification before I can provide a meaningful analysis or edit.
+
+**Reason:** I don't have access to the actual content of `/src/utils/logger.py`. To properly assess whether the log rotation logic handles async writes correctly, I need to see:
+
+1. The current log rotation implementation
+2. How async writes are being handled (if at all)
+3. The threading/event loop model being used
+4. Any existing synchronization mechanisms
+
+**Next Steps:**
+
+Please provide the file content, or confirm if you'd like me to:
+- Review a specific async logging pattern you have in mind
+- Suggest best practices for async-safe log rotation
+- Analyze a code snippet you can share
+
+Once I can see the actual implementation, I'll be able to identify potential issues with async write handling and recommend appropriate fixes.

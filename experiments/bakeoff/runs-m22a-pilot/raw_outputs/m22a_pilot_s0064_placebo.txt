@@ -1,0 +1,30 @@
+## Plan
+
+1. Add a new test case to `/tests/unit/calculator.py` that tests division by zero
+2. Expect the `divide` function to raise a `ZeroDivisionError` when dividing by zero
+3. Use `pytest.raises` pattern (common in pytest-based test files)
+4. Place the test case in an appropriate location within the test file (typically with other error-handling tests)
+
+## Edit
+
+```python
+# Add this new test case to the file
+
+def test_divide_by_zero():
+    """Test that division by zero raises ZeroDivisionError."""
+    with pytest.raises(ZeroDivisionError):
+        calculator.divide(10, 0)
+```
+
+**Location to insert:** Add this test case alongside other `divide` function tests in the test file, preferably near the end of the test file or grouped with other error-handling tests.
+
+**Note:** If the file uses `unittest` instead of `pytest`, the test would need to be written as:
+
+```python
+def test_divide_by_zero():
+    """Test that division by zero raises ZeroDivisionError."""
+    with self.assertRaises(ZeroDivisionError):
+        calculator.divide(10, 0)
+```
+
+**Rationale:** Division by zero is a mathematical edge case that should be explicitly handled. This test ensures the calculator function fails gracefully with a clear error message rather than returning `NaN` or `inf` unexpectedly.

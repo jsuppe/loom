@@ -1,0 +1,8 @@
+I need to pause and request clarification before editing.
+
+**Reason:** I do not have access to your local file system or the current content of `/src/utils/cache.py`. To modify the cache invalidation logic correctly, I need to see the existing implementation to understand:
+1.  Whether the current invalidation is asynchronous (e.g., using `asyncio`, `threading`, or fire-and-forget patterns).
+2.  How the cache is currently managed (e.g., in-memory, Redis, etc.).
+3.  The specific entry points where invalidation occurs.
+
+Please provide the content of `/src/utils/cache.py` (or the relevant functions) so I can analyze the current logic and propose the necessary changes to ensure synchronous completion. I will disregard the unrelated context notes regarding ResNet-X and SQL injection as they do not pertain to this specific task.

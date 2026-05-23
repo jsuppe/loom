@@ -1,0 +1,22 @@
+## Pause Required
+
+I need clarification before making any edits. Several key details are missing:
+
+1. **File Location Issue**: The path `/tests/unit/test_utils.py` suggests this is a test file. The `calculate_hash` function would typically be implemented in a source file (e.g., `utils.py`). Can you confirm the actual location of the function?
+
+2. **Library Details**: What hashing library is currently being used? What is the new version you want to migrate to?
+
+3. **Current Implementation**: I don't have access to the actual codebase contents. I need to see:
+   - The current `calculate_hash` implementation
+   - The existing unit tests
+   - Any breaking changes in the new library version
+
+4. **Migration Requirements**: What specific changes are needed due to the version upgrade? (e.g., API changes, deprecated functions, security updates)
+
+Please provide:
+- The current source file location and implementation
+- The target library version
+- Any migration notes or changelogs for the new version
+- The current test file contents
+
+Once I have this information, I can create a proper refactoring plan and edit.

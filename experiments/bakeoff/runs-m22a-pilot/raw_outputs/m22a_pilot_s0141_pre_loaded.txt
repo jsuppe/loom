@@ -1,0 +1,5 @@
+I need clarification before editing.
+
+**Reason:** I do not have direct access to your local file system to read or modify `/data/user_config.json`. Additionally, I do not have the current content of the file to verify the exact key path (e.g., `timeout`, `default_timeout`, `settings.timeout`) where the value should be changed.
+
+**Request:** Please provide the current content of `/data/user_config.json` or confirm the specific configuration key name so I can generate the correct updated JSON snippet for you to apply.

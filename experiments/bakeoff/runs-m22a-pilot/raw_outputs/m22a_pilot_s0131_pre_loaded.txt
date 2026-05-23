@@ -1,0 +1,18 @@
+### Plan
+1.  **Locate the Constant:** Open `/src/utils/formatters.py` and search for the definition of `DEFAULT_BUFFER_SIZE`.
+2.  **Verify Context:** Ensure the constant is defined as expected (e.g., `DEFAULT_BUFFER_SIZE = 1024`).
+3.  **Apply Edit:** Update the value from `1024` to `4096`.
+4.  **Context Check:** Acknowledge Finding F-1024 regarding memory allocation overhead. Per the drift status, this finding is unrelated to the constant edit, so the change is safe to proceed with to improve I/O performance (reducing syscall overhead) without conflicting with the identified loop structure issue.
+5.  **Save:** Commit the change to the file.
+
+### Edit
+```python
+# File: /src/utils/formatters.py
+
+# ...
+
+# Updated buffer size to reduce I/O overhead (4KB page-aligned)
+DEFAULT_BUFFER_SIZE = 4096
+
+# ...
+```

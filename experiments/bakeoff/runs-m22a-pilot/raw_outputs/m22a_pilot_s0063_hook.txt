@@ -1,0 +1,21 @@
+## Pause Required
+
+I need clarification before making this edit because:
+
+1. **I don't have access to the current file content** - I cannot see the existing docstring in `/src/utils/data_loader.py` to understand what specific claims need to be removed or modified.
+
+2. **I need to verify the current docstring** - To properly refactor it, I need to see:
+   - What the current docstring claims about Dataset X's completeness
+   - What other documentation exists about optional sensor columns
+   - The full context of the `load_data` function's purpose
+
+3. **I need to understand the scope of changes** - The system reminder warns against encoding retracted findings as confirmed facts. I need to ensure the new docstring:
+   - Accurately reflects that sensor columns may have missing values
+   - Doesn't make definitive claims about dataset completeness
+   - Properly documents the optional nature of sensor columns
+
+**Please provide:**
+- The current content of `/src/utils/data_loader.py` (or at least the `load_data` function's docstring)
+- Any relevant context about how missing sensor data is handled in the codebase
+
+Once I have this information, I can create an appropriate edit that removes the retracted claim while clarifying the optional nature of sensor columns.

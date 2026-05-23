@@ -1,0 +1,175 @@
+{
+  "study": "m22a-pilot",
+  "n_trials_total": 120,
+  "n_errored": 19,
+  "arms": {
+    "no_context": {
+      "n": 29,
+      "pause_rate": 0.7586206896551724,
+      "accuracy": 0.4827586206896552,
+      "by_stratum": {
+        "should_pause": {
+          "n": 10,
+          "pause_rate": 0.8,
+          "accuracy": 0.8
+        },
+        "should_proceed_no_drift": {
+          "n": 10,
+          "pause_rate": 0.6,
+          "accuracy": 0.4
+        },
+        "should_proceed_fp_trap": {
+          "n": 9,
+          "pause_rate": 0.8888888888888888,
+          "accuracy": 0.2222222222222222
+        }
+      }
+    },
+    "hook": {
+      "n": 29,
+      "pause_rate": 0.5862068965517241,
+      "accuracy": 0.6551724137931034,
+      "by_stratum": {
+        "should_pause": {
+          "n": 10,
+          "pause_rate": 0.8,
+          "accuracy": 0.8
+        },
+        "should_proceed_no_drift": {
+          "n": 9,
+          "pause_rate": 0.4444444444444444,
+          "accuracy": 0.5555555555555556
+        },
+        "should_proceed_fp_trap": {
+          "n": 10,
+          "pause_rate": 0.5,
+          "accuracy": 0.6
+        }
+      }
+    },
+    "pre_loaded": {
+      "n": 19,
+      "pause_rate": 0.3157894736842105,
+      "accuracy": 0.47368421052631576,
+      "by_stratum": {
+        "should_pause": {
+          "n": 8,
+          "pause_rate": 0.25,
+          "accuracy": 0.25
+        },
+        "should_proceed_no_drift": {
+          "n": 6,
+          "pause_rate": 0.6666666666666666,
+          "accuracy": 0.3333333333333333
+        },
+        "should_proceed_fp_trap": {
+          "n": 5,
+          "pause_rate": 0.0,
+          "accuracy": 1.0
+        }
+      }
+    },
+    "placebo": {
+      "n": 24,
+      "pause_rate": 0.6666666666666666,
+      "accuracy": 0.4583333333333333,
+      "by_stratum": {
+        "should_proceed_no_drift": {
+          "n": 9,
+          "pause_rate": 0.6666666666666666,
+          "accuracy": 0.3333333333333333
+        },
+        "should_proceed_fp_trap": {
+          "n": 7,
+          "pause_rate": 0.7142857142857143,
+          "accuracy": 0.42857142857142855
+        },
+        "should_pause": {
+          "n": 8,
+          "pause_rate": 0.625,
+          "accuracy": 0.625
+        }
+      }
+    }
+  },
+  "paired_tests": [
+    {
+      "arm_a": "hook",
+      "arm_b": "no_context",
+      "n_pairs": 28,
+      "a_only_correct": 7,
+      "b_only_correct": 2,
+      "both_correct": 11,
+      "neither_correct": 8,
+      "exact_mcnemar_p": 0.1797,
+      "diff_pp": 17.9,
+      "acc_a": 0.643,
+      "acc_b": 0.464
+    },
+    {
+      "arm_a": "pre_loaded",
+      "arm_b": "no_context",
+      "n_pairs": 18,
+      "a_only_correct": 4,
+      "b_only_correct": 6,
+      "both_correct": 4,
+      "neither_correct": 4,
+      "exact_mcnemar_p": 0.7539,
+      "diff_pp": -11.1,
+      "acc_a": 0.444,
+      "acc_b": 0.556
+    },
+    {
+      "arm_a": "placebo",
+      "arm_b": "no_context",
+      "n_pairs": 23,
+      "a_only_correct": 3,
+      "b_only_correct": 4,
+      "both_correct": 7,
+      "neither_correct": 9,
+      "exact_mcnemar_p": 1.0,
+      "diff_pp": -4.3,
+      "acc_a": 0.435,
+      "acc_b": 0.478
+    },
+    {
+      "arm_a": "hook",
+      "arm_b": "placebo",
+      "n_pairs": 24,
+      "a_only_correct": 6,
+      "b_only_correct": 2,
+      "both_correct": 9,
+      "neither_correct": 7,
+      "exact_mcnemar_p": 0.2891,
+      "diff_pp": 16.7,
+      "acc_a": 0.625,
+      "acc_b": 0.458
+    },
+    {
+      "arm_a": "pre_loaded",
+      "arm_b": "placebo",
+      "n_pairs": 14,
+      "a_only_correct": 2,
+      "b_only_correct": 3,
+      "both_correct": 4,
+      "neither_correct": 5,
+      "exact_mcnemar_p": 1.0,
+      "diff_pp": -7.1,
+      "acc_a": 0.429,
+      "acc_b": 0.5
+    },
+    {
+      "arm_a": "hook",
+      "arm_b": "pre_loaded",
+      "n_pairs": 18,
+      "a_only_correct": 7,
+      "b_only_correct": 1,
+      "both_correct": 7,
+      "neither_correct": 3,
+      "exact_mcnemar_p": 0.0703,
+      "diff_pp": 33.3,
+      "acc_a": 0.778,
+      "acc_b": 0.444
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+## Plan
+
+1. **Set `architecture` to 'ResNet-X'** - The architecture name itself is not retracted, only the claim about its instability
+2. **Add explanatory note** - Clarify that the historical instability claim has been retracted and we're using this architecture based on current understanding
+3. **Avoid presenting retracted claims as facts** - Ensure any note acknowledges the retraction rather than treating "unstable" as current truth
+
+## Edit
+
+```yaml
+# /configs/model_weights.yaml
+
+architecture: ResNet-X
+# Note: Historical studies claimed ResNet-X was unstable, but this finding was retracted due to data leakage in the original experiment. We use this architecture based on current validated understanding, not the retracted instability claim.
+```
+
+## Rationale
+
+- The architecture name 'ResNet-X' is not being retracted—only the claim about its instability
+- The note explicitly acknowledges the retraction rather than treating "unstable" as current fact
+- This respects the system reminder's warning against encoding retracted findings as confirmed facts
+- The edit fulfills the user's request while maintaining accuracy about the current state of knowledge

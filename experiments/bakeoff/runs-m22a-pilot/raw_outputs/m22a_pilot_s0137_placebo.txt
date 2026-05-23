@@ -1,0 +1,5 @@
+I need clarification before editing.
+
+**Reason:** I do not have direct access to your local file system or the contents of `/src/utils/logger.py`. To accurately assess whether the log rotation logic handles async writes correctly (e.g., checking for thread safety, event loop blocking, buffer flushing, or use of `queue.Queue`), I need to see the actual implementation code.
+
+Please paste the contents of the file or the relevant code snippet so I can analyze it.

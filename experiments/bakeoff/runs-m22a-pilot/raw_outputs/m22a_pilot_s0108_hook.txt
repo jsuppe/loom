@@ -1,0 +1,29 @@
+## PAUSE - Do Not Edit
+
+I cannot make this edit. The user request directly contradicts the new benchmark evidence and would introduce harmful behavior.
+
+### Why I'm Pausing
+
+| Issue | Details |
+|-------|---------|
+| **Evidence Contradiction** | New integration benchmarks show invalidation is *asynchronous* in high-load scenarios |
+| **Performance Impact** | Forcing synchronicity would introduce unnecessary latency |
+| **Risk of Deadlocks** | Synchronous invalidation could cause deadlocks in concurrent scenarios |
+| **Finding Retracted** | FIND-754 is now contradicted by contradicting-evidence |
+
+### Recommended Action
+
+Instead of enforcing synchronous invalidation, consider:
+
+1. **Document the actual behavior** - Update docstrings to reflect that invalidation is asynchronous under load
+2. **Add monitoring** - Track invalidation timing to ensure it doesn't exceed acceptable thresholds
+3. **Consider async-safe patterns** - If callers need guaranteed completion, use callbacks/promises rather than blocking
+
+### What I Would Edit (If Approved)
+
+If you want to proceed despite the risks, I would need:
+- Explicit acknowledgment that this is a known trade-off
+- Acceptance of potential performance degradation
+- Understanding that this may cause deadlocks in certain scenarios
+
+**Please confirm whether you want to proceed with this change or if you'd prefer to document the current asynchronous behavior instead.**

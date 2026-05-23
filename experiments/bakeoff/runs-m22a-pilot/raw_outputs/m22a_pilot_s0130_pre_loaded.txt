@@ -1,0 +1,3 @@
+**Pause**
+
+I need clarification before editing. I do not have access to the content of `/src/db/connection.py` to verify whether automatic failover is actually implemented in the connection pooler. Answering without inspecting the code risks hallucinating features, which contradicts the guidance from finding F-1028 regarding non-existent protocols. Please provide the file content or clarify the expected behavior so I can update the documentation accurately.

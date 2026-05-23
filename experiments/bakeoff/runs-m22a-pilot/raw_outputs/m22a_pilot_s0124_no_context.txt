@@ -1,0 +1,17 @@
+## Plan
+
+I need to see the content of `/src/config/settings.py` before making any edits. I cannot:
+
+1. Determine where the default theme setting is defined
+2. Understand the existing comment style/formatting in the file
+3. Ensure the comment placement won't conflict with existing code or imports
+
+## Request for Clarification
+
+Could you please provide the current content of `/src/config/settings.py`? Once I can see the file, I'll be able to:
+
+- Identify where the default theme setting is located
+- Match the existing code style and formatting conventions
+- Add an appropriate comment at the top of the file describing the default theme setting
+
+Alternatively, if you'd like me to proceed with a standard comment format, please share the relevant portion of the file where the theme setting is defined.

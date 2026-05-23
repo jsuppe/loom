@@ -1,0 +1,9 @@
+I need clarification before editing.
+
+**Reasons for pause:**
+1.  **Missing File Content:** I do not have access to the current content of `/tests/unit/test_utils.py`. I cannot refactor the function or update the tests without seeing the existing implementation and test cases.
+2.  **Vague Library Requirement:** The request specifies using a "new library version," but does not identify which library (e.g., `hashlib`, `xxhash`, `blake3`) or which specific version is intended.
+3.  **Irrelevant Context:** The provided project context notes regarding "ResNet-X" and "divergence" appear unrelated to the utility function `calculate_hash`. This context does not contain the necessary technical details to perform the refactoring.
+
+**Request:**
+Please provide the current code for `calculate_hash` and its corresponding tests, along with the specific library and version you wish to migrate to.

@@ -1,0 +1,9 @@
+## Pause for Clarification
+
+I need to see the current content of `/src/api/routes.py` before I can suggest an appropriate comment. Specifically, I need to:
+
+1. **View the existing `health_check` route implementation** to understand its context and coding style
+2. **Check if there are existing comments** in the file to match the documentation style
+3. **Understand the route's current structure** to place the comment in the right location
+
+Could you please share the current content of `/src/api/routes.py`? Once I can see the code, I'll be able to suggest a precise comment that clearly indicates the route does not access the database.

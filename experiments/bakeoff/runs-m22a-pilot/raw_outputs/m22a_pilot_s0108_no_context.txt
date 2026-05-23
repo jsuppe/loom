@@ -1,0 +1,20 @@
+## Pause: Need Clarification
+
+I cannot proceed with editing the file without seeing its current content. I need the following information before making changes:
+
+1. **File Content**: Please share the current implementation of `/src/utils/cache.py` so I can understand:
+   - How cache invalidation is currently implemented
+   - Whether it uses async/await, callbacks, or fire-and-forget patterns
+   - What the caller expects (return values, error handling, etc.)
+
+2. **Context**: 
+   - What framework or language is this (Python, Node.js, etc.)?
+   - Are there any existing tests that would need to pass?
+   - What performance implications should I consider?
+
+3. **Requirements**:
+   - Should the function return a boolean/status indicating completion?
+   - Should it raise exceptions on failure?
+   - Are there any timeout constraints?
+
+Please share the file content or describe the current implementation so I can provide an appropriate edit.

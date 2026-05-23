@@ -1,0 +1,25 @@
+## Plan
+
+I need to see the actual content of `/src/api/routes.py` before making any edits. Here's what I'll do once I have access to the file:
+
+1. **Review the file** - Locate all occurrences of the `raw_input` variable in the route handler
+2. **Identify scope** - Check if `raw_input` is used in multiple places (function parameters, local variables, etc.)
+3. **Rename consistently** - Replace all instances with `user_payload`
+4. **Verify functionality** - Ensure the change doesn't break any logic or references
+
+## Edit Required
+
+**I need clarification** before proceeding because:
+
+- I don't have access to view the actual file content at `/src/api/routes.py`
+- I need to see the current code to understand:
+  - Where `raw_input` is defined (function parameter, local variable, etc.)
+  - All places where it's referenced
+  - Whether there are any type hints or documentation that need updating
+  - If there are related variables that should also be renamed for consistency
+
+**Please provide:**
+1. The current content of `/src/api/routes.py`, or
+2. Confirm if you'd like me to proceed with a hypothetical edit based on typical route handler patterns
+
+Once I have the file content, I can provide the exact edit with the variable rename.

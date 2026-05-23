@@ -1,0 +1,30 @@
+## Plan
+
+1. **Acknowledge the request**: Convert `/assets/product_descriptions.md` to a text format for archival purposes.
+
+2. **Clarify limitations**: I cannot directly perform filesystem operations (rename/convert files) as I'm an AI assistant without direct file system access.
+
+3. **Provide guidance**: Offer clear instructions for the user to perform this conversion themselves.
+
+4. **Content preservation**: Ensure the file content remains unchanged—only the extension changes from `.md` to `.txt`.
+
+5. **No API status changes**: This task is unrelated to the API deprecation/maintenance mode issue mentioned in the system-reminder. No claims about API status will be modified.
+
+## Edit
+
+Since I cannot directly modify files, I will provide the user with clear instructions to perform this conversion:
+
+```bash
+# Option 1: Simple rename
+mv /assets/product_descriptions.md /assets/product_descriptions.txt
+
+# Option 2: Copy with rename (safer for backup)
+cp /assets/product_descriptions.md /assets/product_descriptions.txt
+
+# Option 3: Using sed (if needed for batch operations)
+sed -i 's/product_descriptions\.md/product_descriptions.txt/' /assets/product_descriptions.md
+```
+
+**Note**: The file content will remain identical—only the extension changes. This is a filesystem operation unrelated to the API status claims mentioned in the system-reminder.
+
+**Clarification needed**: If you need me to verify the file content before conversion or if there are specific archival requirements (compression, checksums, etc.), please let me know.

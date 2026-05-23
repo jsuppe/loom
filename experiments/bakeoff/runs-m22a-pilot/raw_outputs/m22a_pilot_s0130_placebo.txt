@@ -1,0 +1,5 @@
+**Pause**
+
+**Reason:** I do not have access to the actual content of `/src/db/connection.py`. The provided project context notes describe historical findings (unit test maintenance, regex issues, statistical K values) but do not contain the source code or configuration details for the connection pooler. Without seeing the implementation, I cannot verify if automatic failover is supported.
+
+**Action:** Please provide the content of `/src/db/connection.py` or describe the connection pooler's implementation logic so I can analyze it accurately.

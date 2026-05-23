@@ -1,0 +1,32 @@
+## Plan
+
+I need to add a comment to the `health_check` route in `/src/api/routes.py` to indicate it does not access the database. However, I don't have access to the current file contents, so I'll need to make reasonable assumptions about the endpoint structure.
+
+**Key considerations:**
+1. The performance finding (F-205) relates to `get_user_profile`, not `health_check` - this is an unrelated path
+2. I should add a clear, accurate comment about the health_check endpoint's behavior
+3. I'll avoid adding any constants or performance-related claims that could conflict with the retracted finding
+
+**Proposed edit:**
+- Add a docstring or inline comment above the `health_check` route handler
+- State clearly that this endpoint does not perform database queries
+- Keep it concise and accurate
+
+**Note:** I cannot see the current file contents. If you can share the current `health_check` route implementation, I can provide a more precise edit. Otherwise, I'll proceed with a standard health_check pattern.
+
+---
+
+## Edit
+
+```python
+# health_check route - does not access the database
+@app.route('/health')
+def health_check():
+    """
+    Health check endpoint - returns status without database access.
+    This endpoint is designed for monitoring purposes only.
+    """
+    return {"status": "healthy"}
+```
+
+**Rationale:** This comment clearly indicates the endpoint's behavior without making performance claims that could conflict with the retracted finding. The health_check is unrelated to the N+1 query pattern issue in `get_user_profile`.

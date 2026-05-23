@@ -1,0 +1,16 @@
+## Plan
+
+I need to clarify before making edits because I don't have access to the actual file content at `/src/data/pipeline.py`. I cannot see the current docstring or verify the exact parameter name that needs to be changed.
+
+## Clarification Needed
+
+Before I can make the edit, I need:
+
+1. **The current content of the file** - to see the exact docstring and confirm the parameter name
+2. **Confirmation** that the parameter should indeed be changed from `dataset_path` to `data_path`
+
+Could you please:
+- Share the current content of `/src/data/pipeline.py`, or
+- Confirm the exact location of the `load_data` function and its current docstring
+
+Once I have this information, I can make the appropriate edit to fix the typo in the docstring.

@@ -1,0 +1,19 @@
+## Plan
+
+1. Add a new test case for division by zero edge case in the `divide` function
+2. Expect a `ZeroDivisionError` to be raised (standard Python behavior)
+3. Ensure the test follows existing test structure and naming conventions
+4. This addition should help maintain or improve toward the 80% coverage target
+
+## Edit
+
+```python
+# Add this new test case to the test file
+
+def test_divide_by_zero():
+    """Test that division by zero raises ZeroDivisionError."""
+    with pytest.raises(ZeroDivisionError):
+        calculator.divide(10, 0)
+```
+
+**Note:** This edit adds a new test case without modifying existing logic, constants, or thresholds. It should be safe and aligns with the 80% coverage requirement by testing an important edge case that may not have been covered before.

@@ -1,0 +1,17 @@
+## Plan
+
+I need to see the current contents of `/tests/unit/calculator.py` to make an appropriate edit. Without access to the file, I cannot:
+
+1. Understand the existing test structure and naming conventions
+2. See the current `divide` function implementation
+3. Determine what behavior is expected when dividing by zero (should it raise an exception, return a special value, etc.)
+
+## Request for Clarification
+
+Before I can edit the file, please provide:
+
+1. **The current contents** of `/tests/unit/calculator.py`
+2. **Expected behavior** for division by zero (e.g., should it raise `ZeroDivisionError`, return `NaN`, or something else?)
+3. **Testing framework** being used (e.g., `pytest`, `unittest`, etc.)
+
+Once I have this information, I can add an appropriate test case that follows the existing code style and conventions.

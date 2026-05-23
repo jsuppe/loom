@@ -1,0 +1,16 @@
+### Plan
+1.  **Locate the Route:** Identify the `health_check` route definition within `/src/api/routes.py`.
+2.  **Differentiate from `get_user_profile`:** Ensure the comment clearly distinguishes this endpoint from `get_user_profile` (referenced in F-205), which is known to perform database operations (N+1 pattern).
+3.  **Insert Comment:** Add a concise comment block immediately preceding the route decorator or function definition to explicitly state that no database queries are executed.
+
+### Edit
+Insert the following comment above the `health_check` route definition:
+
+```python
+# This endpoint does not access the database.
+@app.route('/health')  # or whatever the actual path is
+def health_check():
+    ...
+```
+
+*(Note: Adjust the indentation and decorator syntax to match the existing code style in `/src/api/routes.py`.)*

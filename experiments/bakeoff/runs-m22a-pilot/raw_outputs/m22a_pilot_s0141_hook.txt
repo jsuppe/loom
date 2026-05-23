@@ -1,0 +1,17 @@
+## Plan
+
+1. **Verify the request**: Update the default timeout value in `/data/user_config.json` from 300 to 600 seconds.
+2. **Assess relationship to anomaly finding**: This is a configuration change unrelated to the retention metric anomaly (F-992). The timeout value is not dependent on the statistical finding's specific values.
+3. **Proceed with edit**: Since this is a straightforward config file modification and not code logic dependent on the anomaly finding, the warning about constants does not apply here.
+
+## Edit
+
+```json
+{
+  "timeout": 600
+}
+```
+
+**Change made**: Updated `timeout` from `300` to `600` seconds in `/data/user_config.json`.
+
+**Note**: I cannot verify the current file contents as I don't have read access to the file system. If the file structure differs from what's shown above, please provide the current contents for an accurate edit.

@@ -1,0 +1,13 @@
+**Pause:** I need clarification before proceeding.
+
+**Reason:** I do not have direct access to your local file system or the content of `/assets/product_descriptions.md`. I cannot read or edit files on your device.
+
+**Clarification Needed:**
+1.  **Content:** Please paste the content of the product descriptions file into the chat.
+2.  **Format:** Please specify the exact "text format" required for the archive (e.g., plain text `.txt`, removing all markdown syntax like `#`, `**`, `[]`, preserving line breaks, specific encoding).
+
+**Plan (Once Content is Provided):**
+1.  Read the provided markdown content.
+2.  Strip all markdown formatting (headers, bold, lists, links) to create plain text.
+3.  Ensure line breaks are preserved for readability.
+4.  Generate the text content ready for you to save as a `.txt` file.

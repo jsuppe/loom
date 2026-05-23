@@ -1,0 +1,12 @@
+I need clarification before editing.
+
+**Reason:** I do not have direct access to the file system to read the current content of `/src/utils/data_loader.py`. To accurately refactor the docstring, I need to see the existing text to:
+1.  Identify the specific claim regarding "Dataset X's completeness" that needs to be removed.
+2.  Understand the current description of sensor columns to ensure the new "optional" phrasing is technically accurate and consistent with the rest of the codebase.
+
+**Plan:**
+1.  Please provide the current content of the `load_data` function's docstring (or the file content).
+2.  Once received, I will draft the refactored docstring that removes the Dataset X claim and clarifies the optional sensor columns.
+3.  I will present the final edit for your review.
+
+**Edit:** [Pending file content]

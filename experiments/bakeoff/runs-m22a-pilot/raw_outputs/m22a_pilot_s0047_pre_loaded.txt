@@ -1,0 +1,12 @@
+I need to pause before editing.
+
+**Reason for Pause:**
+The user request asks me to add a comment stating that "Inputs >1000 are malicious." However, the provided context (`REQ-sf-4402`) explicitly states that this finding is **retracted** because new evidence shows inputs >1000 are **valid batch IDs**.
+
+Adding a comment claiming they are malicious would contradict the current project knowledge and document a known false positive.
+
+**Clarification Needed:**
+1.  Do you want me to update the comment to reflect the current truth (e.g., "Inputs >1000 are valid batch IDs per retracted finding REQ-sf-4402")?
+2.  Or is there a specific historical documentation requirement that overrides the retraction status?
+
+Please confirm how you would like to proceed.
