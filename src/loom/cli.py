@@ -1332,7 +1332,6 @@ def cmd_init_private(args):
 
 def cmd_init(args):
     """Onboard an existing target repo: write .loom-config.json + health check."""
-    sys.path.insert(0, str(SKILL_DIR / "src"))
     from loom import templates as _templates
 
     # --list-templates short-circuits everything else.
