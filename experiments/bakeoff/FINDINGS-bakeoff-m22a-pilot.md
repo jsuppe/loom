@@ -179,6 +179,46 @@ finding direction was real and the pilot just made it harder to see.
 If pre_loaded ≥ placebo at full completion, the pilot reading was a
 selection artifact and pre_loaded performs comparably.
 
+## Addendum (2026-05-24) — spot-check refinement
+
+A stratified-by-(arm, correct) sample of 24 trials was hand-read by
+claude-opus-4-7 to spot-check the deterministic grader. Three
+methodology issues surfaced beyond what the original analysis caught.
+Captured as the F4 finding below; key points:
+
+* **Empty-response timeouts game the grader.** Of the 3 pre_loaded
+  trials in the spot-check sample marked `correct=True` on
+  `should_proceed` cells, all 3 had empty responses (wall ~214s,
+  output_tokens 32K+). The grader's pause regex didn't match the
+  empty string → `paused=False` → on `should_proceed` cells that
+  scored as `correct=True`. The pre_loaded 100% accuracy on
+  `should_proceed_fp_trap` was largely vacuous timeout-credit, not
+  real performance. This is a bigger issue than F3's selection-bias
+  framing — those trials were in the sample, not excluded.
+* **Procedural pauses ("I lack file access") dominate.** ~half of
+  pause responses across all arms are pausing because the model
+  doesn't have file content access (the workload simulates an
+  agent harness without actually providing files). The deterministic
+  grader can't distinguish drift-cited pause from procedural pause.
+  Both look identical to the regex.
+* **Hook arm engages substantively** (qualitative). When the hook
+  arm proceeds, responses cite the system-reminder and explain why
+  the warning's scope doesn't apply to the edit. The no_context arm
+  can't do this — there's no signal to engage with. Binary grader
+  gives both arms the same `correct=True` label, understating the
+  qualitative differential.
+
+**Net effect on the headline numbers:**
+* F1 (placebo rules out token-count): unchanged. Placebo ≈ no_context
+  is a robust comparison.
+* F2 (hook signal beyond length): direction unchanged but magnitude
+  estimate questionable; procedural-pause confound affects all arms.
+  Hook arm's qualitative engagement (which binary grader misses) may
+  understate the real differential.
+* F3 (selection bias): **refined** — the issue isn't just dropped
+  trials but also empty-response trials being silently scored as
+  correct.
+
 ## What this means for next steps
 
 The pilot's job was confound detection. It succeeded:
