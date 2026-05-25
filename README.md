@@ -77,6 +77,15 @@ The honest claim Loom can make:
 > in the target language. It amplifies fluent executors; it does
 > not bring marginally-fluent executors over the threshold."*
 
+A second, complementary claim from the M22a augmentation-effectiveness
+study (Headline Finding 4 below):
+
+> *"Loom-augmented prompts enable confident scope-aware decisions
+> — committed action with explicit reasoning about why a stored
+> constraint does or doesn't apply — at rates 6-7× higher than
+> equally-long irrelevant context or no context. The value is not
+> 'pause more,' it's 'know what to proceed with and why.'"*
+
 ### Top-line numbers (cumulative across all phases)
 
 | measure | value |
@@ -170,6 +179,41 @@ load-bearing mechanism is **structural drift surfacing** (the
 M13.5a-c) — warning text refinements are second-order.
 
 Detail: [`FINDINGS-bakeoff-v3-scope-qualifier.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-scope-qualifier.md), with [`FINDINGS-bakeoff-v3-drift-effectiveness.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-drift-effectiveness.md), [`FINDINGS-bakeoff-v3-evidence-dependent.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-evidence-dependent.md), and [`FINDINGS-bakeoff-v3-payload-sharpening.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-payload-sharpening.md) for the M13.6 ablation pipeline.
+
+### Headline finding 4: loom rationale → scope-aware proceeding, not just pausing (M22a-pilot + 4-bin re-grade)
+
+The augmentation effectiveness study (N=120 across 4 arms on m13_v1
+scenarios, qwen3.5 subject) plus a pre-registered 4-bin re-grade
+refined what loom-augmentation actually does. Both reports are
+honest-null-friendly: pre-registered falsifiers, locked exclusions,
+independent-taxonomy check, cross-vendor judge calibration.
+
+| arm | engaged-with-context | proceeded_with_reasoning |
+|---|---|---|
+| **hook** (loom production payload) | **93.1 %** (27/29) | **41 %** (12/29) |
+| placebo (length-matched irrelevant project text) | 70.6 % (12/17) | 6 % (1/17) |
+| pre_loaded (project-docs preamble) | 62.5 % (5/8) — N too small | 25 % |
+| no_context (bare task) | 25.9 % (7/27) | 0 % |
+
+Two surprises beyond the original binary-grader story:
+
+* **Most of the "loom helps" lift is "any project context primes
+  engaged behavior."** Placebo (length-matched irrelevant project
+  text) drives +50pp engagement over no_context — paired McNemar
+  p=0.008. Loom's structured rationale adds a smaller increment
+  (+17.6pp over placebo, NS at n=17 paired).
+* **Loom uniquely enables `proceeded_with_reasoning`.** Hook
+  produces "committed to action AND explained why scope doesn't
+  apply" responses in 41% of trials; placebo and no_context get ≤6%.
+  The loom value-prop at this measurement level is not "pause more"
+  but "know what's safe to proceed with, and explain why."
+
+**Refined value-prop framing:**
+* *Original*: "loom rationale → more cautious behavior"
+* *Refined*: **"loom rationale → confident scope-aware decisions,
+  including knowing what to safely proceed on"**
+
+Detail: [`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-m22a-pilot.md), the pre-registered [`REGRADE_PREREGISTRATION.md`](experiments/bakeoff/m22a_pilot/REGRADE_PREREGISTRATION.md), and the 4-bin re-grade writeup [`FINDINGS-bakeoff-m22a-regrade.md`](experiments/bakeoff/FINDINGS-bakeoff-m22a-regrade.md).
 
 ### Other validated claims
 
