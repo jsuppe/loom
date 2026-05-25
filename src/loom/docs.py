@@ -48,6 +48,19 @@ def _write_doc_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def _format_req_handle(req) -> str:
+    """M17.2 — render a req's display handle. When a slug is present:
+    ``REQ-a636de03 (imperative-rule-kit)``. When absent (legacy
+    pre-M17.2 entries that never got a slug, or migration failures):
+    bare ``REQ-a636de03``. Used in doc headings + traceability
+    matrix so human readers get a memorable name without losing the
+    stable id."""
+    slug = getattr(req, "slug", None)
+    if slug:
+        return f"{req.id} ({slug})"
+    return req.id
+
+
 def _format_impl_location(impl) -> str:
     """Format an Implementation's (file, lines) for doc rendering (M16.1).
 
@@ -301,10 +314,11 @@ def generate_requirements_doc(
         for req in sorted(domain_reqs, key=lambda r: r.timestamp):
             # M11.2: surface rationale_needed as a visible marker on
             # the heading so debt is impossible to overlook in scans.
+            handle = _format_req_handle(req)
             if req.status == "rationale_needed":
-                lines.append(f"### {req.id}   ⚠ rationale_needed")
+                lines.append(f"### {handle}   ⚠ rationale_needed")
             else:
-                lines.append(f"### {req.id}")
+                lines.append(f"### {handle}")
             lines.append("")
             lines.append(f"> {req.value}")
             lines.append("")
@@ -350,58 +364,78 @@ def generate_requirements_doc(
             lines.append(f"- ~~{req.id}: {req.value}~~ (superseded {req.superseded_at[:10]})")
         lines.append("")
 
-    # M12.2: traceability matrix only makes sense for kind=requirement
-    # — findings/methodology/etc don't have specs/impls in the
-    # implementation sense.
+    # M17.3 — only render the unified traceability matrix once, in
+    # the requirements doc. Per-kind docs (FINDINGS.md / etc) stop
+    # here so each kind has its own narrative without duplicating
+    # the cross-kind matrix.
     if kind != "requirement":
         output_path = output_dir / cfg["filename"]
         _write_doc_if_changed(output_path, "\n".join(lines))
         return output_path
 
-    # Traceability matrix — three layers
+    # M17.3 — unified kind-faceted matrix. Pulls every active entry
+    # across all kinds (requirement / finding / methodology /
+    # hypothesis / process_rule) so REQUIREMENTS.md is the single
+    # cross-kind index of the store. Per-kind docs stay narrative-
+    # focused.
     lines.append("## Traceability Matrix")
     lines.append("")
-    lines.append("*Requirements → Specifications → Implementations*")
+    lines.append(
+        "*Cross-kind index — every active entry with its links to "
+        "specs, code, and test specs.*"
+    )
     lines.append("")
 
-    # M11.2: include "Derives from" column only when at least one
-    # active req has linkage. Avoids cluttering the matrix for
-    # projects that haven't started using rationale_links yet.
+    all_active = [
+        r for r in store.list_requirements(include_superseded=False)
+        if r.status != "archived"
+    ]
+    if public_mode:
+        all_active = [r for r in all_active if r.id not in private_ids]
+
+    # Pre-fetch impls/specs for the cross-kind set (extends req_impls
+    # which was only populated for kind=requirement above).
+    for r in all_active:
+        if r.id not in req_impls:
+            req_impls[r.id] = store.get_implementations_for_requirement(r.id)
+        if r.id not in req_specs:
+            req_specs[r.id] = [
+                s for s in store.get_specifications_for_requirement(r.id)
+                if not s.superseded_at
+            ]
+
     any_links = any(
-        getattr(r, 'rationale_links', None) for r in reqs
+        getattr(r, 'rationale_links', None) for r in all_active
     )
     if any_links:
-        lines.append("| Requirement | Domain | Derives from | Specs | Files | Test Spec |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append("| Entry | Kind | Domain | Status | Derives from | Specs | Files | Test Spec |")
+        lines.append("|---|---|---|---|---|---|---|---|")
     else:
-        lines.append("| Requirement | Domain | Specs | Files | Test Spec |")
-        lines.append("|---|---|---|---|---|")
-    for req in sorted(reqs, key=lambda r: r.domain + r.timestamp):
+        lines.append("| Entry | Kind | Domain | Status | Specs | Files | Test Spec |")
+        lines.append("|---|---|---|---|---|---|---|")
+    for req in sorted(all_active, key=lambda r: (r.kind, r.domain, r.timestamp)):
         specs = req_specs.get(req.id, [])
         impls = req_impls.get(req.id, [])
 
-        if specs:
-            specs_str = ", ".join(f"`{s.id}`" for s in specs)
-        else:
-            specs_str = "—"
-
-        if impls:
-            files = ", ".join(_format_impl_location(impl) for impl in impls)
-        else:
-            files = "—"
-
+        handle = _format_req_handle(req)
+        specs_str = ", ".join(f"`{s.id}`" for s in specs) if specs else "—"
+        files = (
+            ", ".join(_format_impl_location(impl) for impl in impls)
+            if impls else "—"
+        )
         test = req.test_spec_id if req.test_spec_id else "—"
 
         if any_links:
             link_ids = getattr(req, 'rationale_links', None) or []
             derives = ", ".join(f"`{lid}`" for lid in link_ids) if link_ids else "—"
             lines.append(
-                f"| {req.id} | {req.domain} | {derives} | "
-                f"{specs_str} | {files} | {test} |"
+                f"| {handle} | {req.kind} | {req.domain} | {req.status} | "
+                f"{derives} | {specs_str} | {files} | {test} |"
             )
         else:
             lines.append(
-                f"| {req.id} | {req.domain} | {specs_str} | {files} | {test} |"
+                f"| {handle} | {req.kind} | {req.domain} | {req.status} | "
+                f"{specs_str} | {files} | {test} |"
             )
     lines.append("")
 

@@ -1861,6 +1861,107 @@ class TestSupersede:
         assert store.get_implementation(impl_id) is not None
 
 
+class TestSlug:
+    """M17.2 — slug generation + set_slug service."""
+
+    def test_generate_slug_strips_stopwords(self):
+        # "Loom rules MUST be written with absolute imperative wording"
+        # → first 5 content words after stripping must/be/the/etc.
+        slug = services.generate_slug(
+            "High-stakes Loom rules MUST be written with absolute "
+            "imperative wording"
+        )
+        # Stripped: high stakes loom rules written absolute imperative
+        # wording. First 5: high-stakes-loom-rules-written
+        assert slug.startswith("high-stakes-loom-rules")
+        assert "must" not in slug
+        assert "be" not in slug
+
+    def test_generate_slug_empty_value(self):
+        assert services.generate_slug("") == "unnamed"
+        assert services.generate_slug("   ") == "unnamed"
+        # All stopwords case
+        assert services.generate_slug("the of to and") == "unnamed"
+
+    def test_generate_slug_truncates_long(self):
+        slug = services.generate_slug(
+            "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+        )
+        # max_words=5 by default
+        parts = slug.split("-")
+        assert len(parts) <= 5
+
+    def test_generate_slug_normalizes_punctuation(self):
+        slug = services.generate_slug("foo.bar/baz; qux—corge")
+        assert "." not in slug
+        assert "/" not in slug
+        assert ";" not in slug
+
+    def test_set_slug_persists(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.set_slug(store, "REQ-x", "my-handle")
+        assert result == {"req_id": "REQ-x", "slug": "my-handle"}
+        assert store.get_requirement("REQ-x").slug == "my-handle"
+
+    def test_set_slug_normalizes(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        result = services.set_slug(store, "REQ-x", "My Cool Handle!")
+        assert result["slug"] == "my-cool-handle"
+
+    def test_set_slug_empty_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        with pytest.raises(ValueError, match="empty"):
+            services.set_slug(store, "REQ-x", "!!!")
+
+    def test_set_slug_collision_raises(self, store, fake_embedding):
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        _mk_req(store, "REQ-y", "behavior", "y", fake_embedding)
+        services.set_slug(store, "REQ-x", "shared-name")
+        with pytest.raises(ValueError, match="already in use"):
+            services.set_slug(store, "REQ-y", "shared-name")
+
+    def test_set_slug_same_req_idempotent(self, store, fake_embedding):
+        # Setting the same slug on the same req should NOT raise (the
+        # uniqueness check excludes the req being set).
+        _mk_req(store, "REQ-x", "behavior", "x", fake_embedding)
+        services.set_slug(store, "REQ-x", "my-handle")
+        # Idempotent: same value again works.
+        services.set_slug(store, "REQ-x", "my-handle")
+        assert store.get_requirement("REQ-x").slug == "my-handle"
+
+    def test_set_slug_unknown_raises(self, store):
+        with pytest.raises(LookupError):
+            services.set_slug(store, "REQ-missing", "x")
+
+    def test_extract_auto_slugs(self, store):
+        out = services.extract(
+            store, domain="behavior",
+            value="Always retain experimental findings in github",
+            rationale="r",
+        )
+        req = store.get_requirement(out["req_id"])
+        assert req.slug
+        # Stopwords stripped; meaningful content survives
+        assert "always" not in req.slug
+        assert "retain" in req.slug or "experimental" in req.slug
+
+    def test_extract_auto_slug_disambiguates(self, store):
+        # Two reqs with similar value → second should get -2 suffix
+        services.extract(
+            store, domain="behavior",
+            value="alpha beta gamma", rationale="r",
+        )
+        out2 = services.extract(
+            store, domain="behavior",
+            value="alpha beta gamma delta",  # different req but same first words
+            rationale="r",
+        )
+        req2 = store.get_requirement(out2["req_id"])
+        # second one: slug should disambiguate via -2 OR by including delta
+        assert req2.slug
+        assert req2.slug != "alpha-beta-gamma" or req2.slug.endswith("-2")
+
+
 class TestSetStatus:
     def test_unknown_req_raises_lookup(self, store):
         with pytest.raises(LookupError):

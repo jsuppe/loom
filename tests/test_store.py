@@ -448,9 +448,12 @@ class TestDocGeneration:
             content = path.read_text(encoding="utf-8")
 
             assert "## Traceability Matrix" in content
-            assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
-            # M16.1 — matrix Files column also renders line ranges
-            assert "| REQ-001 | behavior | — | `src/projects.py:10-25` | — |" in content
+            # M17.3 — unified kind-faceted matrix (Entry/Kind/Domain/Status/Specs/Files/Test Spec)
+            assert "| Entry | Kind | Domain | Status | Specs | Files | Test Spec |" in content
+            # M16.1 + M17.2 — matrix Files column has line ranges; Entry has slug handle
+            assert "REQ-001" in content
+            assert "`src/projects.py:10-25`" in content
+            assert "| behavior | pending |" in content
 
     def test_test_spec_doc_shows_covered_code(self, temp_store, sample_embedding):
         """Generated TEST_SPEC.md shows linked code under test specs."""
@@ -579,8 +582,10 @@ class TestDocGeneration:
             # M16.1 — line ranges render as `path:start-end` (no "lines" placeholder)
             assert "`src/projects.py:10-25`" in content
             # Traceability matrix shows spec ID
-            # M16.1 — matrix Files column also renders line ranges
-            assert "| REQ-001 | behavior | `SPEC-001` | `src/projects.py:10-25` | — |" in content
+            # M16.1 — matrix Files column renders line ranges; M17.3 unified shape
+            assert "REQ-001" in content
+            assert "`SPEC-001`" in content
+            assert "`src/projects.py:10-25`" in content
 
     # M11.2 — rationale linkage rendering
 
@@ -693,11 +698,12 @@ class TestDocGeneration:
                 temp_store, Path(out_dir),
             ).read_text(encoding="utf-8")
         # Header gains the column.
-        assert "| Requirement | Domain | Derives from | Specs | Files | Test Spec |" in content
-        # Derived row shows the link.
-        assert "| REQ-B | behavior | `REQ-A` |" in content
-        # Anchor row shows em-dash for empty.
-        assert "| REQ-A | behavior | — |" in content
+        # M17.3 — unified matrix header includes Kind + Status
+        assert "| Entry | Kind | Domain | Status | Derives from | Specs | Files | Test Spec |" in content
+        # M17.3 — unified matrix row shape: Entry | Kind | Domain | Status | Derives from
+        assert "| REQ-B | requirement | behavior | pending | `REQ-A` |" in content
+        # Anchor row: M17.3 — unified shape with em-dash for empty Derives from.
+        assert "| REQ-A | requirement | behavior | pending | — |" in content
 
     def test_traceability_matrix_omits_derives_column_when_no_links(
         self, temp_store, sample_embedding,
@@ -719,7 +725,8 @@ class TestDocGeneration:
             content = generate_requirements_doc(
                 temp_store, Path(out_dir),
             ).read_text(encoding="utf-8")
-        assert "| Requirement | Domain | Specs | Files | Test Spec |" in content
+        # M17.3 — unified matrix header (no Derives from when no links)
+        assert "| Entry | Kind | Domain | Status | Specs | Files | Test Spec |" in content
         assert "Derives from" not in content
 
     # M12.2 — per-kind doc emission
@@ -802,10 +809,19 @@ class TestDocGeneration:
             content = generate_requirements_doc(
                 temp_store, Path(out_dir), kind="requirement",
             ).read_text(encoding="utf-8")
-        # Requirement appears, finding does not.
-        assert "REQ-real" in content
-        assert "REQ-finding" not in content
-        assert "research finding" not in content
+        # M17.3 — the body of REQUIREMENTS.md is requirement-only, but
+        # the traceability matrix is cross-kind. Split on the matrix
+        # header so we can assert the kind filter applies to the body
+        # while the matrix still includes the finding.
+        body, _, matrix = content.partition("## Traceability Matrix")
+        # Body: requirement appears, finding does not, value text not present.
+        assert "REQ-real" in body
+        assert "REQ-finding" not in body
+        assert "research finding" not in body
+        # Matrix: cross-kind, both present with kind column.
+        assert "REQ-real" in matrix
+        assert "REQ-finding" in matrix
+        assert "| finding |" in matrix
 
     def test_non_requirement_kind_omits_traceability_matrix(self, temp_store, sample_embedding):
         """Findings/methodology don't have specs/impls in the

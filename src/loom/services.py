@@ -1353,6 +1353,11 @@ def extract(
     else:
         initial_status = "rationale_needed"
 
+    # M17.2: auto-generate a kebab-case slug from value content,
+    # disambiguated against existing slugs. Manual override later
+    # via `loom slug REQ-x <name>`.
+    auto_slug = _unique_slug(store, generate_slug(value), exclude_req_id=req_id)
+
     req = Requirement(
         id=req_id,
         domain=domain,
@@ -1364,6 +1369,7 @@ def extract(
         rationale_links=cleaned_links,
         status=initial_status,
         kind=kind,
+        slug=auto_slug,
     )
 
     # Conflict check is best-effort. Done before adding so the conflict
@@ -3767,6 +3773,109 @@ def set_status(
         prev = hop
 
     return {"req_id": req_id, "status": status, "path": path}
+
+
+# M17.2 — slug generation. Stopwords + verb-like tokens that don't
+# carry the gist of a requirement when they appear early. The list is
+# deliberately conservative; we want short readable handles, not
+# perfect summarization.
+_SLUG_STOPWORDS = frozenset({
+    # Articles, prepositions, conjunctions
+    "the", "a", "an", "of", "to", "in", "on", "for", "with", "and",
+    "or", "but", "by", "as", "at", "from", "into", "onto", "than",
+    "this", "that", "these", "those", "their", "its", "such",
+    # Aux verbs / modals (often the imperative shell, not the content)
+    "must", "should", "shall", "will", "can", "may", "might", "would",
+    "could", "do", "does", "did", "have", "has", "had", "be", "is",
+    "are", "was", "were", "been", "being",
+    # Boilerplate
+    "not", "no", "all", "any", "some", "only", "also", "when",
+    "where", "what", "which", "who", "how", "why",
+    "always", "never", "every", "each",
+})
+_SLUG_MAX_WORDS = 5
+_SLUG_MAX_CHARS = 50
+
+
+def generate_slug(value: str, max_words: int = _SLUG_MAX_WORDS,
+                  max_chars: int = _SLUG_MAX_CHARS) -> str:
+    """Generate a kebab-case slug from a requirement value (M17.2).
+
+    Strips stopwords + aux-verbs, takes the first ``max_words``
+    remaining content words, lowercases + joins with hyphens, caps
+    total length. Returns ``"unnamed"`` when the input has no
+    extractable content words (e.g. pure punctuation).
+
+    Pure function; no uniqueness check (callers handle collisions
+    by appending ``-2``, ``-3``, ...).
+    """
+    import re
+    text = re.sub(r"[^a-zA-Z0-9]+", " ", (value or "").lower())
+    words = [
+        w for w in text.split()
+        if w and len(w) > 2 and w not in _SLUG_STOPWORDS
+    ]
+    selected = words[:max_words]
+    slug = "-".join(selected)
+    if len(slug) > max_chars:
+        # Truncate at word boundary so the slug doesn't end mid-word.
+        slug = slug[:max_chars].rsplit("-", 1)[0]
+    return slug or "unnamed"
+
+
+def _slug_in_use(store: LoomStore, slug: str, exclude_req_id: str | None = None) -> bool:
+    """True if any requirement (other than ``exclude_req_id``) already
+    has this slug."""
+    for req in store.list_requirements(include_superseded=True):
+        if req.id == exclude_req_id:
+            continue
+        if getattr(req, "slug", None) == slug:
+            return True
+    return False
+
+
+def _unique_slug(store: LoomStore, base: str, exclude_req_id: str | None = None) -> str:
+    """Disambiguate by appending ``-2``, ``-3``, ... until unique."""
+    if not _slug_in_use(store, base, exclude_req_id):
+        return base
+    n = 2
+    while True:
+        candidate = f"{base}-{n}"
+        if not _slug_in_use(store, candidate, exclude_req_id):
+            return candidate
+        n += 1
+
+
+def set_slug(store: LoomStore, req_id: str, slug: str) -> dict[str, Any]:
+    """Set a requirement's slug manually (M17.2).
+
+    Slug is normalized to kebab-case (lowercased, non-alphanumeric →
+    hyphens). Uniqueness is enforced — collision raises ValueError so
+    the caller can pick a different name. To auto-disambiguate
+    silently use ``services.generate_slug`` + ``_unique_slug``.
+
+    Returns: {req_id, slug}.
+
+    Raises:
+        ValueError: slug is empty after normalization or already in use.
+        LookupError: req_id not found.
+    """
+    import re
+    if store.get_requirement(req_id) is None:
+        raise LookupError(f"Requirement {req_id} not found")
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "-", (slug or "").lower()).strip("-")
+    if not normalized:
+        raise ValueError(f"Slug is empty after normalization: {slug!r}")
+    if _slug_in_use(store, normalized, exclude_req_id=req_id):
+        raise ValueError(
+            f"Slug {normalized!r} already in use. "
+            f"Pick a different name or run services._unique_slug to "
+            f"auto-disambiguate."
+        )
+    updated = store.update_requirement(req_id, {"slug": normalized})
+    if updated is None:
+        raise LookupError(f"Requirement {req_id} not found")
+    return {"req_id": req_id, "slug": normalized}
 
 
 def set_kind(store: LoomStore, req_id: str, kind: str) -> dict[str, Any]:

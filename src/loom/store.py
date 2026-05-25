@@ -247,6 +247,14 @@ class Requirement:
     # routing (M12.5), and the `evidences` link type (M12.6).
     # See docs/DESIGN-research-mode.md for the full taxonomy.
     kind: str = "requirement"
+    # M17.2: human-readable short alias (kebab-case) for the REQ-id.
+    # Generated automatically by ``services.generate_slug`` at
+    # extract time; overridable via ``loom slug REQ-xxx <name>``.
+    # Defaults to None for back-compat — older stores load fine and
+    # `loom sync` will only render slugs when present. Uniqueness is
+    # not enforced at the dataclass level (the CLI checks and
+    # disambiguates by suffix when collisions occur).
+    slug: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -271,6 +279,7 @@ class Requirement:
         d.setdefault('conversation_context', None)
         d.setdefault('last_referenced', None)
         d.setdefault('kind', 'requirement')  # M12.1 (back-compat)
+        d.setdefault('slug', None)  # M17.2 (back-compat)
         return cls(**d)
     
     def is_complete(self) -> bool:

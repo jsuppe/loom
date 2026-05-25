@@ -1808,6 +1808,18 @@ def cmd_set_kind(args):
     return 0
 
 
+def cmd_slug(args):
+    """Set a requirement's human-readable slug (M17.2)."""
+    store = LoomStore(args.project)
+    try:
+        result = services.set_slug(store, args.req_id, args.slug)
+    except (LookupError, ValueError) as e:
+        print(f"❌ {e}")
+        return 1
+    print(f"✅ {result['req_id']} → slug={result['slug']!r}")
+    return 0
+
+
 def cmd_warrant(args):
     """Push or retract a warrant against the Driftgraph substrate (M13).
 
@@ -3031,6 +3043,16 @@ def main():
              "finding/process-rule as a generic requirement.",
     )
 
+    # slug (M17.2) — set a human-readable alias for a REQ-id
+    p_slug = sp("slug", help="Set a human-readable slug alias for a "
+                              "requirement (M17.2)")
+    p_slug.add_argument("req_id", help="Requirement ID")
+    p_slug.add_argument(
+        "slug",
+        help="Kebab-case alias. Will be normalized (lowercased; "
+             "non-alphanumeric → hyphens). Uniqueness enforced.",
+    )
+
     # warrant — Driftgraph integration (M13)
     p_warrant = sp(
         "warrant",
@@ -3401,6 +3423,7 @@ def main():
         "set-status": cmd_set_status,
         "verify-stable": cmd_verify_stable,
         "set-kind": cmd_set_kind,
+        "slug": cmd_slug,
         "warrant": cmd_warrant,
         "incomplete": cmd_incomplete,
         "spec": cmd_spec_add,

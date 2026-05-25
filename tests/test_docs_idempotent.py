@@ -22,6 +22,7 @@ import pytest
 
 from loom.docs import (
     _format_impl_location,
+    _format_req_handle,
     _normalize_for_compare,
     _write_doc_if_changed,
     generate_requirements_doc,
@@ -151,6 +152,33 @@ class TestFormatImplLocation:
         out = _format_impl_location(impl)
         assert "(lines all)" not in out
         assert "lines all" not in out
+
+
+class TestFormatReqHandle:
+    """M17.2 — slug-aware req handle renderer."""
+
+    def _req(self, slug=None) -> Requirement:
+        return Requirement(
+            id="REQ-abc12345",
+            domain="behavior",
+            value="example",
+            source_msg_id="m1",
+            source_session="s1",
+            timestamp="2026-01-01T00:00:00Z",
+            slug=slug,
+        )
+
+    def test_handle_with_slug(self):
+        assert _format_req_handle(self._req(slug="imperative-rule-kit")) == (
+            "REQ-abc12345 (imperative-rule-kit)"
+        )
+
+    def test_handle_without_slug(self):
+        assert _format_req_handle(self._req(slug=None)) == "REQ-abc12345"
+
+    def test_handle_with_empty_slug(self):
+        # Empty string slug is treated as missing.
+        assert _format_req_handle(self._req(slug="")) == "REQ-abc12345"
 
 
 class TestGeneratorsIdempotent:
