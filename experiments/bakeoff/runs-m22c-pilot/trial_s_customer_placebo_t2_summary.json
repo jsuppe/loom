@@ -1,0 +1,37 @@
+{
+  "study": "m22c-pilot",
+  "scenario_id": "s_customer",
+  "arm": "placebo",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 1,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [],
+  "raw_output_path": "raw_outputs\\m22c_s_customer_placebo_t2.txt",
+  "input_tokens": 173,
+  "output_tokens": 302,
+  "llm_elapsed_s": 2.1,
+  "wall_s": 5.9,
+  "grade_stdout_tail": "type 'CustomerService'.\n   - 'CustomerService' is from 'package:shop/services/customer_service.dart' ('lib/services/customer_service.dart').\n  Try correcting the name to the name of an existing method, or defining a method named 'ConflictError'.\n        throw ConflictError('Customer with id ${customer.id} already exists.');\n              ^^^^^^^^^^^^^\n  lib/services/customer_service.dart:25:13: Error: The method 'NotFoundError' isn't defined for the type 'CustomerService'.\n   - 'CustomerService' is from 'package:shop/services/customer_service.dart' ('lib/services/customer_service.dart').\n  Try correcting the name to the name of an existing method, or defining a method named 'NotFoundError'.\n        throw NotFoundError('Customer with id $id not found.');\n              ^^^^^^^^^^^^^\n  lib/services/customer_service.dart:32:33: Error: 'Address' isn't a type.\n    void updateAddress(String id, Address address) {\n                                  ^^^^^^^\n  lib/services/customer_service.dart:35:13: Error: The method 'NotFoundError' isn't defined for the type 'CustomerService'.\n   - 'CustomerService' is from 'package:shop/services/customer_service.dart' ('lib/services/customer_service.dart').\n  Try correcting the name to the name of an existing method, or defining a method named 'NotFoundError'.\n        throw NotFoundError('Customer with id $id not found.');\n              ^^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n\n"
+}

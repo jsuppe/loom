@@ -1,0 +1,47 @@
+﻿M22c-pilot: 3 scenarios × 4 arms × 2 trials = 24 trials on qwen3.5:latest
+Output: C:\Users\jonsu\dev\loom\experiments\bakeoff\runs-m22c-pilot
+
+Already complete: 4/24 (resume mode)
+
+[1/24] s_order      | placebo         | t2
+    ✗ bin=compile_fail  pass=0/1 wall=10.9s
+[2/24] s_customer   | placebo         | t2
+    ✗ bin=compile_fail  pass=0/1 wall=5.9s
+[3/24] s_inventory  | no_context      | t1
+    ✗ bin=compile_fail  pass=0/1 wall=8.5s
+[4/24] s_order      | hook_rationale  | t2
+    ✗ bin=compile_fail  pass=0/0 wall=25.7s
+[6/24] s_order      | hook_fact       | t1
+    ✗ bin=compile_fail  pass=0/1 wall=7.8s
+[7/24] s_order      | no_context      | t1
+    ✗ bin=compile_fail  pass=0/1 wall=11.3s
+[8/24] s_order      | placebo         | t1
+    ✗ bin=compile_fail  pass=0/1 wall=10.7s
+[9/24] s_customer   | no_context      | t2
+    ✗ bin=compile_fail  pass=0/1 wall=7.1s
+[10/24] s_inventory  | hook_fact       | t2
+    ✗ bin=compile_fail  pass=0/1 wall=9.4s
+[11/24] s_inventory  | hook_rationale  | t2
+    ✗ bin=compile_fail  pass=0/1 wall=12.9s
+[13/24] s_order      | hook_fact       | t2
+    ✗ bin=compile_fail  pass=0/1 wall=7.9s
+[14/24] s_inventory  | no_context      | t2
+    ✗ bin=compile_fail  pass=0/1 wall=8.4s
+[15/24] s_inventory  | placebo         | t2
+    ✗ bin=compile_fail  pass=0/1 wall=11.8s
+[16/24] s_order      | no_context      | t2
+    ✗ bin=compile_fail  pass=0/1 wall=11.4s
+[17/24] s_order      | hook_rationale  | t1
+    ✗ bin=compile_fail  pass=0/0 wall=25.6s
+[18/24] s_customer   | hook_fact       | t2
+    ✗ bin=compile_fail  pass=0/1 wall=5.5s
+[19/24] s_inventory  | hook_fact       | t1
+    ✗ bin=compile_fail  pass=0/1 wall=9.4s
+[20/24] s_inventory  | hook_rationale  | t1
+    ✗ bin=compile_fail  pass=0/1 wall=12.9s
+[23/24] s_inventory  | placebo         | t1
+    ✗ bin=compile_fail  pass=0/1 wall=11.9s
+[24/24] s_customer   | hook_rationale  | t2
+    ✗ bin=compile_fail  pass=0/1 wall=6.2s
+
+Sweep complete. 20 new trials in 221s.

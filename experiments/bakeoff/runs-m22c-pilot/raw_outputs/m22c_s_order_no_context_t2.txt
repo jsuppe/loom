@@ -1,0 +1,152 @@
+```dart
+import 'package:equatable/equatable.dart';
+import '../models/order.dart';
+import '../models/order_line.dart';
+import '../models/customer.dart';
+import '../models/store.dart';
+import '../models/inventory.dart';
+import '../services/customer_service.dart';
+import '../services/inventory_service.dart';
+
+/// Service responsible for managing the lifecycle of orders within the store.
+/// Handles placement, payment, shipping, delivery, and cancellation.
+class OrderService {
+  final Store _store;
+  final CustomerService _customerService;
+  final InventoryService _inventoryService;
+
+  OrderService({
+    required Store store,
+    required CustomerService customerService,
+    required InventoryService inventoryService,
+  })  : _store = store,
+        _customerService = customerService,
+        _inventoryService = inventoryService;
+
+  /// Creates a new order for a customer with the specified line items.
+  /// This action reserves stock for each item in the order.
+  Future<Order> placeOrder({
+    required Customer customer,
+    required List<OrderLine> lineItems,
+  }) async {
+    // Validate customer
+    final validatedCustomer = await _customerService.getCustomer(customer.id);
+    if (validatedCustomer == null) {
+      throw ArgumentError('Customer with id ${customer.id} not found.');
+    }
+
+    // Validate and reserve inventory for each line item
+    for (final lineItem in lineItems) {
+      final product = _store.products[lineItem.productId];
+      if (product == null) {
+        throw ArgumentError('Product with id ${lineItem.productId} not found.');
+      }
+
+      final reservation = await _inventoryService.reserve(
+        productId: product.id,
+        quantity: lineItem.quantity,
+      );
+
+      if (reservation == null) {
+        throw StateError(
+          'Insufficient stock for product ${product.name} (requested: ${lineItem.quantity}, available: ${product.stockQuantity})',
+        );
+      }
+
+      lineItem.reservationId = reservation.id;
+    }
+
+    // Create the new order
+    final order = Order(
+      id: _generateOrderId(),
+      customerId: validatedCustomer.id,
+      createdAt: DateTime.now(),
+      status: OrderStatus.pending,
+      lineItems: lineItems,
+    );
+
+    // In a real application, we would persist the order here.
+    // For this example, we assume the order is stored in memory or a DB.
+    // We return the order immediately after successful reservation.
+    return order;
+  }
+
+  /// Marks an order as paid.
+  Future<void> markPaid(String orderId) async {
+    final order = _getOrder(orderId);
+    if (order.status != OrderStatus.pending) {
+      throw StateError('Cannot mark order as paid. Current status: ${order.status}.');
+    }
+
+    order.status = OrderStatus.paid;
+    // Persist changes
+  }
+
+  /// Marks an order as shipped.
+  /// This action commits all previous reservations.
+  Future<void> ship(String orderId) async {
+    final order = _getOrder(orderId);
+    if (order.status != OrderStatus.paid) {
+      throw StateError('Cannot ship order. Current status: ${order.status}.');
+    }
+
+    order.status = OrderStatus.shipped;
+
+    // Commit reservations
+    for (final lineItem in order.lineItems) {
+      if (lineItem.reservationId != null) {
+        await _inventoryService.commitReservation(lineItem.reservationId!);
+      }
+    }
+
+    // Persist changes
+  }
+
+  /// Marks an order as delivered.
+  Future<void> deliver(String orderId) async {
+    final order = _getOrder(orderId);
+    if (order.status != OrderStatus.shipped) {
+      throw StateError('Cannot deliver order. Current status: ${order.status}.');
+    }
+
+    order.status = OrderStatus.delivered;
+    // Persist changes
+  }
+
+  /// Cancels an order and releases any reserved stock.
+  Future<void> cancel(String orderId) async {
+    final order = _getOrder(orderId);
+
+    // Allow cancellation if pending, paid, or shipped (but not delivered)
+    if (order.status == OrderStatus.delivered) {
+      throw StateError('Cannot cancel a delivered order.');
+    }
+
+    order.status = OrderStatus.cancelled;
+
+    // Release open reservations
+    for (final lineItem in order.lineItems) {
+      if (lineItem.reservationId != null) {
+        await _inventoryService.releaseReservation(lineItem.reservationId!);
+      }
+    }
+
+    // Persist changes
+  }
+
+  /// Helper method to retrieve an order by ID.
+  /// In a real implementation, this would fetch from a repository.
+  Order _getOrder(String orderId) {
+    // This is a placeholder for the actual retrieval logic.
+    // Assuming orders are stored in a map or database.
+    // For the purpose of this snippet, we assume the caller has valid IDs
+    // and the order exists. In a real app, this would throw if not found.
+    throw UnimplementedError('Order retrieval logic needs to be implemented in the repository layer.');
+  }
+
+  String _generateOrderId() {
+    // Generate a unique order ID
+    return 'ORD-${DateTime.now().millisecondsSinceEpoch}';
+  }
+}
+```

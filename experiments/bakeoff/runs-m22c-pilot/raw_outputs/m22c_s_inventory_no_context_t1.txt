@@ -1,0 +1,108 @@
+```dart
+import '../models/store.dart';
+import '../models/product.dart';
+import '../models/stock.dart';
+import '../models/reservation.dart';
+
+class InventoryService {
+  final Store store;
+
+  InventoryService(this.store);
+
+  /// Registers a new product in the system.
+  /// Returns the created product instance.
+  Product registerProduct({
+    required String name,
+    required double price,
+    required int initialQuantity,
+  }) {
+    final product = Product(
+      id: _generateId(),
+      name: name,
+      price: price,
+      stock: Stock(
+        id: _generateId(),
+        productId: product.id,
+        quantity: initialQuantity,
+      ),
+      reservations: [],
+    );
+
+    store.products.add(product);
+    return product;
+  }
+
+  /// Commits a reservation, deducting stock.
+  /// Throws [ArgumentError] if stock is insufficient.
+  void commitReservation(Reservation reservation) {
+    if (reservation.quantity > reservation.product.stock.quantity) {
+      throw ArgumentError(
+        'Insufficient stock for product ${reservation.product.name}. '
+        'Available: ${reservation.product.stock.quantity}, '
+        'Requested: ${reservation.quantity}',
+      );
+    }
+
+    // Deduct from stock
+    reservation.product.stock.quantity -= reservation.quantity;
+
+    // Move reservation from pending to committed
+    store.reservations.remove(reservation);
+    reservation.status = ReservationStatus.committed;
+    reservation.committedAt = DateTime.now();
+
+    // Optionally, you might want to store committed reservations separately
+    // or keep them in a history list. For now, we just update status.
+  }
+
+  /// Releases a reservation, returning stock to available quantity.
+  /// Throws [ArgumentError] if the reservation is not in a reservable state.
+  void releaseReservation(Reservation reservation) {
+    if (reservation.status != ReservationStatus.reserved) {
+      throw ArgumentError(
+        'Cannot release reservation with status: ${reservation.status}',
+      );
+    }
+
+    // Add back to stock
+    reservation.product.stock.quantity += reservation.quantity;
+
+    // Remove from active reservations list
+    store.reservations.remove(reservation);
+    reservation.status = ReservationStatus.released;
+    reservation.releasedAt = DateTime.now();
+  }
+
+  /// Creates a new reservation for a specific product.
+  /// Returns the created reservation instance.
+  Reservation reserveProduct({
+    required Product product,
+    required int quantity,
+  }) {
+    if (product.stock.quantity < quantity) {
+      throw ArgumentError(
+        'Insufficient stock for product ${product.name}. '
+        'Available: ${product.stock.quantity}, '
+        'Requested: $quantity',
+      );
+    }
+
+    final reservation = Reservation(
+      id: _generateId(),
+      productId: product.id,
+      product: product,
+      quantity: quantity,
+      status: ReservationStatus.reserved,
+      reservedAt: DateTime.now(),
+    );
+
+    store.reservations.add(reservation);
+    return reservation;
+  }
+
+  /// Helper to generate a unique ID (simplified for this example).
+  String _generateId() {
+    return DateTime.now().millisecondsSinceEpoch.toString();
+  }
+}
+```

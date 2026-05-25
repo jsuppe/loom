@@ -1,0 +1,37 @@
+{
+  "study": "m22c-pilot",
+  "scenario_id": "s_order",
+  "arm": "hook_rationale",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 0,
+  "returncode": -1,
+  "no_code_extracted": true,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [],
+  "raw_output_path": "raw_outputs\\m22c_s_order_hook_rationale_t2.txt",
+  "input_tokens": 208,
+  "output_tokens": 4096,
+  "llm_elapsed_s": 25.6,
+  "wall_s": 25.7,
+  "grade_stdout_tail": "no_code_extracted"
+}

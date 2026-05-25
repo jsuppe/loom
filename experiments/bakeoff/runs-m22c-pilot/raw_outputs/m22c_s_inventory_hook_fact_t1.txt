@@ -1,0 +1,137 @@
+```dart
+import '../store.dart';
+import '../models/product.dart';
+import '../models/stock_level.dart';
+import '../models/reservation_token.dart';
+
+class InventoryService {
+  final Store store;
+
+  InventoryService(this.store);
+
+  Product registerProduct({
+    required String sku,
+    required String name,
+    required double price,
+  }) {
+    if (store.products.containsKey(sku)) {
+      throw ArgumentError('Product with SKU "$sku" already exists.');
+    }
+
+    final product = Product(
+      sku: sku,
+      name: name,
+      price: price,
+    );
+
+    store.products[sku] = product;
+    store.stock[sku] = StockLevel(
+      sku: sku,
+      available: 0,
+      reserved: 0,
+    );
+
+    return product;
+  }
+
+  Product getProduct(String sku) {
+    final product = store.products[sku];
+    if (product == null) {
+      throw StateError('Product with SKU "$sku" not found.');
+    }
+    return product;
+  }
+
+  StockLevel stockOf(String sku) {
+    final stock = store.stock[sku];
+    if (stock == null) {
+      throw StateError('Stock for SKU "$sku" not found.');
+    }
+    return stock;
+  }
+
+  void addStock(String sku, int qty) {
+    final stock = store.stock[sku];
+    if (stock == null) {
+      throw StateError('Stock for SKU "$sku" not found.');
+    }
+    if (qty < 0) {
+      throw ArgumentError('Quantity to add must be non-negative.');
+    }
+    stock.available += qty;
+  }
+
+  ReservationToken reserve({
+    required String orderId,
+    required String sku,
+    required int quantity,
+  }) {
+    final product = store.products[sku];
+    if (product == null) {
+      throw StateError('Product with SKU "$sku" not found.');
+    }
+
+    final stock = store.stock[sku];
+    if (stock == null) {
+      throw StateError('Stock for SKU "$sku" not found.');
+    }
+
+    if (quantity <= 0) {
+      throw ArgumentError('Reservation quantity must be positive.');
+    }
+
+    if (stock.available < quantity) {
+      throw StateError(
+        'Insufficient stock. Available: ${stock.available}, Requested: $quantity.',
+      );
+    }
+
+    final token = ReservationToken(
+      orderId: orderId,
+      sku: sku,
+      quantity: quantity,
+      createdAt: DateTime.now(),
+    );
+
+    store.reservations[token.id] = token;
+    stock.reserved += quantity;
+    stock.available -= quantity;
+
+    return token;
+  }
+
+  void commit(String tokenId) {
+    final token = store.reservations[tokenId];
+    if (token == null) {
+      throw StateError('Reservation with token "$tokenId" not found.');
+    }
+
+    final stock = store.stock[token.sku];
+    if (stock == null) {
+      throw StateError('Stock for SKU "${token.sku}" not found.');
+    }
+
+    stock.available -= token.quantity;
+    stock.reserved -= token.quantity;
+
+    store.reservations.remove(tokenId);
+  }
+
+  void release(String tokenId) {
+    final token = store.reservations[tokenId];
+    if (token == null) {
+      throw StateError('Reservation with token "$tokenId" not found.');
+    }
+
+    final stock = store.stock[token.sku];
+    if (stock == null) {
+      throw StateError('Stock for SKU "${token.sku}" not found.');
+    }
+
+    stock.available += token.quantity;
+    stock.reserved -= token.quantity;
+
+    store.reservations.remove(tokenId);
+  }
+}
+```

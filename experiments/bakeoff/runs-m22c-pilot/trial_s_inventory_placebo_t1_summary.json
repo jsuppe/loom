@@ -1,0 +1,37 @@
+{
+  "study": "m22c-pilot",
+  "scenario_id": "s_inventory",
+  "arm": "placebo",
+  "trial_n": 1,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 1,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [],
+  "raw_output_path": "raw_outputs\\m22c_s_inventory_placebo_t1.txt",
+  "input_tokens": 173,
+  "output_tokens": 1261,
+  "llm_elapsed_s": 8.0,
+  "wall_s": 11.9,
+  "grade_stdout_tail": "ntory_service.dart:115:26: Error: The getter 'ReservationStatus' isn't defined for the type 'InventoryService'.\n   - 'InventoryService' is from 'package:shop/services/inventory_service.dart' ('lib/services/inventory_service.dart').\n  Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReservationStatus'.\n      reservation.status = ReservationStatus.committed;\n                           ^^^^^^^^^^^^^^^^^\n  lib/services/inventory_service.dart:127:31: Error: The getter 'ReservationStatus' isn't defined for the type 'InventoryService'.\n   - 'InventoryService' is from 'package:shop/services/inventory_service.dart' ('lib/services/inventory_service.dart').\n  Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReservationStatus'.\n      if (reservation.status != ReservationStatus.pending) {\n                                ^^^^^^^^^^^^^^^^^\n  lib/services/inventory_service.dart:131:26: Error: The getter 'ReservationStatus' isn't defined for the type 'InventoryService'.\n   - 'InventoryService' is from 'package:shop/services/inventory_service.dart' ('lib/services/inventory_service.dart').\n  Try correcting the name to the name of an existing getter, or defining a getter or field named 'ReservationStatus'.\n      reservation.status = ReservationStatus.released;\n                           ^^^^^^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n\n"
+}

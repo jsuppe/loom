@@ -1,0 +1,37 @@
+{
+  "study": "m22c-pilot",
+  "scenario_id": "s_customer",
+  "arm": "no_context",
+  "trial_n": 1,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 1,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [],
+  "raw_output_path": "raw_outputs\\m22c_s_customer_no_context_t1.txt",
+  "input_tokens": 108,
+  "output_tokens": 495,
+  "llm_elapsed_s": 3.3,
+  "wall_s": 7.1,
+  "grade_stdout_tail": " found: 'CustomerService'.\n        final svc = CustomerService(Store());\n                    ^^^^^^^^^^^^^^^\n  test/shop_test.dart:43:19: Error: Method not found: 'CustomerService'.\n        final svc = CustomerService(Store());\n                    ^^^^^^^^^^^^^^^\n  test/shop_test.dart:152:18: Error: Method not found: 'CustomerService'.\n        final cs = CustomerService(s);\n                   ^^^^^^^^^^^^^^^\n  test/shop_test.dart:334:18: Error: Method not found: 'CustomerService'.\n        final cs = CustomerService(s);\n                   ^^^^^^^^^^^^^^^\n  lib/services/order_service.dart:27:15: Error: The method 'get' isn't defined for the type 'CustomerService'.\n   - 'CustomerService' is from 'package:shop/services/customer_service.dart' ('lib/services/customer_service.dart').\n  Try correcting the name to the name of an existing method, or defining a method named 'get'.\n      customers.get(customerId);\n                ^^^\n  lib/services/customer_service.dart:5:9: Error: 'Store' isn't a type.\n    final Store store;\n          ^^^^^\n  lib/services/customer_service.dart:11:29: Error: 'Customer' isn't a type.\n    Customer registerCustomer(Customer customer) {\n                              ^^^^^^^^\n  lib/services/customer_service.dart:27:42: Error: 'Address' isn't a type.\n    Customer addAddress(String customerId, Address address) {\n                                           ^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n\n"
+}

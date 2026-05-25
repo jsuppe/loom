@@ -1,0 +1,52 @@
+```dart
+import '../store.dart';
+import '../models/customer.dart';
+
+class CustomerService {
+  final Store store;
+
+  CustomerService(this.store);
+
+  /// Registers a new customer with the provided details.
+  /// Throws [ArgumentError] if a customer with the same id already exists.
+  Customer registerCustomer({
+    required String id,
+    required String name,
+    required String email,
+    required String phone,
+    required String address,
+  }) {
+    if (store.customers.containsKey(id)) {
+      throw ArgumentError('Customer with id "$id" already exists.');
+    }
+
+    final customer = Customer(
+      id: id,
+      name: name,
+      email: email,
+      phone: phone,
+      address: address,
+    );
+
+    store.customers[id] = customer;
+    return customer;
+  }
+
+  /// Looks up a customer by their id.
+  /// Returns `null` if no customer is found with the given id.
+  Customer? lookupCustomer(String id) {
+    return store.customers[id];
+  }
+
+  /// Updates the address of an existing customer.
+  /// Throws [ArgumentError] if the customer is not found.
+  void updateCustomerAddress(String id, String newAddress) {
+    final customer = store.customers[id];
+    if (customer == null) {
+      throw ArgumentError('Customer with id "$id" not found.');
+    }
+
+    customer.address = newAddress;
+  }
+}
+```

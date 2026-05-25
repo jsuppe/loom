@@ -1,0 +1,155 @@
+```dart
+import 'package:shop/models/order.dart';
+import 'package:shop/models/order_line.dart';
+import 'package:shop/models/customer.dart';
+import 'package:shop/models/inventory_item.dart';
+import 'package:shop/services/customer_service.dart';
+import 'package:shop/services/inventory_service.dart';
+import 'package:shop/services/store_service.dart';
+import 'package:shop/errors/domain_errors.dart';
+
+class OrderService {
+  final StoreService storeService;
+  final CustomerService customerService;
+  final InventoryService inventoryService;
+
+  OrderService({
+    required this.storeService,
+    required this.customerService,
+    required this.inventoryService,
+  });
+
+  /// Places a new order, reserving stock for each line item.
+  Future<Order> placeOrder({
+    required String customerId,
+    required List<OrderLine> lineItems,
+  }) async {
+    // Validate customer exists
+    final customer = customerService.getCustomer(customerId);
+
+    // Validate store context (optional if storeService is used for global state)
+    // Assuming storeService provides current store context or validation
+    // if (storeService.isStoreOpen()) { ... }
+
+    // Validate inventory and reserve stock
+    for (final lineItem in lineItems) {
+      final item = lineItem.item;
+      final quantity = lineItem.quantity;
+
+      // Check if item exists in inventory
+      if (!inventoryService.hasItem(item.id)) {
+        throw DomainError(
+          message: 'Inventory item not found: ${item.id}',
+          code: 'ITEM_NOT_FOUND',
+        );
+      }
+
+      // Reserve stock
+      inventoryService.reserve(item.id, quantity);
+    }
+
+    // Create order with initial status 'placed'
+    final order = Order(
+      id: generateOrderId(),
+      customerId: customerId,
+      lineItems: lineItems,
+      status: OrderStatus.placed,
+      createdAt: DateTime.now(),
+    );
+
+    // Persist order (assuming storeService handles persistence)
+    await storeService.saveOrder(order);
+
+    return order;
+  }
+
+  /// Marks an order as paid.
+  Future<void> markPaid(String orderId) async {
+    final order = storeService.getOrder(orderId);
+
+    if (order.status != OrderStatus.placed) {
+      throw DomainError(
+        message: 'Cannot mark order as paid: current status is ${order.status}',
+        code: 'INVALID_STATUS_TRANSITION',
+      );
+    }
+
+    order.status = OrderStatus.paid;
+    order.paidAt = DateTime.now();
+
+    await storeService.saveOrder(order);
+  }
+
+  /// Marks an order as shipped.
+  Future<void> ship(String orderId) async {
+    final order = storeService.getOrder(orderId);
+
+    if (order.status != OrderStatus.paid) {
+      throw DomainError(
+        message: 'Cannot ship order: current status is ${order.status}',
+        code: 'INVALID_STATUS_TRANSITION',
+      );
+    }
+
+    order.status = OrderStatus.shipped;
+    order.shippedAt = DateTime.now();
+
+    // Commit all reservations to actual inventory
+    for (final lineItem in order.lineItems) {
+      final item = lineItem.item;
+      final quantity = lineItem.quantity;
+      inventoryService.commit(item.id, quantity);
+    }
+
+    await storeService.saveOrder(order);
+  }
+
+  /// Marks an order as delivered.
+  Future<void> deliver(String orderId) async {
+    final order = storeService.getOrder(orderId);
+
+    if (order.status != OrderStatus.shipped) {
+      throw DomainError(
+        message: 'Cannot deliver order: current status is ${order.status}',
+        code: 'INVALID_STATUS_TRANSITION',
+      );
+    }
+
+    order.status = OrderStatus.delivered;
+    order.deliveredAt = DateTime.now();
+
+    await storeService.saveOrder(order);
+  }
+
+  /// Cancels an order, releasing any reserved stock.
+  Future<void> cancel(String orderId) async {
+    final order = storeService.getOrder(orderId);
+
+    // Only allow cancellation if order is placed, paid, or shipped (not delivered)
+    if (order.status == OrderStatus.delivered) {
+      throw DomainError(
+        message: 'Cannot cancel delivered order: ${orderId}',
+        code: 'INVALID_STATUS_TRANSITION',
+      );
+    }
+
+    order.status = OrderStatus.cancelled;
+    order.cancelledAt = DateTime.now();
+
+    // Release all reservations
+    for (final lineItem in order.lineItems) {
+      final item = lineItem.item;
+      final quantity = lineItem.quantity;
+      inventoryService.release(item.id, quantity);
+    }
+
+    await storeService.saveOrder(order);
+  }
+
+  /// Helper to generate a unique order ID.
+  String generateOrderId() {
+    // Implement your own ID generation logic here
+    return 'ORD-${DateTime.now().millisecondsSinceEpoch}';
+  }
+}
+```

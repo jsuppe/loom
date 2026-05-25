@@ -1,0 +1,147 @@
+```dart
+import 'package:equatable/equatable.dart';
+import '../models/store.dart';
+import '../models/product.dart';
+import '../models/stock.dart';
+import '../models/reservation.dart';
+
+/// Service for managing product registration, stock levels, and reservation lifecycle.
+///
+/// Ensures data integrity by validating all line items (customer existence, SKU existence)
+/// before performing any persistence operations or stock reservations.
+class InventoryService {
+  final Store store;
+
+  InventoryService(this.store);
+
+  /// Registers a new product in the system.
+  /// Throws [ArgumentError] if a product with the same SKU already exists.
+  Future<void> registerProduct(Product product) async {
+    if (store.products.any((p) => p.sku == product.sku)) {
+      throw ArgumentError('Product with SKU ${product.sku} already exists.');
+    }
+    store.products.add(product);
+  }
+
+  /// Validates that a product exists and has sufficient stock for a given quantity.
+  /// Returns the available quantity if valid.
+  int? validateStock(String sku, int quantity) {
+    final product = store.products.firstWhere(
+      (p) => p.sku == sku,
+      orElse: () => throw StateError('Product with SKU $sku not found.'),
+    );
+
+    final stock = store.stock.firstWhere(
+      (s) => s.sku == sku,
+      orElse: () => throw StateError('Stock record for SKU $sku not found.'),
+    );
+
+    if (stock.quantity < quantity) {
+      return null;
+    }
+    return stock.quantity;
+  }
+
+  /// Creates a new reservation for a list of line items.
+  ///
+  /// **Pre-check Pass:**
+  /// 1. Validates that every customer in the line items exists.
+  /// 2. Validates that every SKU in the line items exists.
+  /// 3. Validates that sufficient stock exists for every line item.
+  ///
+  /// If any validation fails, an [ArgumentError] is thrown and no state is changed.
+  /// If successful, a new [Reservation] is created and persisted.
+  Future<Reservation> createReservation({
+    required List<ReservationLineItem> lineItems,
+    required String customerId,
+  }) async {
+    // Pre-check pass: Validate ALL line items before any persistence
+    final validationErrors = <String>[];
+
+    // 1. Validate Customer Existence
+    if (!store.customers.any((c) => c.id == customerId)) {
+      validationErrors.add('Customer with ID $customerId does not exist.');
+    }
+
+    // 2 & 3. Validate SKU Existence and Stock Availability for ALL items
+    for (final item in lineItems) {
+      if (!store.products.any((p) => p.sku == item.sku)) {
+        validationErrors.add('SKU ${item.sku} does not exist.');
+      } else {
+        final available = validateStock(item.sku, item.quantity);
+        if (available == null) {
+          validationErrors.add(
+            'Insufficient stock for SKU ${item.sku}. Required: ${item.quantity}, Available: ${store.stock.firstWhere((s) => s.sku == item.sku).quantity}',
+          );
+        }
+      }
+    }
+
+    if (validationErrors.isNotEmpty) {
+      throw ArgumentError(validationErrors.join('; '));
+    }
+
+    // Body: Perform reservations and persistence
+    final reservation = Reservation(
+      id: _generateReservationId(),
+      customerId: customerId,
+      lineItems: lineItems,
+      status: ReservationStatus.pending,
+      createdAt: DateTime.now(),
+    );
+
+    store.reservations.add(reservation);
+
+    // Update stock levels immediately upon reservation creation
+    for (final item in lineItems) {
+      final stockRecord = store.stock.firstWhere((s) => s.sku == item.sku);
+      stockRecord.quantity -= item.quantity;
+    }
+
+    return reservation;
+  }
+
+  /// Commits a pending reservation, finalizing the stock deduction.
+  /// Throws [StateError] if the reservation is not in 'pending' status.
+  Future<void> commitReservation(String reservationId) async {
+    final reservation = store.reservations.firstWhere(
+      (r) => r.id == reservationId,
+      orElse: () => throw StateError('Reservation $reservationId not found.'),
+    );
+
+    if (reservation.status != ReservationStatus.pending) {
+      throw StateError('Cannot commit reservation with status: ${reservation.status}');
+    }
+
+    reservation.status = ReservationStatus.committed;
+    reservation.committedAt = DateTime.now();
+  }
+
+  /// Releases a reservation, returning the stock to available inventory.
+  /// Throws [StateError] if the reservation is not in 'pending' status.
+  Future<void> releaseReservation(String reservationId) async {
+    final reservation = store.reservations.firstWhere(
+      (r) => r.id == reservationId,
+      orElse: () => throw StateError('Reservation $reservationId not found.'),
+    );
+
+    if (reservation.status != ReservationStatus.pending) {
+      throw StateError('Cannot release reservation with status: ${reservation.status}');
+    }
+
+    reservation.status = ReservationStatus.released;
+    reservation.releasedAt = DateTime.now();
+
+    // Restore stock levels
+    for (final item in reservation.lineItems) {
+      final stockRecord = store.stock.firstWhere((s) => s.sku == item.sku);
+      stockRecord.quantity += item.quantity;
+    }
+  }
+
+  /// Helper to generate a unique reservation ID.
+  String _generateReservationId() {
+    return 'RES-${DateTime.now().millisecondsSinceEpoch}';
+  }
+}
+```

@@ -1,0 +1,61 @@
+```dart
+import '../models/customer.dart';
+import '../models/store.dart';
+
+class CustomerService {
+  final Store store;
+
+  CustomerService(this.store);
+
+  /// Registers a new customer in the store.
+  /// Returns the created customer or throws [ArgumentError] if the customer ID already exists.
+  Customer registerCustomer(Customer customer) {
+    if (store.customers.containsKey(customer.id)) {
+      throw ArgumentError('Customer with ID ${customer.id} already exists.');
+    }
+    store.customers[customer.id] = customer;
+    return customer;
+  }
+
+  /// Looks up a customer by their ID.
+  /// Returns the customer if found, or null if not found.
+  Customer? lookupCustomer(String id) {
+    return store.customers[id];
+  }
+
+  /// Adds a new address to an existing customer.
+  /// Returns the updated customer or throws [ArgumentError] if the customer ID is invalid.
+  Customer addAddress(String customerId, Address address) {
+    final customer = store.customers[customerId];
+    if (customer == null) {
+      throw ArgumentError('Customer with ID $customerId not found.');
+    }
+    customer.addresses.add(address);
+    return customer;
+  }
+
+  /// Removes an address from a customer by address ID.
+  /// Returns the updated customer or throws [ArgumentError] if the customer or address is not found.
+  Customer removeAddress(String customerId, String addressId) {
+    final customer = store.customers[customerId];
+    if (customer == null) {
+      throw ArgumentError('Customer with ID $customerId not found.');
+    }
+    if (!customer.addresses.any((a) => a.id == addressId)) {
+      throw ArgumentError('Address with ID $addressId not found for customer $customerId.');
+    }
+    customer.addresses.removeWhere((a) => a.id == addressId);
+    return customer;
+  }
+
+  /// Retrieves all addresses for a specific customer.
+  /// Returns an empty list if the customer is not found.
+  List<Address> getCustomerAddresses(String customerId) {
+    final customer = store.customers[customerId];
+    if (customer == null) {
+      return [];
+    }
+    return customer.addresses;
+  }
+}
+```

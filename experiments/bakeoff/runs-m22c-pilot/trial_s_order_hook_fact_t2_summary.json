@@ -1,0 +1,37 @@
+{
+  "study": "m22c-pilot",
+  "scenario_id": "s_order",
+  "arm": "hook_fact",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 1,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "seed": 42,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [],
+  "raw_output_path": "raw_outputs\\m22c_s_order_hook_fact_t2.txt",
+  "input_tokens": 203,
+  "output_tokens": 614,
+  "llm_elapsed_s": 4.0,
+  "wall_s": 7.9,
+  "grade_stdout_tail": "t:229:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:241:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:250:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:263:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:274:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:284:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:302:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:319:32: Error: 'OrderService' isn't a type.\n        final os = m['order'] as OrderService;\n                                 ^^^^^^^^^^^^\n  test/shop_test.dart:336:18: Error: Method not found: 'OrderService'.\n        final os = OrderService(s, cs, inv);\n                   ^^^^^^^^^^^^\n00:00 +0 -1: Some tests failed.\n\nFailing tests:\n  test/shop_test.dart: loading test/shop_test.dart\n\n"
+}

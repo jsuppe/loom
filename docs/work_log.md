@@ -29,6 +29,81 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-25 — M22c pilot — pre-reg gates stopped the sweep
+
+### What we did
+
+- **Continued the M22c arc from prior session** (session reset / new
+  conversation). Resumed at M22c.2 (Dart workload scaffolding) after
+  the compaction.
+- **Built scenarios.json** — 3 service files (customer, inventory,
+  order) for the dart-inventory benchmark with per-scenario
+  hide_files + strip_from_files rules implementing the pre-reg's
+  "hide contract" operational rule. Each style-rationale pre-graded
+  leak-score 0.
+- **Built m22c_pilot.py harness** — 4-arm runner (no_context /
+  hook_rationale / hook_fact / placebo). Workspace setup applies
+  hide-rules to a temp copy of the reference solution; grader
+  re-adds shop_test.dart for testing (model never sees it).
+  Captured 2 smoke-test fixes: `think:false` on Ollama (qwen3.5
+  reasoning was consuming num_predict and producing empty
+  response — same shape as M22a F3) + compile_fail priority
+  over test_fail in the parser (Dart loader emits spurious "-1"
+  for compile errors).
+- **Ran the pilot N=24.** Resumed in ~4 minutes.
+- **Pilot FAILED gates 2 + 6.** 0/24 trials compile-pass across all
+  four arms. Even hook_fact (literal signature in prompt) compiles
+  0%. McNemar Δ=+0.0pp p=1.00 for every paired comparison.
+
+### What we decided
+
+- **Sweep does NOT run.** Per the pre-reg's null-result pre-commit:
+  the workload + grader + model combo floors below where any
+  rationale-shaped signal could surface. Honest verdict: "this
+  benchmark setup cannot measure the effect" — not "hook-rationale
+  is ineffective."
+- **Root cause = model-capability ceiling**, NOT hide-rule design.
+  qwen3.5:latest (7B) writes correct-looking Dart but doesn't emit
+  the right `import` statements even when given the method
+  signatures verbatim. A redesign of hide-rules cannot fix this.
+- **REQ-3896db58 (methodology pattern) earned its keep 6/6.** First
+  time the pattern STOPPED a study before sweep cost was paid.
+  Pre-reg gates paid for themselves on first use (~4 min of pilot
+  caught what a full sweep would have missed at higher compute +
+  much higher writeup cost).
+- **Three pivot options surfaced (each requires a NEW pre-reg, not
+  continuation of M22c):** (a) M22d model-arm pivot to a stronger
+  executor, (b) M22e workload-simplification pivot, (c) accept
+  refuted-via-floor and rest on M22a-regrade's engagement 4-bin
+  signal that already produced loom-rationale's positive result
+  ("proceeded with reasoning" 41% vs ≤6% other arms).
+- **Pre-reg's anti-Texas-sharpshooter rule held.** Did NOT swap
+  primary metric to LLM-judged 4-bin engagement when compile/test
+  went against us. The pre-reg pre-committed against exactly this
+  move; we honored it.
+
+### What's still open
+
+- **User decision on pivot path** (A/B/C above). No autonomous
+  follow-up.
+- M22d / M22e remain unscheduled until user picks direction.
+- Lower-priority queue from earlier roadmap: M16.3 Python LSP
+  indexer, M17.4 export formats, M18.4 Sonnet replication,
+  M20.3 L4 productionization, M20.4 Driftgraph webhook activation,
+  M19 real-world drift evaluation, M21 transcript-eval harness,
+  M14.4 interactive triage loop, M15.4 hard-require `--reason` flip.
+
+### Pointers
+
+- **Commits:** `239b00a` (harness + scenarios), `82df6c3` (pre-reg
+  from prior session)
+- **Findings doc:** `experiments/bakeoff/m22c_pilot/M22C_PILOT_FINDINGS.md`
+- **Pre-reg:** `experiments/bakeoff/m22c_pilot/M22C_PREREGISTRATION.md`
+- **Trial summaries:** `experiments/bakeoff/runs-m22c-pilot/` (24 JSON
+  + raw outputs)
+
+---
+
 ## 2026-05-10 (evening) — Three-vendor × three-scenario cross-validation, paper draft
 
 ### What we did

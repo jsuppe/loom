@@ -1,0 +1,99 @@
+```dart
+import 'package:equatable/equatable.dart';
+import '../models/order.dart';
+import '../models/customer.dart';
+import '../models/inventory.dart';
+import '../models/store.dart';
+
+class OrderService {
+  final Store store;
+  final CustomerService customerService;
+  final InventoryService inventoryService;
+
+  OrderService({
+    required this.store,
+    required this.customerService,
+    required this.inventoryService,
+  });
+
+  Order place({
+    required String customerId,
+    required List<({String sku, int quantity})> lines,
+  }) {
+    final customer = customerService.get(customerId);
+    if (customer == null) {
+      throw ArgumentError('Customer not found: $customerId');
+    }
+
+    final order = Order(
+      id: store.generateOrderId(),
+      customerId: customerId,
+      lines: lines,
+      status: OrderStatus.pending,
+      createdAt: DateTime.now(),
+    );
+
+    for (final line in order.lines) {
+      final reservation = inventoryService.reserve(
+        sku: line.sku,
+        quantity: line.quantity,
+      );
+      order.lines.add(
+        line.sku,
+        line.quantity,
+        reservation,
+      );
+    }
+
+    store.save(order);
+    return order;
+  }
+
+  Order get(String orderId) {
+    return store.get(orderId);
+  }
+
+  void markPaid(String orderId) {
+    final order = store.get(orderId);
+    if (order.status != OrderStatus.pending) {
+      throw StateError('Only pending orders can be marked as paid');
+    }
+    order.status = OrderStatus.paid;
+    store.save(order);
+  }
+
+  void ship(String orderId) {
+    final order = store.get(orderId);
+    if (order.status != OrderStatus.paid) {
+      throw StateError('Only paid orders can be shipped');
+    }
+    order.status = OrderStatus.shipped;
+    store.save(order);
+  }
+
+  void deliver(String orderId) {
+    final order = store.get(orderId);
+    if (order.status != OrderStatus.shipped) {
+      throw StateError('Only shipped orders can be delivered');
+    }
+    order.status = OrderStatus.delivered;
+    store.save(order);
+  }
+
+  void cancel(String orderId) {
+    final order = store.get(orderId);
+    if (order.status != OrderStatus.pending) {
+      throw StateError('Only pending orders can be cancelled');
+    }
+    order.status = OrderStatus.cancelled;
+    store.save(order);
+
+    for (final line in order.lines) {
+      inventoryService.release(
+        sku: line.sku,
+        quantity: line.quantity,
+      );
+    }
+  }
+}
+```

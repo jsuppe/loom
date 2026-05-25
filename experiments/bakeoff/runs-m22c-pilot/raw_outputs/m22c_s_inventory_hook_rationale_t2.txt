@@ -1,0 +1,192 @@
+```dart
+import 'package:equatable/equatable.dart';
+import '../domain/entities/product.dart';
+import '../domain/entities/stock.dart';
+import '../domain/entities/reservation.dart';
+import '../domain/errors/conflict_error.dart';
+import '../domain/errors/not_found_error.dart';
+import '../domain/errors/domain_error.dart';
+import '../infrastructure/store.dart';
+
+class InventoryService {
+  final Store _store;
+
+  InventoryService(this._store);
+
+  /// Registers a new product with initial stock.
+  /// Throws [ConflictError] if a product with the same id already exists.
+  Future<void> registerProduct({
+    required String id,
+    required String name,
+    required double price,
+    required int initialQuantity,
+  }) async {
+    if (_store.products.containsKey(id)) {
+      throw const ConflictError(
+        message: 'Product with id "$id" already exists.',
+      );
+    }
+
+    final product = Product(
+      id: id,
+      name: name,
+      price: price,
+      stock: Stock(
+        quantity: initialQuantity,
+        reservedQuantity: 0,
+      ),
+    );
+
+    _store.products[id] = product;
+    _store.stock[id] = product.stock;
+  }
+
+  /// Retrieves a product by id.
+  /// Throws [NotFoundError] if the product does not exist.
+  Future<Product> getProduct(String id) async {
+    final product = _store.products[id];
+    if (product == null) {
+      throw NotFoundError(
+        message: 'Product with id "$id" not found.',
+      );
+    }
+    return product;
+  }
+
+  /// Updates the available stock quantity for a product.
+  /// Throws [NotFoundError] if the product does not exist.
+  Future<void> updateStock(String id, int quantity) async {
+    final product = _store.products[id];
+    if (product == null) {
+      throw NotFoundError(
+        message: 'Product with id "$id" not found.',
+      );
+    }
+
+    final currentAvailable = product.stock.quantity - product.stock.reservedQuantity;
+    if (quantity < currentAvailable) {
+      throw ConflictError(
+        message: 'Cannot update stock to $quantity. Available stock is only $currentAvailable.',
+      );
+    }
+
+    product.stock.quantity = quantity;
+    _store.stock[id] = product.stock;
+  }
+
+  /// Reserves stock for a reservation.
+  /// Throws [NotFoundError] if the product does not exist.
+  /// Throws [ConflictError] if insufficient stock is available.
+  Future<Reservation> reserveStock({
+    required String id,
+    required String customerId,
+    required int quantity,
+    required DateTime dueDate,
+  }) async {
+    final product = _store.products[id];
+    if (product == null) {
+      throw NotFoundError(
+        message: 'Product with id "$id" not found.',
+      );
+    }
+
+    final available = product.stock.quantity - product.stock.reservedQuantity;
+    if (quantity > available) {
+      throw ConflictError(
+        message: 'Insufficient stock. Available: $available, Requested: $quantity.',
+      );
+    }
+
+    final reservation = Reservation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      productId: id,
+      customerId: customerId,
+      quantity: quantity,
+      dueDate: dueDate,
+      status: ReservationStatus.pending,
+    );
+
+    product.stock.reservedQuantity += quantity;
+    _store.stock[id] = product.stock;
+
+    _store.reservations[reservation.id] = reservation;
+
+    return reservation;
+  }
+
+  /// Commits a reservation, converting it to 'confirmed' and deducting from available stock.
+  /// Throws [NotFoundError] if the reservation or product does not exist.
+  Future<void> commitReservation(String reservationId) async {
+    final reservation = _store.reservations[reservationId];
+    if (reservation == null) {
+      throw NotFoundError(
+        message: 'Reservation with id "$reservationId" not found.',
+      );
+    }
+
+    final product = _store.products[reservation.productId];
+    if (product == null) {
+      throw NotFoundError(
+        message: 'Product for reservation "$reservationId" not found.',
+      );
+    }
+
+    reservation.status = ReservationStatus.confirmed;
+    _store.reservations[reservationId] = reservation;
+
+    // Deduct from available stock (already tracked via reservedQuantity)
+    // No further action needed on stock object as reservedQuantity is the source of truth
+  }
+
+  /// Releases a reservation, converting it to 'released' and returning stock to available.
+  /// Throws [NotFoundError] if the reservation or product does not exist.
+  Future<void> releaseReservation(String reservationId) async {
+    final reservation = _store.reservations[reservationId];
+    if (reservation == null) {
+      throw NotFoundError(
+        message: 'Reservation with id "$reservationId" not found.',
+      );
+    }
+
+    final product = _store.products[reservation.productId];
+    if (product == null) {
+      throw NotFoundError(
+        message: 'Product for reservation "$reservationId" not found.',
+      );
+    }
+
+    reservation.status = ReservationStatus.released;
+    _store.reservations[reservationId] = reservation;
+
+    product.stock.reservedQuantity -= reservation.quantity;
+    _store.stock[reservation.productId] = product.stock;
+  }
+
+  /// Cancels a pending reservation before it is committed.
+  /// Throws [NotFoundError] if the reservation does not exist.
+  /// Throws [ConflictError] if the reservation is not in 'pending' status.
+  Future<void> cancelReservation(String reservationId) async {
+    final reservation = _store.reservations[reservationId];
+    if (reservation == null) {
+      throw NotFoundError(
+        message: 'Reservation with id "$reservationId" not found.',
+      );
+    }
+
+    if (reservation.status != ReservationStatus.pending) {
+      throw ConflictError(
+        message: 'Cannot cancel reservation with status "${reservation.status}".',
+      );
+    }
+
+    reservation.status = ReservationStatus.cancelled;
+    _store.reservations[reservationId] = reservation;
+
+    final product = _store.products[reservation.productId];
+    if (product != null) {
+      product.stock.reservedQuantity -= reservation.quantity;
+      _store.stock[reservation.productId] = product.stock;
+    }
+  }
+}
+```

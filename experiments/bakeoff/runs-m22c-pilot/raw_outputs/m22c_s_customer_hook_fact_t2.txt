@@ -1,0 +1,44 @@
+```dart
+import '../models/customer.dart';
+import '../models/address.dart';
+import '../store.dart';
+
+class CustomerService {
+  final Store store;
+
+  CustomerService(this.store);
+
+  Customer register({
+    required String id,
+    required String name,
+    required String email,
+  }) {
+    if (store.customers.containsKey(id)) {
+      throw ArgumentError('Customer with id "$id" already exists');
+    }
+
+    final customer = Customer(
+      id: id,
+      name: name,
+      email: email,
+      addresses: [],
+    );
+
+    store.customers[id] = customer;
+    return customer;
+  }
+
+  Customer? get(String id) {
+    return store.customers[id];
+  }
+
+  void addAddress(String id, Address address) {
+    final customer = store.customers[id];
+    if (customer == null) {
+      throw ArgumentError('Customer with id "$id" not found');
+    }
+
+    customer.addresses.add(address);
+  }
+}
+```
