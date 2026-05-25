@@ -1,0 +1,67 @@
+{
+  "version": "m22c-pilot-v1",
+  "locked_at": "2026-05-25",
+  "benchmark": "dart-inventory",
+  "source": "experiments/bakeoff/benchmarks/dart-inventory/ground_truth/reference/",
+  "test_command": ["dart", "test", "test/shop_test.dart"],
+  "_notes": "Per M22C_PREREGISTRATION.md, single-benchmark scope. Three service files. Each scenario: regenerate one service file with operational hide-rules. Style-rationales pre-graded leak-score 0.",
+  "scenarios": [
+    {
+      "scenario_id": "s_customer",
+      "target_file": "lib/services/customer_service.dart",
+      "hide_files": [
+        "lib/services/customer_service.dart",
+        "test/shop_test.dart"
+      ],
+      "strip_from_files": {
+        "lib/shop.dart": [
+          "export 'services/customer_service.dart';"
+        ],
+        "lib/types/customers.dart": [
+          "/// `addresses` is mutable so customer_service can append."
+        ]
+      },
+      "user_request": "Implement lib/services/customer_service.dart for this multi-service shop project. It should provide customer registration, lookup, and address management. The class is CustomerService, takes a Store in its constructor, and stores customers in store.customers (a Map<String, Customer>). Match the project's conventions you can see from the other files.",
+      "style_rationale": "Service methods that create domain objects use required named kwargs rather than positional parameters because most callers are higher-level orchestration code that may evolve their argument lists out-of-order over time.",
+      "rationale_leak_score": 0,
+      "fact_signature": "register({required String id, required String name, required String email}) -> Customer\nget(String id) -> Customer\naddAddress(String id, Address address) -> void",
+      "expected_reservation_count_in_tests": 28
+    },
+    {
+      "scenario_id": "s_inventory",
+      "target_file": "lib/services/inventory_service.dart",
+      "hide_files": [
+        "lib/services/inventory_service.dart",
+        "test/shop_test.dart"
+      ],
+      "strip_from_files": {
+        "lib/shop.dart": [
+          "export 'services/inventory_service.dart';"
+        ]
+      },
+      "user_request": "Implement lib/services/inventory_service.dart for this multi-service shop project. It should provide product registration, stock management, and reservation lifecycle (reserve / commit / release). The class is InventoryService, takes a Store in its constructor, uses store.products, store.stock, store.reservations.",
+      "style_rationale": "Duplicate-registration attempts and lookups of unknown ids must throw the appropriate domain error (ConflictError for duplicates, NotFoundError for missing) rather than return null or silent-overwrite. Downstream services rely on the throw to distinguish 'first-time setup' from 'resync needed' control flow.",
+      "rationale_leak_score": 0,
+      "fact_signature": "registerProduct({required String sku, required String name, required double price}) -> Product\ngetProduct(String sku) -> Product\nstockOf(String sku) -> StockLevel\naddStock(String sku, int qty) -> void\nreserve({required String orderId, required String sku, required int quantity}) -> ReservationToken\ncommit(String tokenId) -> void\nrelease(String tokenId) -> void",
+      "expected_reservation_count_in_tests": 28
+    },
+    {
+      "scenario_id": "s_order",
+      "target_file": "lib/services/order_service.dart",
+      "hide_files": [
+        "lib/services/order_service.dart",
+        "test/shop_test.dart"
+      ],
+      "strip_from_files": {
+        "lib/shop.dart": [
+          "export 'services/order_service.dart';"
+        ]
+      },
+      "user_request": "Implement lib/services/order_service.dart for this multi-service shop project. It should provide order placement and lifecycle transitions (place / markPaid / ship / deliver / cancel). The class is OrderService, takes a Store + CustomerService + InventoryService in its constructor. Order placement reserves stock for each line item via inventory.reserve; ship commits all reservations; cancel releases open ones.",
+      "style_rationale": "Order creation must validate ALL line items (customer exists, every SKU exists) BEFORE any persistence write or stock reservation. Use a pre-check pass first, then a body that does the reservations. On any mid-loop failure inside the body, release whatever was reserved so far before propagating. Never leave the store in a half-written state.",
+      "rationale_leak_score": 0,
+      "fact_signature": "place({required String customerId, required List<({String sku, int quantity})> lines}) -> Order\nget(String orderId) -> Order\nmarkPaid(String orderId) -> void\nship(String orderId) -> void\ndeliver(String orderId) -> void\ncancel(String orderId) -> void",
+      "expected_reservation_count_in_tests": 28
+    }
+  ]
+}
