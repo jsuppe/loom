@@ -15,7 +15,9 @@ Loom is a semantic requirements-traceability system for AI-assisted development,
 7. **Decomposes specs into atomic executor-ready tasks** (`loom decompose`) — a frontier model emits a dependency-ordered YAML task list.
 8. **Executes those tasks on a small local model** (`loom_exec`) — claims, assembles context, generates code, runs grading tests, promotes on pass. The context bundle now includes a structured **Semantic context** block from the pluggable `SemanticIndexer` registry (M10) — TypeScript/JavaScript via `typescript-language-server`, plus simpler stub-indexers for C/C++/JS.
 9. **Pushes warrants to a claim graph (Driftgraph) and surfaces foundation drift back into edits** — outbound, validated through `Toulmin@v1` and `Falsifiability@v1` philosophical validators (M13.L2/L3); inbound through a three-tier channel (cache → HTTP → Cypher fallback) so structural drift in upstream claims appears as a `GRAPH-DRIFT` flag in `loom context`. A scope-qualified drift warning closes the over-firing gap to **100 % recall / 12 % FPR** on the locked m13_v1 evaluation set (M13.7d).
-10. **Measures itself** (`loom cost`, `loom doctor`, `loom metrics`, `loom health-score`) — hook latency, coverage gaps, drift, kind-aware rollups, single 0–100 CI gate.
+10. **Measures itself** (`loom cost`, `loom doctor`, `loom metrics`, `loom health-score`) — hook latency, coverage gaps, drift, kind-aware rollups, single 0–100 CI gate. `doctor` also warns on stale-pending requirements (>30 days, no impls — M15.3) and provisional-intake backlog (M14.4).
+11. **Auto-advances requirement lifecycle** (M15) — `loom link` bumps `pending → in_progress`; passing `loom verify` bumps to `implemented`; `loom verify-stable --apply` promotes drift-free implemented reqs to `verified`. Multi-hop `set-status` fast-forwards through a strict transition graph with audit-log events per hop.
+12. **Validates its own research methodology** — A 5-step pattern (independent design review → pre-registration → independent-taxonomy check → cross-vendor judge calibration → honest falsifier verdict) is captured as REQ-3896db58 and followed by all M22-era studies. Caught fatal flaws in 2 designs pre-launch and produced honest "refined" / "partially refuted" verdicts on 2 run studies.
 
 ## The thesis (validated)
 
@@ -49,14 +51,23 @@ Format: (perfect trials) / (trials).
 
 See [`experiments/gaps/FINDINGS.md`](experiments/gaps/FINDINGS.md) for methodology, caveats, reproduction steps, and the benchmark runners in `benchmarks/ollama_gaps*.py`.
 
-## Validation — what's been measured (~830 trials)
+## Validation — what's been measured (~1,050 trials)
 
 Loom has been tested across multiple phases of bake-off experiments
-(A–S, plus cross-language smokes covering 9 languages). All run
-summaries are committed under
-[`experiments/bakeoff/runs-v2/`](experiments/bakeoff/runs-v2/).
-Findings docs synthesize the methodology and headline results;
-detailed evidence is per-trial JSON in `runs-v2/`.
+(A–S, plus cross-language smokes covering 9 languages, plus the M22a
+augmentation-effectiveness study + 4-bin re-grade). All run summaries
+are committed under
+[`experiments/bakeoff/runs-v2/`](experiments/bakeoff/runs-v2/),
+[`experiments/bakeoff/runs-m22a-pilot/`](experiments/bakeoff/runs-m22a-pilot/),
+and `runs-v3/`. Findings docs synthesize the methodology and headline
+results; detailed evidence is per-trial JSON.
+
+A 5-step methodology pattern (independent design review → pre-registration
+→ independent-taxonomy check → cross-vendor judge calibration → honest
+falsifier verdict) is captured as a process_rule (REQ-3896db58) and
+followed by all M22-era studies. It earned its keep 4-for-4 in the
+M22 arc — caught fatal flaws in two pre-launch designs and produced
+honest "refined" / "partially refuted" verdicts in the run studies.
 
 ### What Loom is, in light of the data
 
@@ -238,9 +249,13 @@ Detail: [`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-
 | Cross-session rationale beats rule alone | phK | Honest null on Python S1/S2/S3: rule = rule+rationale = 100 %. Rationale-as-distinct-lever isn't supported by the data. JS is the lone counter-example (60 % vs 40 %). |
 | typelink (Milestone 7) verifier earns its keep | M7 | **Removed.** 50+ trials produced typelink_fail = 0 across every run. Reverted (~1300 LoC). The data plane (`*-contract` fences in spec text) is what carried the R1 lift, not the structured public_api parsing. |
 | Loom mechanism generalizes to all qwen-readable languages | phL/M/S | **Partially false.** C/Go/C++ show flat or absent lift on the same scenario where Python/Java/Rust/TS show clean bridging. |
+| Length-matched placebo rules out token-count confound (F1) | M22a-pilot | **Partially refuted by re-grade.** Binary grader showed placebo ≈ no_context (45.8 % vs 48.3 %). 4-bin re-grade showed placebo engages with project context at 70.6 % vs no_context's 25.9 % (paired McNemar p=0.008). "Any project context primes engaged behavior" is most of the lift; loom's structured rationale adds a smaller increment. |
+| Hook signal beyond token-count is statistically significant (F2) | M22a-pilot | **Refined, not confirmed.** Re-grade hook vs placebo: +17.6pp engaged-with-context, direction-positive but McNemar p=0.45 at n=17 paired. Magnitude smaller than binary grader claimed. Loom-specific signal exists but underpowered at pilot N. |
 
 ### Documents
 
+- **[`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-m22a-pilot.md)** + **[`FINDINGS-bakeoff-m22a-regrade.md`](experiments/bakeoff/FINDINGS-bakeoff-m22a-regrade.md)** — **M22 augmentation-effectiveness arc.** Pilot (4-arm, 120 trials) showed suggestive lift; 4-bin re-grade pre-registered with falsifiers refined F2 and partially refuted F1. Together they ground Headline Finding 4. The re-grade's [`REGRADE_PREREGISTRATION.md`](experiments/bakeoff/m22a_pilot/REGRADE_PREREGISTRATION.md) is the working template for future loom-effectiveness studies.
+- **[`FINDINGS-bakeoff-m22b-design-review.md`](experiments/bakeoff/FINDINGS-bakeoff-m22b-design-review.md)** — M22b multi-file pilot designed-but-not-run after methodology-review sub-agent caught three structural blockers (factual error + answer-leak + reference-file leak). γ-pivot demonstrates the pre-launch review pattern saving 1-2 weeks of harness work on a flawed design.
 - **[`FINDINGS-bakeoff-v3-scope-qualifier.md`](experiments/bakeoff/FINDINGS-bakeoff-v3-scope-qualifier.md)** — **the M13.7 headline.** v3 scope-qualified drift warning closes the v2 over-firing gap on the locked m13_v1 set.
 - **[`FINDINGS-bakeoff-v2-cross-language-map.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-cross-language-map.md)** — **the headline document.** Cross-language Loom-lift map across 9 languages, with regime classification.
 - **[`FINDINGS-bakeoff-v2-pythonfirst-smoke.md`](experiments/bakeoff/FINDINGS-bakeoff-v2-pythonfirst-smoke.md)** — D2 vs D3 = 0 → 95 % isolation of delivery as the mechanism. R2 (rename) replication showing Loom adds nothing when task is easy.
@@ -272,7 +287,13 @@ Detail: [`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-
 - **Spec → task decomposition** — `loom decompose SPEC-xxx --apply` uses a frontier model (or local fallback) to emit atomic tasks with full context bundles.
 - **Small-model task execution** — `loom_exec` claims the next ready task, calls Ollama, applies code to a scratch copy, runs grading tests, and promotes on pass.
 - **Research mode (kinds + per-kind lifecycles)** — Every entry carries a `kind` (`requirement` / `finding` / `methodology` / `process_rule` / `hypothesis`); each kind has its own lifecycle (e.g. findings: proposed → refined → confirmed → falsified) and its own renderer. `loom sync` emits FINDINGS.md / METHODOLOGY.md / PROCESS-RULES.md / HYPOTHESES.md alongside REQUIREMENTS.md (M12).
-- **Intake hook (chat → store)** — `hooks/loom_intake.py` is a `UserPromptSubmit` hook that classifies the user's message kind-aware (M12.5), runs `loom related` to find semantic neighbors, and routes to one of six branches (auto-link / propose / captured-with-rationale / rationale-needed / duplicate / no-op). Three guardrails (softener detection, domain whitelist, daily auto-link budget) keep auto-capture clean. Logs to `.intake-log.jsonl`; `loom intake-stats` rolls it up (M11.5).
+- **Intake hook (chat → store)** — `hooks/loom_intake.py` is a `UserPromptSubmit` hook that classifies the user's message kind-aware (M12.5), runs `loom related` to find semantic neighbors, and routes to one of six branches (auto-link / propose / captured-with-rationale / rationale-needed / duplicate / no-op). Three guardrails (softener detection, domain whitelist, daily auto-link budget) keep auto-capture clean, plus **four lexical screens** (session-scoped phrases / scenario-paste / tool-docs / speculation) for the M14.2 noise-pollution fix that took dogfooded intake precision from 55 % to 100 % on the audit corpus. Logs to `.intake-log.jsonl`; `loom intake-stats` rolls it up (M11.5).
+- **Provisional capture + triage (M14.3-.4)** — Intake captures can land in a `provisional` status (opt-in via `LOOM_INTAKE_PROVISIONAL=1`) that's hidden from REQUIREMENTS.md until promoted. `loom triage --json` surfaces the backlog; `loom doctor` warns when the queue exceeds `LOOM_PROVISIONAL_BACKLOG_WARN` (default 10).
+- **Requirement lifecycle (M15)** — `kind=requirement` entries follow a strict transition graph (`pending → in_progress → implemented → verified`) with three auto-advance hooks (first `loom link` → in_progress; `loom verify` on a passing test spec → implemented; `loom verify-stable` after N drift-free days → verified). Multi-hop `set-status` fast-forwards through legal edges and records one `status_changed` event per hop in `.loom-events.jsonl`. Manual transitions soft-require `--reason`. Other kinds (finding/methodology/hypothesis/process_rule) keep free per-kind enums.
+- **POSIX-relative impl paths (M17.1)** — `loom link` stores POSIX-relative paths from the project root so impl rows round-trip cleanly across machines. Out-of-root paths stay absolute. Migration script provided.
+- **Line-range rendering + hook auto-capture (M16)** — Doc renderer surfaces line ranges as `path:42-87` (GitHub-permalink style) when available; the PreToolUse hook auto-captures the edited line range from Edit/MultiEdit tool inputs and logs it to `.hook-log.jsonl` (just-log, not auto-link).
+- **Supersession workflow closure (M20.1)** — `loom unlink <file>` removes implementation rows; `loom supersede` enumerates affected impls and suggests cleanup commands. Closes the drift-signal-without-affordance gap.
+- **Idempotent doc sync (Fix A)** — `loom sync` skips writing files when only the auto-generated timestamp differs. Keeps `git status` clean after no-op regenerations.
 - **Rationale tracking** — `Requirement.rationale` (free text) plus `rationale_links` (M11.1) form a DAG of "why" pointers. `loom chain` traverses both directions (M12.4); `loom audit-rationale` previews the impact of `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` before flipping it (M11.4). `loom needs-rationale` lists captures missing both prose and links.
 - **Semantic indexers** — Pluggable `SemanticIndexer` registry (M10) injects a structured **Semantic context** block into `loom_exec` prompts and powers a structural-drift channel in `loom check`. Shipped: an LSP-backed `JsIndexer` (TypeScript / JavaScript via `typescript-language-server`) plus stub indexers for C/C++/JS. `loom indexer-doctor` health-checks the pipeline.
 - **Driftgraph integration (warrants + foundation drift)** — Outbound: every captured finding / methodology / process rule can be pushed as a Toulmin@v1 (M13.L2) or Falsifiability@v1 (M13.L3d) warrant with claim-id tracking, retract / supersede cascade. Inbound: a three-tier channel (cache → HTTP → Cypher fallback, M13.5a-e) surfaces upstream claim invalidations as a `GRAPH-DRIFT` flag in `loom context`, with a scope-qualified warning prompt that lifts F1 to **0.965** at 100 % recall on the locked m13_v1 evaluation set (M13.7d).
@@ -442,7 +463,8 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | **`indexer-doctor`**     | Health-check the semantic-indexer pipeline (M10.5)                   | yes      |
 | `check <file>`           | Multi-channel drift detection: content / structural / superseded (M10.4) | yes  |
 | `context <file>`         | Pre-edit briefing: linked reqs, specs, drift, GRAPH-DRIFT (used by the hook) | yes |
-| `link <file>`            | Link code to reqs (`--req`) or specs (`--spec`)                      | —        |
+| `link <file>`            | Link code to reqs (`--req`), specs (`--spec`), or symbol (`--symbol --language`); `--lines` for ranges (M16)  | —        |
+| **`unlink <file>`**      | Remove an impl link (`--req` for per-req; otherwise whole-impl). Closes the supersession workflow loop (M20.1) | —      |
 | `status`                 | Project overview with drift summary                                  | yes      |
 | `query <text>`           | Semantic search                                                      | yes      |
 | `list`                   | List requirements                                                    | yes      |
@@ -455,7 +477,9 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | `trace <target>`         | Bidirectional traceability (req↔files)                               | yes      |
 | `chain <req_id>`         | Full traceability chain (req→patterns→specs→impls→tests)             | yes      |
 | `coverage`               | Show requirements missing implementations or tests                   | yes      |
-| `refine` / `set-status` / `incomplete` | Elaborate and status-manage reqs                       | —        |
+| `refine` / `set-status` / `incomplete` | Elaborate and status-manage reqs. `set-status` enforces a strict transition graph for kind=requirement with fast-forward + audit-log events (M15) | —        |
+| **`triage [--json --kind --limit]`** | Surface provisional intake captures awaiting promotion (M14.4)   | yes      |
+| **`verify-stable [--apply --days]`** | Promote implemented requirements to verified when drift-free for N days (M15.2) | yes |
 | `spec` / `specs` / `spec-link` | Specification management                                       | `specs`  |
 | `pattern` / `patterns` / `pattern-apply` | Shared design patterns                               | `patterns` |
 | `doctor`                 | Health checks (Ollama, store, orphans, drift, coverage)              | yes      |
