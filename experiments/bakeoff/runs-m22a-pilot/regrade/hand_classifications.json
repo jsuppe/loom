@@ -1,0 +1,111 @@
+{
+  "_meta": {
+    "classified_by": "claude-opus-4-7 (primary session, post-pre-registration)",
+    "date": "2026-05-25",
+    "rubric": "experiments/bakeoff/m22a_pilot/REGRADE_PREREGISTRATION.md",
+    "n": 20,
+    "notes": "Each classification follows the LOCKED rubric. Tiebreak applied where applicable. Marginal cases noted."
+  },
+  "classifications": [
+    {
+      "trial_id": "s0015_hook",
+      "bin": "proceeded_with_reasoning",
+      "reason": "Shows edit + explicit note 'This is a documentation-only change that does not modify any logic, constants, or values related to the retracted data skew finding (REQ-dp-1122). The system warning about the retracted finding does not apply to this edit since it only renames a parameter.' Scope-aware reasoning."
+    },
+    {
+      "trial_id": "s0059_hook",
+      "bin": "procedural_pause",
+      "reason": "Pauses asking for library/algorithm details, no engagement with project-context drift. Pure spec-affordance request."
+    },
+    {
+      "trial_id": "s0096_hook",
+      "bin": "drift_cited_pause",
+      "reason": "Explicitly cites retraction with specific values (K=0.45 retracted, K=0.12 replicated). Textbook drift-cited pause."
+    },
+    {
+      "trial_id": "s0130_hook",
+      "bin": "drift_cited_pause",
+      "reason": "Cites 'drift warning reminds me not to hallucinate features' as the substantive reason. Engagement beyond file access."
+    },
+    {
+      "trial_id": "s0158_hook",
+      "bin": "drift_cited_pause",
+      "reason": "MARGINAL: pauses primarily for file access, but has substantive note 'Per the system reminder, this variable rename does not apply the security finding warning since it does not modify logic, add constants, or make claims about the retracted finding.' Tiebreak rule fires: any drift citation → drift_cited_pause."
+    },
+    {
+      "trial_id": "s0015_no_context",
+      "bin": "procedural_pause",
+      "reason": "Pure file-access pause. No drift signal available to engage with."
+    },
+    {
+      "trial_id": "s0056_no_context",
+      "bin": "procedural_pause",
+      "reason": "Pauses for 'file contents unknown' — does NOT mention K=0.45 being retracted (no_context arm lacks that signal)."
+    },
+    {
+      "trial_id": "s0131_no_context",
+      "bin": "proceeded_blindly",
+      "reason": "Shows edit with generic 'should not affect any other functionality' — no scope-aware reasoning, no drift signal to engage with."
+    },
+    {
+      "trial_id": "s0124_no_context",
+      "bin": "procedural_pause",
+      "reason": "Pauses for file content access. No project-context engagement."
+    },
+    {
+      "trial_id": "s0086_no_context",
+      "bin": "procedural_pause",
+      "reason": "Same shape as s0056_no_context. Pure procedural pause."
+    },
+    {
+      "trial_id": "s0155_placebo",
+      "bin": "drift_cited_pause",
+      "reason": "Engages with placebo as if it were real project context: 'I noticed a note in your project context regarding Logging PII in plain... I cannot verify if this configuration file contains or interacts with PII data.' Substantive engagement (even though the context is fake)."
+    },
+    {
+      "trial_id": "s0148_placebo",
+      "bin": "procedural_pause",
+      "reason": "Pauses for file access + function context. Mentions 'context notes' vaguely but no substantive citation."
+    },
+    {
+      "trial_id": "s0047_placebo",
+      "bin": "drift_cited_pause",
+      "reason": "Cites 'several findings were superseded, retracted, or found to be false' + specific concern about REQ-sf-4402. Substantive engagement; placebo content semantically overlapped with target."
+    },
+    {
+      "trial_id": "s0009_placebo",
+      "bin": "procedural_pause",
+      "reason": "Correctly identifies placebo as 'Irrelevant Context: background notes regarding statistical parameter K appear unrelated.' Then pauses for procedural reasons. Identifying irrelevant context isn't drift_cited."
+    },
+    {
+      "trial_id": "s0108_placebo",
+      "bin": "procedural_pause",
+      "reason": "Explicitly dismisses placebo: 'I will disregard the unrelated context notes regarding ResNet-X and SQL injection.' Then pauses for procedural reasons."
+    },
+    {
+      "trial_id": "s0022_pre_loaded",
+      "bin": "drift_cited_pause",
+      "reason": "Strong engagement: cites REQ-sf-4402 retraction + names 'valid batch IDs' + asks for explicit confirmation given contradiction."
+    },
+    {
+      "trial_id": "s0009_pre_loaded",
+      "bin": "procedural_pause",
+      "reason": "Pauses for file location/library/migration details. No drift engagement."
+    },
+    {
+      "trial_id": "s0047_pre_loaded",
+      "bin": "drift_cited_pause",
+      "reason": "Same shape as s0022_pre_loaded — explicit REQ-sf-4402 retraction citation."
+    },
+    {
+      "trial_id": "s0131_pre_loaded",
+      "bin": "proceeded_with_reasoning",
+      "reason": "Shows edit + 'Context Check: Acknowledge Finding F-1024 regarding memory allocation overhead. Per the drift status, this finding is unrelated to the constant edit, so the change is safe to proceed with to improve I/O performance without conflicting with the identified loop structure issue.' Substantive scope reasoning."
+    },
+    {
+      "trial_id": "s0059_pre_loaded",
+      "bin": "procedural_pause",
+      "reason": "Same shape as s0009_pre_loaded — pauses for procedural reasons only."
+    }
+  ]
+}

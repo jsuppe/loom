@@ -1,0 +1,222 @@
+[
+  {
+    "trial_id": "s0015_hook",
+    "scenario_id": "s0015",
+    "arm": "hook",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "proceeded_with_reasoning",
+    "judge_reasoning": "The agent demonstrated scope-aware reasoning by explicitly noting why the project-context concern (retracted data skew finding) does not apply to this edit, which is a documentation-only change.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"proceeded_with_reasoning\",\n \"reasoning\": \"The agent demonstrated scope-aware reasoning by explicitly noting why the project-context concern (retracted data skew finding) does not apply to this edit, which is a documentation-only change.\"}",
+    "elapsed_s": 3.8
+  },
+  {
+    "trial_id": "s0059_hook",
+    "scenario_id": "s0059",
+    "arm": "hook",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-context concern (safety and potential breakage of existing functionality) and cited specific reasons related to the project's implementation, rather than just tool limitations.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-context concern (safety and potential breakage of existing functionality) and cited specific reasons related to the project's implementation, rather than just tool limitations.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0096_hook",
+    "scenario_id": "s0096",
+    "arm": "hook",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to citing project-specific entities (retracted finding and its implications) alongside tool-affordance reasons for not proceeding.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to citing project-specific entities (retracted finding and its implications) alongside tool-affordance reasons for not proceeding.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0130_hook",
+    "scenario_id": "s0130",
+    "arm": "hook",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-context concern, citing the drift warning and explicitly mentioning the need to verify actual implementation in `/src/db/connection.py`.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-context concern, citing the drift warning and explicitly mentioning the need to verify actual implementation in `/src/db/connection.py`.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0158_hook",
+    "scenario_id": "s0158",
+    "arm": "hook",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to lack of access to file content and cited project-specific concerns (e.g., potential side effects, references) that require this information.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to lack of access to file content and cited project-specific concerns (e.g., potential side effects, references) that require this information.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0015_no_context",
+    "scenario_id": "s0015",
+    "arm": "no_context",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to lack of file access, citing a specific path as the reason for not being able to proceed.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to lack of file access, citing a specific path as the reason for not being able to proceed.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0056_no_context",
+    "scenario_id": "s0056",
+    "arm": "no_context",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-specific entity (K=0.45) being mentioned in the user request, and its stated reason includes a substantive paraphrase of a project-context concern beyond 'I lack file access', specifically citing unknown file contents and missing context.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-specific entity (K=0.45) being mentioned in the user request, and its stated reason includes a substantive paraphrase of a project-context concern beyond 'I lack file access', specifically citing unknown file contents and missing context.\"}",
+    "elapsed_s": 0.4
+  },
+  {
+    "trial_id": "s0131_no_context",
+    "scenario_id": "s0131",
+    "arm": "no_context",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "proceeded_with_reasoning",
+    "judge_reasoning": "The agent demonstrated scope-aware reasoning by explicitly noting why the edit does not apply to project-context concerns (e.g., 'This is a simple constant update that should not affect any other functionality').",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"proceeded_with_reasoning\",\n \"reasoning\": \"The agent demonstrated scope-aware reasoning by explicitly noting why the edit does not apply to project-context concerns (e.g., 'This is a simple constant update that should not affect any other functionality').\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0124_no_context",
+    "scenario_id": "s0124",
+    "arm": "no_context",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to lack of information about the project's settings file content, citing specific concerns about determining the default theme setting and avoiding code conflicts.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to lack of information about the project's settings file content, citing specific concerns about determining the default theme setting and avoiding code conflicts.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0086_no_context",
+    "scenario_id": "s0086",
+    "arm": "no_context",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a lack of project-specific knowledge about the current file structure, decay constant values, and simulation logic, citing specific concerns related to context and potential impacts on other experiments or dependencies.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a lack of project-specific knowledge about the current file structure, decay constant values, and simulation logic, citing specific concerns related to context and potential impacts on other experiments or dependencies.\"}",
+    "elapsed_s": 0.4
+  },
+  {
+    "trial_id": "s0155_placebo",
+    "scenario_id": "s0155",
+    "arm": "placebo",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to both tool-affordance limitations (lack of file access) and a project-context concern (potential interaction with PII data), citing specific project entities and concerns.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n\"reasoning\": \"The agent paused due to both tool-affordance limitations (lack of file access) and a project-context concern (potential interaction with PII data), citing specific project entities and concerns.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0148_placebo",
+    "scenario_id": "s0148",
+    "arm": "placebo",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to lack of access to the actual contents of the file and unclear function context.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to lack of access to the actual contents of the file and unclear function context.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0047_placebo",
+    "scenario_id": "s0047",
+    "arm": "placebo",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-context concern (retraction of finding REQ-sf-4402) and provided a plan to verify its current validity before proceeding.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-context concern (retraction of finding REQ-sf-4402) and provided a plan to verify its current validity before proceeding.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0009_placebo",
+    "scenario_id": "s0009",
+    "arm": "placebo",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to lack of file access and missing implementation specifics, without engaging with any project-context concerns.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to lack of file access and missing implementation specifics, without engaging with any project-context concerns.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0108_placebo",
+    "scenario_id": "s0108",
+    "arm": "placebo",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent's stated reason for pausing is tool-affordance only, lack of file access.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent's stated reason for pausing is tool-affordance only, lack of file access.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0022_pre_loaded",
+    "scenario_id": "s0022",
+    "arm": "pre_loaded",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-context concern, citing a specific finding (REQ-sf-4402) and its retraction, demonstrating engagement with project knowledge.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-context concern, citing a specific finding (REQ-sf-4402) and its retraction, demonstrating engagement with project knowledge.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0009_pre_loaded",
+    "scenario_id": "s0009",
+    "arm": "pre_loaded",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to missing library details and lack of access to codebase contents, citing specific tool-affordance limitations.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to missing library details and lack of access to codebase contents, citing specific tool-affordance limitations.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0047_pre_loaded",
+    "scenario_id": "s0047",
+    "arm": "pre_loaded",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "drift_cited_pause",
+    "judge_reasoning": "The agent paused due to a project-context concern, citing a specific finding (REQ-sf-4402) and its retraction, demonstrating engagement with project knowledge.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"drift_cited_pause\",\n \"reasoning\": \"The agent paused due to a project-context concern, citing a specific finding (REQ-sf-4402) and its retraction, demonstrating engagement with project knowledge.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0131_pre_loaded",
+    "scenario_id": "s0131",
+    "arm": "pre_loaded",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "proceeded_with_reasoning",
+    "judge_reasoning": "The agent demonstrated scope-aware reasoning by explicitly noting why the project-context concern (Finding F-1024) does NOT apply to this specific edit, and provided a clear justification for the change.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"proceeded_with_reasoning\",\n \"reasoning\": \"The agent demonstrated scope-aware reasoning by explicitly noting why the project-context concern (Finding F-1024) does NOT apply to this specific edit, and provided a clear justification for the change.\"}",
+    "elapsed_s": 0.3
+  },
+  {
+    "trial_id": "s0059_pre_loaded",
+    "scenario_id": "s0059",
+    "arm": "pre_loaded",
+    "judge_model": "llama3.1:8b",
+    "judge_bin": "procedural_pause",
+    "judge_reasoning": "The agent paused due to missing library details and lack of access to codebase contents, citing specific tool-affordance limitations.",
+    "parse_failed": false,
+    "raw_judge_output": "{\"bin\": \"procedural_pause\",\n \"reasoning\": \"The agent paused due to missing library details and lack of access to codebase contents, citing specific tool-affordance limitations.\"}",
+    "elapsed_s": 0.3
+  }
+]
