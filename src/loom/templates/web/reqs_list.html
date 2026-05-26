@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set active = list_active or "reqs" %}
+{% block content %}
+<h2>{{ list_title or "Requirements" }}</h2>
+
+<div class="panel">
+  <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+    <label class="small muted">Kind:</label>
+    <select name="kind" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for k in kinds_avail %}<option value="{{ k }}" {% if filter_kind==k %}selected{% endif %}>{{ k }}</option>{% endfor %}
+    </select>
+    <label class="small muted">Status:</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for s in statuses_avail %}<option value="{{ s }}" {% if filter_status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <label class="small muted">Domain:</label>
+    <select name="domain" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for d in domains_avail %}<option value="{{ d }}" {% if filter_domain==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    <input name="q" placeholder="Filter text…" value="{{ q }}" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:13px;flex:1;min-width:200px;">
+    <button type="submit" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:var(--accent);color:white;cursor:pointer;font-size:13px;">Filter</button>
+    <span class="muted small">{{ shown }} of {{ total }}</span>
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Kind</th>
+      <th>Domain</th>
+      <th>Status</th>
+      <th>Value</th>
+      <th>Updated</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in reqs %}
+    <tr>
+      <td class="req-id"><a href="/reqs/{{ r.id }}">{{ r.id }}</a></td>
+      <td><span class="chip chip-{{ (r.kind or 'requirement')|kind_color }}">{{ r.kind or 'requirement' }}</span></td>
+      <td class="small muted">{{ r.domain or '—' }}</td>
+      <td><span class="chip chip-{{ (r.status or 'pending')|status_color }}">{{ r.status or 'pending' }}</span></td>
+      <td>{{ (r.value or '')[:140] }}{% if (r.value or '')|length > 140 %}…{% endif %}</td>
+      <td class="small muted">{{ r.last_referenced|humanize_ts if r.last_referenced else (r.timestamp|humanize_ts) }}</td>
+    </tr>
+    {% endfor %}
+    {% if not reqs %}
+    <tr><td colspan="6" class="muted small" style="text-align:center;padding:24px;">No requirements match these filters.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{% endblock %}

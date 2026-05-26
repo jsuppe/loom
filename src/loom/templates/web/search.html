@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% set active = "search" %}
+{% block content %}
+<h2>Semantic search</h2>
+
+<div class="panel">
+  <form method="get" style="display:flex;gap:12px;align-items:center;">
+    <input name="q" placeholder="Free-text query — semantic search across reqs / findings…" value="{{ q }}" autofocus style="padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:14px;flex:1;">
+    <label class="small muted">min score:</label>
+    <input name="min_score" type="number" step="0.05" min="0" max="1" value="{{ min_score }}" style="width:80px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);">
+    <button type="submit" style="padding:8px 20px;border:1px solid var(--border);border-radius:6px;background:var(--accent);color:white;cursor:pointer;">Search</button>
+  </form>
+</div>
+
+{% if q %}
+  {% if results and results[0].error %}
+    <div class="panel">
+      <p style="color:var(--red);">Error: {{ results[0].error }}</p>
+    </div>
+  {% elif results %}
+    <table>
+      <thead>
+        <tr><th>Score</th><th>ID</th><th>Kind</th><th>Status</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+      {% for r in results %}
+        <tr>
+          <td class="small">{{ '%.2f'|format(r.score or 0) }}</td>
+          <td class="req-id"><a href="/reqs/{{ r.req_id }}">{{ r.req_id }}</a></td>
+          <td><span class="chip chip-{{ (r.kind or 'requirement')|kind_color }}">{{ r.kind or 'requirement' }}</span></td>
+          <td><span class="chip chip-{{ (r.status or 'pending')|status_color }}">{{ r.status or 'pending' }}</span></td>
+          <td>{{ (r.value or '')[:150] }}{% if (r.value or '')|length > 150 %}…{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="small muted">{{ results|length }} results at min_score={{ min_score }}.</p>
+  {% else %}
+    <div class="panel">
+      <p class="muted">No results above the min_score threshold. Try lowering it.</p>
+    </div>
+  {% endif %}
+{% else %}
+  <div class="panel">
+    <p class="muted small">Enter a query to search semantically across requirements, findings, methodology, hypotheses, and process rules.</p>
+  </div>
+{% endif %}
+{% endblock %}

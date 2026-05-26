@@ -434,6 +434,21 @@ def cmd_indexer_doctor(args):
     return 0 if data["ok"] else 1
 
 
+def cmd_ui(args):
+    """Start the local web UI (M23).
+
+    Reads ``--project`` (or LOOM_PROJECT / config) like every other
+    command. Binds to localhost by default; pass ``--host 0.0.0.0`` to
+    expose on LAN (no auth — only do that on a trusted network).
+    """
+    from . import web as _web
+    try:
+        return _web.run(args.project, host=args.host, port=args.port)
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return 1
+
+
 def cmd_triage(args):
     """Surface the intake-capture triage queue (M14.4 lite).
 
@@ -3225,6 +3240,16 @@ def main():
     )
     p_idoc.add_argument("--json", "-j", action="store_true", help="JSON output")
 
+    # ui (M23) — local web UI for browsing reqs/specs/findings/files
+    p_ui = sp(
+        "ui",
+        help="Start the local web UI for browsing reqs/specs/findings",
+    )
+    p_ui.add_argument("--host", default="127.0.0.1",
+                       help="Bind address (default 127.0.0.1; localhost-only)")
+    p_ui.add_argument("--port", type=int, default=8090,
+                       help="Bind port (default 8090)")
+
     # related (M11.1) — find prior decisions a new req might cite
     p_related = sp(
         "related",
@@ -3438,6 +3463,7 @@ def main():
         "metrics": cmd_metrics,
         "health-score": cmd_health_score,
         "indexer-doctor": cmd_indexer_doctor,
+        "ui": cmd_ui,
         "related": cmd_related,
         "needs-rationale": cmd_needs_rationale,
         "audit-rationale": cmd_audit_rationale,

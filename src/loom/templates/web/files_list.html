@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set active = "files" %}
+{% block content %}
+<h2>Files</h2>
+
+<div class="panel">
+  <form method="get" style="display:flex;gap:12px;align-items:center;">
+    <input name="q" placeholder="Filter file paths…" value="{{ q }}" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:13px;flex:1;">
+    <button type="submit" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:var(--accent);color:white;cursor:pointer;font-size:13px;">Filter</button>
+    <span class="muted small">{{ shown }} of {{ total }} linked files</span>
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Impls</th>
+      <th>Linked reqs</th>
+      <th>Last updated</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for f in files %}
+    <tr>
+      <td><a href="/files/{{ f.file }}">{{ f.file }}</a></td>
+      <td>{{ f.impl_count }}</td>
+      <td>
+        {% for rid in f.req_ids %}
+          <a class="req-id" href="/reqs/{{ rid }}">{{ rid }}</a>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </td>
+      <td class="small muted">{{ f.last_updated|humanize_ts }}</td>
+    </tr>
+  {% endfor %}
+  {% if not files %}
+    <tr><td colspan="4" class="muted small" style="text-align:center;padding:24px;">No linked files match this filter.</td></tr>
+  {% endif %}
+  </tbody>
+</table>
+{% endblock %}

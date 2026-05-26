@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% block content %}
+<h2>Dashboard</h2>
+
+<div class="grid">
+  <div class="stat">
+    <div class="label">Requirements</div>
+    <div class="value">{{ req_count }}</div>
+    <div class="sub">across all kinds</div>
+  </div>
+  <div class="stat">
+    <div class="label">Implementations</div>
+    <div class="value">{{ impl_count }}</div>
+    <div class="sub">linked files</div>
+  </div>
+  {% if doctor.checks and doctor.checks.drift %}
+  <div class="stat">
+    <div class="label">Drift detected</div>
+    <div class="value">{{ doctor.checks.drift.count or 0 }}</div>
+    <div class="sub">from <code>loom doctor</code></div>
+  </div>
+  {% endif %}
+  {% if doctor.checks and doctor.checks.orphans %}
+  <div class="stat">
+    <div class="label">Orphans</div>
+    <div class="value">{{ doctor.checks.orphans.count or 0 }}</div>
+    <div class="sub">unlinked impls</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3>By kind</h3>
+  <table>
+    <thead><tr><th>Kind</th><th>Count</th></tr></thead>
+    <tbody>
+    {% for kind, n in by_kind.items()|sort %}
+      <tr>
+        <td><span class="chip chip-{{ kind|kind_color }}">{{ kind }}</span></td>
+        <td>{{ n }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>By status</h3>
+  <table>
+    <thead><tr><th>Status</th><th>Count</th></tr></thead>
+    <tbody>
+    {% for status, n in by_status.items()|sort %}
+      <tr>
+        <td><span class="chip chip-{{ status|status_color }}">{{ status }}</span></td>
+        <td>{{ n }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if recent_events %}
+<div class="panel">
+  <h3>Recent activity</h3>
+  <table>
+    <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for ev in recent_events %}
+      <tr>
+        <td class="small muted">{{ ev.ts|humanize_ts }}</td>
+        <td><span class="chip chip-{{ 'blue' if ev.event=='extract' else 'teal' if ev.event=='link' else 'orange' if ev.event=='check' else 'gray' }}">{{ ev.event }}</span></td>
+        <td class="small">
+          {% if ev.req_id %}<a class="req-id" href="/reqs/{{ ev.req_id }}">{{ ev.req_id }}</a>{% endif %}
+          {% if ev.file %}<code>{{ ev.file }}</code>{% endif %}
+          {% if ev.detail %}<span class="muted">{{ ev.detail }}</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if doctor.warnings %}
+<div class="panel">
+  <h3>Warnings</h3>
+  <ul>
+    {% for w in doctor.warnings %}<li class="small muted">{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% endblock %}

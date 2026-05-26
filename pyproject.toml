@@ -55,6 +55,10 @@ driftgraph = ["neo4j>=5.0"]
 # so it doesn't appear here; pylsp ships from PyPI so it can be
 # an optional dependency.
 indexer-py = ["python-lsp-server>=1.7"]
+# M23 — local web UI (`loom ui`). Without this extra,
+# `loom ui` exits with an install hint; the rest of the CLI is
+# unaffected. Server-rendered HTML via Jinja2, no JS build step.
+ui = ["fastapi>=0.110", "uvicorn>=0.29", "jinja2>=3.1"]
 dev = [
     "pytest>=8.0",
     "pytest-xdist>=3.0",
@@ -85,6 +89,7 @@ include = ["loom*"]
 loom = [
     "prompts/*.md",
     "templates/**/*",
+    "templates/web/*.html",
 ]
 
 [tool.pytest.ini_options]

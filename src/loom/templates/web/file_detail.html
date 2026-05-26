@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% set active = "files" %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;">
+  <h2><code>{{ path }}</code></h2>
+  <a href="/files" class="small">← back</a>
+</div>
+
+{% if drift %}
+<div class="panel">
+  <h3>Current drift status</h3>
+  <p>
+    Linked: <strong>{{ 'yes' if drift.linked else 'no' }}</strong>
+    {% if drift.drift_detected %}
+      <span class="chip chip-red">drift detected</span>
+    {% else %}
+      <span class="chip chip-green">no drift</span>
+    {% endif %}
+  </p>
+  {% if drift.drift_signals %}
+  <ul class="small">
+    <li>content drift: {{ 'YES' if drift.drift_signals.content else 'no' }}</li>
+    <li>structural drift: {{ 'YES' if drift.drift_signals.structural else 'no' }}</li>
+    <li>superseded: {{ 'YES' if drift.drift_signals.superseded else 'no' }}</li>
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>Linked requirements ({{ reqs|length }})</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Kind</th><th>Status</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for r in reqs %}
+    <tr>
+      <td class="req-id"><a href="/reqs/{{ r.id }}">{{ r.id }}</a></td>
+      <td><span class="chip chip-{{ (r.kind or 'requirement')|kind_color }}">{{ r.kind or 'requirement' }}</span></td>
+      <td><span class="chip chip-{{ (r.status or 'pending')|status_color }}">{{ r.status or 'pending' }}</span></td>
+      <td>{{ (r.value or '')[:120] }}{% if (r.value or '')|length > 120 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>Implementations ({{ impls|length }})</h3>
+  <table>
+    <thead><tr><th>Impl ID</th><th>Lines</th><th>Content hash</th><th>Linked</th></tr></thead>
+    <tbody>
+    {% for i in impls %}
+    <tr>
+      <td class="req-id">{{ i.id[:12] }}</td>
+      <td class="small muted">{{ i.lines }}</td>
+      <td class="small muted"><code>{{ (i.content_hash or '')[:12] }}</code></td>
+      <td class="small muted">{{ i.timestamp|humanize_ts }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if recent_commits %}
+<div class="panel">
+  <h3>Recent commits ({{ recent_commits|length }})</h3>
+  <table>
+    <thead><tr><th>Date</th><th>Hash</th><th>Subject</th></tr></thead>
+    <tbody>
+    {% for c in recent_commits %}
+    <tr>
+      <td class="small muted">{{ c.date[:10] }}</td>
+      <td class="small"><code>{{ c.hash }}</code></td>
+      <td class="small">{{ c.subject }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

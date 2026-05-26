@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% set active = "specs" %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;">
+  <h2>
+    <span class="req-id">{{ spec.id }}</span>
+    <span class="chip chip-{{ (spec.status or 'draft')|status_color }}">{{ spec.status or 'draft' }}</span>
+  </h2>
+  <a href="/specs" class="small">← back</a>
+</div>
+
+<div class="panel">
+  <h3>Value</h3>
+  <p style="white-space:pre-wrap;line-height:1.6;">{{ spec.value }}</p>
+
+  {% if spec.elaboration %}
+  <h3>Elaboration</h3>
+  <p style="white-space:pre-wrap;color:var(--muted);line-height:1.6;">{{ spec.elaboration }}</p>
+  {% endif %}
+
+  <h3>Metadata</h3>
+  <table>
+    {% if parent %}
+    <tr><th>Parent req</th><td><a class="req-id" href="/reqs/{{ parent.id }}">{{ parent.id }}</a> <span class="muted small">— {{ (parent.value or '')[:120] }}</span></td></tr>
+    {% else %}
+    <tr><th>Parent req</th><td class="muted">—</td></tr>
+    {% endif %}
+    <tr><th>Captured</th><td class="small muted">{{ spec.timestamp|humanize_ts }}</td></tr>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>Linked implementations ({{ impls|length }})</h3>
+  {% if impls %}
+  <table>
+    <thead><tr><th>File</th><th>Lines</th></tr></thead>
+    <tbody>
+    {% for i in impls %}
+    <tr>
+      <td><a href="/files/{{ i.file }}">{{ i.file }}</a></td>
+      <td class="small muted">{{ i.lines }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted small">No linked implementations.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

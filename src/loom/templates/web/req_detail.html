@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% set active = list_active or "reqs" %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;">
+  <h2>
+    <span class="req-id">{{ req.id }}</span>
+    <span class="chip chip-{{ kind|kind_color }}">{{ kind }}</span>
+    <span class="chip chip-{{ (req.status or 'pending')|status_color }}">{{ req.status or 'pending' }}</span>
+  </h2>
+  <a href="/{% if kind == 'finding' %}findings{% else %}reqs{% endif %}" class="small">← back</a>
+</div>
+
+<div class="panel">
+  <h3>Value</h3>
+  <p style="white-space:pre-wrap;line-height:1.6;">{{ req.value }}</p>
+
+  {% if req.rationale %}
+  <h3>Rationale</h3>
+  <p style="white-space:pre-wrap;color:var(--muted);line-height:1.6;">{{ req.rationale }}</p>
+  {% endif %}
+
+  {% if req.elaboration %}
+  <h3>Elaboration</h3>
+  <p style="white-space:pre-wrap;color:var(--muted);line-height:1.6;">{{ req.elaboration }}</p>
+  {% endif %}
+
+  {% if req.acceptance_criteria %}
+  <h3>Acceptance criteria</h3>
+  <ul>
+    {% for c in req.acceptance_criteria %}<li>{{ c }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <h3>Metadata</h3>
+  <table>
+    <tr><th>Domain</th><td>{{ req.domain or '—' }}</td></tr>
+    <tr><th>Captured</th><td class="small muted">{{ req.timestamp|humanize_ts }}</td></tr>
+    {% if req.last_referenced %}
+    <tr><th>Last referenced</th><td class="small muted">{{ req.last_referenced|humanize_ts }}</td></tr>
+    {% endif %}
+    {% if req.superseded_at %}
+    <tr><th>Superseded at</th><td class="small muted">{{ req.superseded_at|humanize_ts }}</td></tr>
+    {% endif %}
+    {% if req.source_session %}
+    <tr><th>Source session</th><td class="small muted"><code>{{ req.source_session }}</code></td></tr>
+    {% endif %}
+  </table>
+</div>
+
+{% if derives_from %}
+<div class="panel">
+  <h3>Derives from ({{ derives_from|length }})</h3>
+  <p class="small muted">REQs whose decisions this one builds on:</p>
+  <table>
+    <thead><tr><th>ID</th><th>Kind</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for r in derives_from %}
+    <tr>
+      <td class="req-id"><a href="/reqs/{{ r.id }}">{{ r.id }}</a></td>
+      <td><span class="chip chip-{{ (r.kind or 'requirement')|kind_color }}">{{ r.kind or 'requirement' }}</span></td>
+      <td>{{ (r.value or '')[:120] }}{% if (r.value or '')|length > 120 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if derives_to %}
+<div class="panel">
+  <h3>Derived by ({{ derives_to|length }})</h3>
+  <p class="small muted">Later REQs that cite this one as rationale:</p>
+  <table>
+    <thead><tr><th>ID</th><th>Kind</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for r in derives_to %}
+    <tr>
+      <td class="req-id"><a href="/reqs/{{ r.id }}">{{ r.id }}</a></td>
+      <td><span class="chip chip-{{ (r.kind or 'requirement')|kind_color }}">{{ r.kind or 'requirement' }}</span></td>
+      <td>{{ (r.value or '')[:120] }}{% if (r.value or '')|length > 120 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if specs %}
+<div class="panel">
+  <h3>Specifications ({{ specs|length }})</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Status</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for s in specs %}
+    <tr>
+      <td class="req-id"><a href="/specs/{{ s.id }}">{{ s.id }}</a></td>
+      <td><span class="chip chip-{{ (s.status or 'draft')|status_color }}">{{ s.status or 'draft' }}</span></td>
+      <td>{{ (s.value or '')[:120] }}{% if (s.value or '')|length > 120 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>Linked implementations ({{ impls|length }})</h3>
+  {% if impls %}
+  <table>
+    <thead><tr><th>File</th><th>Lines</th><th>Hash</th><th>Linked</th></tr></thead>
+    <tbody>
+    {% for i in impls %}
+    <tr>
+      <td><a href="/files/{{ i.file }}">{{ i.file }}</a></td>
+      <td class="small muted">{{ i.lines }}</td>
+      <td class="small muted"><code>{{ (i.content_hash or '')[:12] }}</code></td>
+      <td class="small muted">{{ i.timestamp|humanize_ts }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted small">No linked implementations.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

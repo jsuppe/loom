@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Loom — {{ project }}{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #1c1c1e;
+      --muted: #6e6e73;
+      --border: #d2d2d7;
+      --panel: #ffffff;
+      --accent: #007aff;
+      --code-bg: #f4f4f5;
+      --blue: #007aff;
+      --green: #34c759;
+      --orange: #ff9500;
+      --red: #ff3b30;
+      --teal: #5ac8fa;
+      --purple: #af52de;
+      --gray: #8e8e93;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1e;
+        --fg: #f2f2f7;
+        --muted: #98989d;
+        --border: #38383a;
+        --panel: #2c2c2e;
+        --code-bg: #2c2c2e;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      line-height: 1.5;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    header .project {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    nav {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 20px;
+    }
+    nav a {
+      color: var(--fg);
+      text-decoration: none;
+      padding: 12px 0;
+      border-bottom: 2px solid transparent;
+      font-size: 14px;
+    }
+    nav a:hover {
+      border-bottom-color: var(--muted);
+    }
+    nav a.active {
+      border-bottom-color: var(--accent);
+      color: var(--accent);
+    }
+    nav .search {
+      margin-left: auto;
+      padding: 8px 0;
+    }
+    nav .search input {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 13px;
+      width: 240px;
+    }
+    main {
+      padding: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h2 { margin-top: 24px; font-size: 20px; }
+    h3 { margin-top: 16px; font-size: 16px; color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat .value {
+      font-size: 28px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .stat .sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .chip {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .chip-blue   { background: rgba(0,122,255,0.15); color: var(--blue); }
+    .chip-green  { background: rgba(52,199,89,0.15); color: var(--green); }
+    .chip-orange { background: rgba(255,149,0,0.15); color: var(--orange); }
+    .chip-red    { background: rgba(255,59,48,0.15);  color: var(--red); }
+    .chip-teal   { background: rgba(90,200,250,0.15); color: var(--teal); }
+    .chip-purple { background: rgba(175,82,222,0.15); color: var(--purple); }
+    .chip-gray   { background: rgba(142,142,147,0.15); color: var(--gray); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    tr:hover { background: rgba(0,0,0,0.02); }
+    @media (prefers-color-scheme: dark) {
+      tr:hover { background: rgba(255,255,255,0.04); }
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+      font-size: 12px;
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      padding: 12px;
+      overflow-x: auto;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .req-id { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧵 Loom UI</h1>
+    <span class="project">project: <code>{{ project }}</code></span>
+  </header>
+  <nav>
+    <a href="/" {% if active=='dashboard' %}class="active"{% endif %}>Dashboard</a>
+    <a href="/reqs" {% if active=='reqs' %}class="active"{% endif %}>Requirements</a>
+    <a href="/findings" {% if active=='findings' %}class="active"{% endif %}>Findings</a>
+    <a href="/specs" {% if active=='specs' %}class="active"{% endif %}>Specs</a>
+    <a href="/files" {% if active=='files' %}class="active"{% endif %}>Files</a>
+    <form class="search" action="/search" method="get">
+      <input name="q" placeholder="Semantic search…" {% if q %}value="{{ q }}"{% endif %}>
+    </form>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

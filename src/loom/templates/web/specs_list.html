@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% set active = "specs" %}
+{% block content %}
+<h2>Specifications</h2>
+
+{% if specs %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Parent req</th>
+      <th>Status</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in specs %}
+    <tr>
+      <td class="req-id"><a href="/specs/{{ s.id }}">{{ s.id }}</a></td>
+      <td class="req-id"><a href="/reqs/{{ s.parent_req }}">{{ s.parent_req or '—' }}</a></td>
+      <td><span class="chip chip-{{ (s.status or 'draft')|status_color }}">{{ s.status or 'draft' }}</span></td>
+      <td>{{ (s.value or '')[:140] }}{% if (s.value or '')|length > 140 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="panel">
+  <p class="muted">No specifications in this store.</p>
+</div>
+{% endif %}
+{% endblock %}

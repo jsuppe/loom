@@ -63,6 +63,7 @@ loom/
 - **`hooks/loom_intake.py`** — `UserPromptSubmit` hook (M11.5). Classifies the user's chat message as requirement-shape, runs `services.find_related_requirements`, and routes to one of six branches (auto_link / propose / captured_with_rationale / rationale_needed / duplicate / noop). Persists captures via `services.extract` with `rationale_links` when applicable; injects a `<system-reminder>` describing the action so the agent knows what was just captured. Logs every fire to `<project>/.intake-log.jsonl` for `loom intake-stats`. Three guardrails (softener detection, domain whitelist, daily auto-link budget) keep auto-capture from polluting the store. Backed by the testable core in `src/loom/intake.py`.
 - **`src/loom/intake.py`** — testable core for the intake hook. Six-branch decision tree, classifier prompt, JSONL log helpers. Importable as `from loom import intake`.
 - **`src/loom/indexers.py` + `src/loom/indexers_js.py` + `src/loom/indexers_py.py`** — pluggable `SemanticIndexer` registry (M10.1) plus the LSP-backed `JsIndexer` for JavaScript/TypeScript via `typescript-language-server` (M10.3c) and `PyIndexer` for Python via `python-lsp-server` (M16.3). Powers the `## Semantic context` block in `loom_exec` prompts and the structural-drift channel in `services.check`. Indexers are opt-in — user code calls `loom.indexers.register(JsIndexer(root=...))` or `register(PyIndexer(root=...))`.
+- **`src/loom/web.py` + `src/loom/templates/web/`** — local web UI (M23). `loom ui -p <project>` starts a FastAPI server on `localhost:8090` with read-only HTML views for reqs / findings / specs / files plus semantic search and JSON API mirrors at `/api/*`. Opt-in via `pip install loom-cli[ui]` (extra installs fastapi + uvicorn + jinja2). Server-rendered, no JS build step. Single-project per server start.
 
 ## CLI Commands (reference)
 
@@ -75,6 +76,7 @@ loom/
 | `intake-stats` | Aggregate intake-hook activity from `.intake-log.jsonl` (M11.5 P3) | Yes |
 | `audit-rationale` | Preview `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` impact (M11.4) | Yes |
 | `indexer-doctor` | Health check for the semantic-indexer pipeline (M10.5) | Yes |
+| `ui` | Start the local web UI on localhost:8090 (M23). Opt-in extra: `pip install loom-cli[ui]` | — |
 | `check <file>` | Multi-channel drift detection (content/structural/superseded; M10.4) | Yes |
 | `link <file>` | Link code to requirements (auto, `--req`, or `--symbol`) | — |
 | `status` | Project overview with drift summary | Yes |
