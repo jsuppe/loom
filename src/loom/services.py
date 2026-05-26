@@ -1521,12 +1521,19 @@ def _links_to(
 
 
 def _read_file_content(file_path: str, lines: str | None = None) -> str:
-    """Read file (optionally a line range like '42-78'). Raises LookupError."""
+    """Read file (optionally a line range like '42-78'). Raises LookupError.
+
+    Always decodes as UTF-8 with errors="replace". Without an explicit
+    encoding, Path.read_text() falls back to the system default
+    (cp1252 on Windows) which fails hard on UTF-8 source files
+    containing em-dashes / non-ASCII identifiers — a recurring loom
+    bug surfaced by detect_requirements() on src/loom/services.py.
+    """
     from pathlib import Path
     p = Path(file_path)
     if not p.exists():
         raise LookupError(f"File not found: {file_path}")
-    content = p.read_text()
+    content = p.read_text(encoding="utf-8", errors="replace")
     if lines:
         start, end = (int(x) for x in lines.split("-"))
         content = "\n".join(content.split("\n")[start - 1:end])

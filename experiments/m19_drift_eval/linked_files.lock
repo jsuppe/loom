@@ -1,7 +1,7 @@
 {
-  "frozen_at": "2026-05-26T01:11:43.217161+00:00",
+  "frozen_at": "2026-05-26T10:01:27.394463+00:00",
   "project": "loom",
-  "git_head": "e970104c7d4481084410b46677438a199a1807f5",
+  "git_head": "d33f71330c83ebd1f6298fd2a412bbc47b3b5acf",
   "implementations": [
     {
       "impl_id": "ea3d725dc6bba48b",
@@ -143,6 +143,418 @@
       "content_hash": "357a67145de8d2186e737585dde34b663d303c86fefdc875fbdf8be7f25fd6eb",
       "timestamp": "2026-05-05T12:15:04.777740+00:00",
       "satisfies": [
+        {
+          "req_id": "REQ-bdb1e667",
+          "req_version": "2026-05-04T14:04:00.055929+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "b40dbf411f7cc99e",
+      "file": "src/loom/cli.py",
+      "lines": "all",
+      "content_hash": "6fef804b05325771b42de4e4d0ed40cf1407cb12949e7ed5d330e6a50f069dc6",
+      "timestamp": "2026-05-26T10:01:12.626484+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-4d3e74f2",
+          "req_version": "2026-05-04T12:06:13.288559+00:00"
+        },
+        {
+          "req_id": "REQ-bdb1e667",
+          "req_version": "2026-05-04T14:04:00.055929+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "54ee75f1eb6db25f",
+      "file": "src/loom/config.py",
+      "lines": "all",
+      "content_hash": "bb56d9984dd3162121282130544e20f92f43143385d15cf5f1baa153b8883c42",
+      "timestamp": "2026-05-26T10:01:12.707479+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-56811be1",
+          "req_version": "2026-05-26T01:15:07.415300+00:00"
+        },
+        {
+          "req_id": "REQ-6298a209",
+          "req_version": "2026-05-21T02:45:36.154448+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "4c618ef052f8107c",
+      "file": "src/loom/conflict_verify.py",
+      "lines": "all",
+      "content_hash": "ab66b584fe1c39140333392ecd4892d3b757f59efe41d382c1fea2e86e242c96",
+      "timestamp": "2026-05-26T10:01:12.747923+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-aec89441",
+          "req_version": "2026-05-11T20:02:21.558379+00:00"
+        },
+        {
+          "req_id": "REQ-5e3f5b52",
+          "req_version": "2026-05-23T20:25:58.363508+00:00"
+        },
+        {
+          "req_id": "REQ-b5cdf541",
+          "req_version": "2026-05-06T11:05:43.864961+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "310cef96e4ea054c",
+      "file": "src/loom/docs.py",
+      "lines": "all",
+      "content_hash": "a17efe1c24196860b3321030710632cf55a1091f7387b579ffb766b04eac65fc",
+      "timestamp": "2026-05-26T10:01:12.790908+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-9f24f46e",
+          "req_version": "2026-05-25T22:44:32.250549+00:00"
+        },
+        {
+          "req_id": "REQ-ab5b84b0",
+          "req_version": "2026-05-03T14:32:59.204891+00:00"
+        },
+        {
+          "req_id": "REQ-7e2d6518",
+          "req_version": "2026-05-26T00:16:50.800274+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "2917864ccc24e55c",
+      "file": "src/loom/driftgraph_cache.py",
+      "lines": "all",
+      "content_hash": "346f42f677a0537ea4199b5bb7673e48d40f0de9dc58e2c24c265fbf1599a393",
+      "timestamp": "2026-05-26T10:01:12.839165+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-6c353203",
+          "req_version": "2026-05-05T01:15:36.591599+00:00"
+        },
+        {
+          "req_id": "REQ-56811be1",
+          "req_version": "2026-05-26T01:15:07.415300+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "95ac2188531e83c8",
+      "file": "src/loom/driftgraph_http.py",
+      "lines": "all",
+      "content_hash": "cd45c79cc14484465bf4275734a04cf25994b0953c578a5f478641f4714350a0",
+      "timestamp": "2026-05-26T10:01:12.883229+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-7b40fdd8",
+          "req_version": "2026-05-06T03:06:38.588086+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-6c353203",
+          "req_version": "2026-05-05T01:15:36.591599+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "bd48951ce5b224d9",
+      "file": "src/loom/driftgraph_query.py",
+      "lines": "all",
+      "content_hash": "38e60c473267ddc629b75d17d6821010dc3b7869aae8610ea9265e22e44a56a2",
+      "timestamp": "2026-05-26T10:01:12.919533+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-7b40fdd8",
+          "req_version": "2026-05-06T03:06:38.588086+00:00"
+        },
+        {
+          "req_id": "REQ-9f24f46e",
+          "req_version": "2026-05-25T22:44:32.250549+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "f58700249005c6d9",
+      "file": "src/loom/embedding.py",
+      "lines": "all",
+      "content_hash": "3541fff8a504fe1a0b4fd607c113341d1b5d72edc4a34158bb97a18498866b27",
+      "timestamp": "2026-05-26T10:01:12.956684+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-7e2d6518",
+          "req_version": "2026-05-26T00:16:50.800274+00:00"
+        },
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "2216b6251e2de364",
+      "file": "src/loom/exec_cli.py",
+      "lines": "all",
+      "content_hash": "1fbab95cd92029a59fdfcd2a1ac17400112c261251844446cd69fdc5704cc4d5",
+      "timestamp": "2026-05-26T10:01:12.989300+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-aaa595ca",
+          "req_version": "2026-05-03T11:43:10.868569+00:00"
+        },
+        {
+          "req_id": "REQ-9f24f46e",
+          "req_version": "2026-05-25T22:44:32.250549+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "f5d2ab91ca28de5a",
+      "file": "src/loom/indexers.py",
+      "lines": "all",
+      "content_hash": "2c3accadb66836230b5c0a7ff731d3511d7d2b22265e8ec0b9ca7e042e718794",
+      "timestamp": "2026-05-26T10:01:13.009728+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-81a67c36",
+          "req_version": "2026-05-20T16:45:45.657699+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "d46a38f33bf7f058",
+      "file": "src/loom/indexers_py.py",
+      "lines": "all",
+      "content_hash": "68e3895255f74ae17328bf0445e47538c6af318523787e8a70dad90abad1cbda",
+      "timestamp": "2026-05-26T10:01:13.042387+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-ab5b84b0",
+          "req_version": "2026-05-03T14:32:59.204891+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "ba95a5fe7f6cf20d",
+      "file": "src/loom/intake.py",
+      "lines": "all",
+      "content_hash": "f52aba852bb95de4f6fd674b27e31df7c0ec3baea61fd679cf70ecf96ab4c677",
+      "timestamp": "2026-05-26T10:01:13.065269+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
+        {
+          "req_id": "REQ-ba817d28",
+          "req_version": "2026-05-25T22:13:51.263685+00:00"
+        },
+        {
+          "req_id": "REQ-40b70660",
+          "req_version": "2026-05-25T10:20:13.049863+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "e407d7c8b1d97968",
+      "file": "src/loom/intake_filters.py",
+      "lines": "all",
+      "content_hash": "7b06ea644f972df0c34887dea2ab4b2c3f2182eba5ea0e9d757bad75067ed778",
+      "timestamp": "2026-05-26T10:01:13.089338+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
+        {
+          "req_id": "REQ-40b70660",
+          "req_version": "2026-05-25T10:20:13.049863+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "efc5b530e0f532b2",
+      "file": "src/loom/paths.py",
+      "lines": "all",
+      "content_hash": "d2d7e6b3569d35a84c72cb5ec4022f01f0665298c2ede9970f86cf80c32f699e",
+      "timestamp": "2026-05-26T10:01:13.108921+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "6b20e47c9ba5ea61",
+      "file": "src/loom/runners.py",
+      "lines": "all",
+      "content_hash": "02e6572b007d5b6767a115911bf6485e5a3782a322730dc16d612d031738678c",
+      "timestamp": "2026-05-26T10:01:13.142519+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-ab5b84b0",
+          "req_version": "2026-05-03T14:32:59.204891+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
+        {
+          "req_id": "REQ-9f24f46e",
+          "req_version": "2026-05-25T22:44:32.250549+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "8dd1a9edaab57fe5",
+      "file": "src/loom/services.py",
+      "lines": "all",
+      "content_hash": "ce7230f88e8fc57f5c0fac74bce5380a6ce50fe6af4d7c87bc02695acd32158e",
+      "timestamp": "2026-05-26T10:01:13.165242+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-81a67c36",
+          "req_version": "2026-05-20T16:45:45.657699+00:00"
+        },
+        {
+          "req_id": "REQ-51455681",
+          "req_version": "2026-05-20T16:45:24.672269+00:00"
+        },
+        {
+          "req_id": "REQ-ab5b84b0",
+          "req_version": "2026-05-03T14:32:59.204891+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "96ce57c93a43a382",
+      "file": "src/loom/store.py",
+      "lines": "all",
+      "content_hash": "51a00d76986ebb50c640884d8e649e433bc84ef094c0f6d1882fbb839301f9b6",
+      "timestamp": "2026-05-26T10:01:13.187953+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-4d3e74f2",
+          "req_version": "2026-05-04T12:06:13.288559+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
+        {
+          "req_id": "REQ-81a67c36",
+          "req_version": "2026-05-20T16:45:45.657699+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "75ca8703f32459e8",
+      "file": "src/loom/templates.py",
+      "lines": "all",
+      "content_hash": "30e9886338b894747f9e968b1e9b0d73a646f0cdaf4e344093c1aa9f93fe1af0",
+      "timestamp": "2026-05-26T10:01:13.220497+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-7e2d6518",
+          "req_version": "2026-05-26T00:16:50.800274+00:00"
+        },
+        {
+          "req_id": "REQ-65f50316",
+          "req_version": "2026-05-03T11:43:10.162518+00:00"
+        },
+        {
+          "req_id": "REQ-9f24f46e",
+          "req_version": "2026-05-25T22:44:32.250549+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "fab804f7a3b44d73",
+      "file": "src/loom/testspec.py",
+      "lines": "all",
+      "content_hash": "18d47449d945abc055d074fa49f50bd7cd870a0465a2c4e286ccc2615166650d",
+      "timestamp": "2026-05-26T10:01:13.252606+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-ab5b84b0",
+          "req_version": "2026-05-03T14:32:59.204891+00:00"
+        },
+        {
+          "req_id": "REQ-ec36bd89",
+          "req_version": "2026-05-03T11:43:10.014526+00:00"
+        },
+        {
+          "req_id": "REQ-b5cdf541",
+          "req_version": "2026-05-06T11:05:43.864961+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "f762fc8f09eb713d",
+      "file": "src/loom/warrants.py",
+      "lines": "all",
+      "content_hash": "3d78ea22d907e7b42d1fd0a81560ff56e6966307010948d07df9603923c86b84",
+      "timestamp": "2026-05-26T10:01:13.284824+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-5e3f5b52",
+          "req_version": "2026-05-23T20:25:58.363508+00:00"
+        },
+        {
+          "req_id": "REQ-73bcd158",
+          "req_version": "2026-05-26T00:38:51.651852+00:00"
+        },
         {
           "req_id": "REQ-bdb1e667",
           "req_version": "2026-05-04T14:04:00.055929+00:00"

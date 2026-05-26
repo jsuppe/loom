@@ -154,7 +154,28 @@ def _hash_embedding(text: str, dim: int = _HASH_DEFAULT_DIM) -> list[float]:
 
 def _ollama_embed(text: str, model: str, max_retries: int) -> list[float]:
     """Call Ollama. Raises on failure after retries (caller decides
-    whether to fall back to hash)."""
+    whether to fall back to hash).
+
+    Despite documentation saying nomic-embed-text has an 8K-token
+    context, empirically the Ollama server rejects inputs above
+    ~7000 characters with HTTP 400 ``input length exceeds the
+    context length`` for dense code-shaped text (3-character avg
+    token = ~2300 tokens at 7K chars). Rather than failing — which
+    would flip the caller to hash-noise embeddings on every
+    moderately-sized file (a real bug surfaced during M19v2) —
+    truncate to a conservative cap before sending. The semantic
+    signal for "what is this file about" is overwhelmingly in the
+    first few thousand characters (module docstring + top imports
+    + first class definitions).
+    """
+    # 4000 chars is conservative — empirical threshold ranges from
+    # ~7000 chars on prose-heavy code to ~5000 chars on dense code
+    # (heavy decorators, type annotations, JSON-like literal blocks).
+    # 4000 covers the worst-case tokenization density observed during
+    # M19v2 enrichment without sacrificing semantic signal — module
+    # docstring + top imports + first 1-2 classes fit comfortably.
+    if len(text) > 4000:
+        text = text[:4000]
     last_error: Exception | None = None
     for attempt in range(max_retries):
         try:

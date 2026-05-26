@@ -29,6 +29,80 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-26 — M16.3 PyIndexer shipped + M19v2 enriched drift-eval
+
+### What we did
+
+- **M16.3 (Python LSP indexer) shipped.** `src/loom/indexers_py.py`
+  mirrors JsIndexer's shape. Backend: python-lsp-server (pylsp)
+  invoked via `[sys.executable, "-m", "pylsp"]` to sidestep Windows
+  Store Python's not-on-PATH issue. 28 tests pass (helpers + soft-fail
+  + integration), full suite 819/0/1 skipped — no regressions.
+  Discovery during integration: pylsp returns SymbolInformation with
+  `position.character=0` regardless of capability hint; added
+  `_refine_position_to_name` so refs land on the identifier, not
+  the line start.
+- **M19v2 enrichment + re-eval.** Auto-linked 20 src/loom/ files
+  via `services.detect_requirements` at distance ≤ 0.45. Linked
+  impls 10 → 30. M19 harness re-ran: N=76 (58 drift-fires + 18
+  TN match cases). Heuristic classifier: 58/58 TP, precision 100%.
+- **Three production bugs surfaced and fixed during M19v2:**
+  1. `services._read_file_content` used system default encoding —
+     dies on UTF-8 source files with em-dashes on Windows (cp1252).
+     Now passes `encoding="utf-8", errors="replace"`.
+  2. `_ollama_embed` silently fell back to hash on `nomic-embed-text`'s
+     ~7K-char context limit (HTTP 400). Was producing similarity
+     NOISE reported to users as real matches. Now truncates input
+     to 4000 chars (empirical cap surviving dense code).
+  3. Spurious auto-links from the hash-fallback noise — 5 src/loom/
+     files got linked to semantically-random REQs (e.g. `paths.py`
+     → an M22e finding). Rolled back after fixes, re-ran with real
+     embeddings.
+
+### What we decided
+
+- **Hash-based content drift is trivially 100% precise.** Every
+  triggered signal corresponds to a real content change (by
+  construction — SHA-256 doesn't lie). The honest question is
+  "is the warning RELEVANT to the linked req's intent?" — that's
+  unmeasured and requires hand-curated tight links + per-event
+  req-relevance judgment.
+- **Pre-registered prediction (50-70%) was wrong both v1 and v2.**
+  Intuition about cosmetic-commit ratio in Python codebases didn't
+  match reality. Methodology pattern's predicted-band lock forced
+  the wrong-prediction surfacing even with "favorable" results.
+- **M19v2's most concrete deliverable was the 3 production bug
+  fixes**, not the precision number. The encoding bug alone
+  affected `detect_requirements`, `check`, and any code path that
+  reads a project file with non-ASCII content on Windows.
+- **Methodology pattern REQ-3896db58 now 9/9.** First 8: stopped or
+  re-framed misleading-at-face-value results. M19v2: forced honest
+  surfacing of a wrong prediction even when result direction was
+  favorable.
+- **Three pivot proposals** for future drift-eval: M19v3
+  (hand-curated tight links + per-event req-relevance hand-judging),
+  M19v4 (synthetic-edit FP+recall study), or stop and take the
+  bug-fix value.
+
+### What's still open
+
+- User decision on next milestone direction.
+- M19v3/v4 if drift-eval remains active; otherwise queue items
+  (M17.4 exports, M20.x productionization, M14.4 triage loop, etc.).
+
+### Pointers
+
+- **Commits (this session):** `d33f713` (M16.3 PyIndexer, pushed),
+  plus current uncommitted M19v2 work
+- **Findings docs:**
+  - `experiments/m19_drift_eval/M19V2_FINDINGS.md`
+- **Captured loom finding:** REQ-6834d5b6 (derives from
+  REQ-56811be1 + REQ-7e2d6518)
+- **Bug-fix files:** `src/loom/services.py` (encoding),
+  `src/loom/embedding.py` (truncation)
+
+---
+
 ## 2026-05-25 (later) — M19 drift-detection eval — sample-composition finding
 
 ### What we did

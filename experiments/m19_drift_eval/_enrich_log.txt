@@ -1,0 +1,22 @@
+﻿Already linked: 10 impls
+python : Traceback (most recent call last):
+At line:1 char:1
++ python experiments/m19_drift_eval/enrich.py 2>&1 | Out-File experimen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\jonsu\dev\loom\experiments\m19_drift_eval\enrich.py", line 139, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\jonsu\dev\loom\experiments\m19_drift_eval\enrich.py", line 63, in main
+    print(f"Target: {TARGET_DIR.relative_to(_REPO)}/*.py "
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          f"(distance \u2264 {DISTANCE_THRESHOLD})")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program 
+Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.3568.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 
+19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2264' in position 32: character maps to <undefined>
