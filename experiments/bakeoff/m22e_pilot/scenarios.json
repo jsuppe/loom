@@ -1,0 +1,55 @@
+{
+  "version": "m22e-pilot-v1",
+  "locked_at": "2026-05-25",
+  "benchmark": "js-singlefile",
+  "source": "experiments/bakeoff/benchmarks/js-singlefile/",
+  "test_command_template": ["node", "--test", "test/{scenario_test_file}"],
+  "_notes": "Per M22E_PREREGISTRATION.md. Single-file JS workload to eliminate the file-layout hallucination confound (REQ-7e2d6518) measured in M22c. Each scenario hides only its own src file; layout is given explicitly in the prompt's import block so it cannot be hallucinated. Rationales pre-graded leak-score ≤1 per M22E_LEAK_GRADING.md.",
+  "scenarios": [
+    {
+      "scenario_id": "s_validate",
+      "target_file": "src/validate.js",
+      "test_file": "test/validate_test.js",
+      "hide_files": [
+        "src/validate.js",
+        "test/validate_test.js"
+      ],
+      "import_block": "import { validate } from '../src/validate.js';",
+      "user_request": "Implement src/validate.js for a single-file Node.js (ES modules) workload. Export a function `validate(input, rules)` that checks an input object against a list of declarative rules. Each rule has shape { field: string, check: (value) => boolean, message: string }. Return { valid: boolean, errors: Array<{ field, message }> }. Match the project's conventions you can see from the other files.",
+      "style_rationale": "Collect ALL validation errors before returning; never throw or short-circuit on the first failure. Callers consume the full error list to display to users.",
+      "rationale_leak_score": 1,
+      "fact_signature": "validate(input: object, rules: Array<{field, check, message}>) -> {valid: boolean, errors: Array<{field, message}>}",
+      "expected_sub_tests": 25
+    },
+    {
+      "scenario_id": "s_aggregate",
+      "target_file": "src/aggregate.js",
+      "test_file": "test/aggregate_test.js",
+      "hide_files": [
+        "src/aggregate.js",
+        "test/aggregate_test.js"
+      ],
+      "import_block": "import { aggregate } from '../src/aggregate.js';",
+      "user_request": "Implement src/aggregate.js for a single-file Node.js (ES modules) workload. Export a function `aggregate(events, opts)` that groups an array of event objects by `opts.groupBy` field, then runs `opts.reducers` (each is { initial, step }) over each group to produce a summary object. Return shape: { [groupKey]: { [reducerKey]: value } }.",
+      "style_rationale": "Treat inputs as immutable; do not mutate the events array or any event object. Build the result by accumulating new objects in a reducer pass.",
+      "rationale_leak_score": 1,
+      "fact_signature": "aggregate(events: Array<object>, opts: {groupBy: string, reducers: {[key]: {initial, step}}}) -> object",
+      "expected_sub_tests": 25
+    },
+    {
+      "scenario_id": "s_retry",
+      "target_file": "src/retry.js",
+      "test_file": "test/retry_test.js",
+      "hide_files": [
+        "src/retry.js",
+        "test/retry_test.js"
+      ],
+      "import_block": "import { retry, defaultIsRetriable } from '../src/retry.js';",
+      "user_request": "Implement src/retry.js for a single-file Node.js (ES modules) workload. Export both `retry(fn, opts)` (async function that retries a failing async fn with backoff) and `defaultIsRetriable(err)` (a predicate). Options shape: { maxAttempts, baseDelayMs, isRetriable? }. Use exponential backoff between retries.",
+      "style_rationale": "Distinguish 'truly retriable' errors (network, timeout, 5xx) from terminal errors (validation, 4xx). Terminal errors must short-circuit and re-throw immediately; only retriable errors get retried with backoff.",
+      "rationale_leak_score": 1,
+      "fact_signature": "retry(fn: () => Promise<T>, opts: {maxAttempts: number, baseDelayMs: number, isRetriable?: (err) => boolean}) -> Promise<T>\ndefaultIsRetriable(err) -> boolean",
+      "expected_sub_tests": 26
+    }
+  ]
+}

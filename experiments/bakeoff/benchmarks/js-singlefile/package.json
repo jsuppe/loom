@@ -1,0 +1,12 @@
+{
+  "name": "js-singlefile",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "M22e single-file JS workload — 3 scenarios (validate, aggregate, retry). Each scenario lives in src/<name>.js with an oracle at test/<name>_test.js. Uses node --test (built-in, Node 22+). No external dependencies.",
+  "scripts": {
+    "test": "node --test test/*_test.js",
+    "test:validate": "node --test test/validate_test.js",
+    "test:aggregate": "node --test test/aggregate_test.js",
+    "test:retry": "node --test test/retry_test.js"
+  }
+}
