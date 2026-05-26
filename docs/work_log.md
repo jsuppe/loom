@@ -29,6 +29,73 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-25 (later) — M19 drift-detection eval — sample-composition finding
+
+### What we did
+
+- **User picked operational shift** after M22e ceiling-saturation and
+  selected M19 (real-world drift evaluation) as the next milestone,
+  with "medium pattern" methodology weight (no sub-agent reviews,
+  single pre-reg + harness + findings).
+- **M19.0 pre-reg locked**: precision eval on loom-self's 10 linked
+  files × up to 8 historical versions each, target N=30-50, locked
+  rubric (M-API / M-Behav / M-Intent for TP; C-White / C-Rename /
+  C-Comment / C-Dead for FP; Mixed = TP; Ambig excluded), predicted
+  band 50-70% precision.
+- **M19.1 harness built**: freezes linked_files.lock baseline from
+  current store, walks `git log --max-count=8` per linked file, runs
+  hash-compare via `git show`, emits CSV with diff stat + preview for
+  classification.
+- **M19.3 eval ran**: N=17 (below target 30; linked files have short
+  histories), 17/17 drift_fires=yes (every historical version differs
+  from current stored hash).
+- **M19.4 classification**: AI-applied per locked rubric with per-case
+  rationale in `classifier_note` column. 17 TP, 0 FP, 0 Ambig.
+
+### What we decided
+
+- **Precision = 100%, but the headline is sample composition.**
+  12 of 17 cases are file-INCEPTION events (no prior version existed);
+  zero are cosmetic-only. Sample structurally cannot produce FPs —
+  the 10 linked impls don't have enough cosmetic/refactor commits in
+  their short histories.
+- **Pre-registered prediction (50-70%) was wrong**, which is itself
+  useful: it surfaces that the eval implicitly assumed cosmetic-commit
+  volume that doesn't exist on loom-self's linked subset. Without the
+  prediction lock in the pre-reg, "100% precision, done" would have
+  been a tempting but misleading writeup.
+- **Loom-self is currently underlinked for self-evaluation.** 10
+  linked impls + 75 requirements + 0% test_coverage for kind=requirement.
+  Most linked files are stale experiment-driver scripts. Drift
+  detection eval on this surface area can't characterize FP rate
+  meaningfully.
+- **Methodology pattern earns its keep again** (8th study using it,
+  3rd time it caught a misleading-at-face-value result). The
+  predicted-precision-band requirement in the pre-reg was the load-
+  bearing safeguard.
+- **Three pivot options surfaced for user:** M19v2 (enrich link
+  count via indexing pass on `src/loom/` before re-running),
+  M19v3 (synthetic-edit eval — author 3-5 known-cosmetic and
+  known-substantive edits per file to populate FP bin by
+  construction), or stop with the meta-finding intact.
+
+### What's still open
+
+- User decision on M19 follow-up direction.
+- All earlier-open queue items unchanged.
+
+### Pointers
+
+- **Commits (this session):** TBD this session
+- **Findings doc:** `experiments/m19_drift_eval/M19_FINDINGS.md`
+- **Pre-reg:** `experiments/m19_drift_eval/M19_PREREGISTRATION.md`
+- **Harness + classification:** `experiments/m19_drift_eval/m19_harness.py`,
+  `classify.py`, `m19_classifications.csv`, `linked_files.lock`
+- **Captured finding (loom store):** REQ-56811be1 (derives from
+  REQ-73bcd158)
+
+---
+
 ## 2026-05-25 (continued) — M22d killed in design + M22e ceiling-failed at pilot
 
 ### What we did

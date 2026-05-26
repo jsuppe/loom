@@ -1,0 +1,153 @@
+{
+  "frozen_at": "2026-05-26T01:11:43.217161+00:00",
+  "project": "loom",
+  "git_head": "e970104c7d4481084410b46677438a199a1807f5",
+  "implementations": [
+    {
+      "impl_id": "ea3d725dc6bba48b",
+      "file": "experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py",
+      "lines": "all",
+      "content_hash": "65b3ad95c5496023911e83991845329a5bd7809c60833a0f6a0756400ddc7950",
+      "timestamp": "2026-05-03T11:45:33.093099+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-a636de03",
+          "req_version": "2026-05-03T11:43:10.588085+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "0bf90e61208ec822",
+      "file": "experiments/bakeoff/v2_driver/phU_imperative_followups_smoke.py",
+      "lines": "all",
+      "content_hash": "7cf29a7b63d1cf814816c5ffc640e41641eee396a31b99412753a9665dad8185",
+      "timestamp": "2026-05-03T11:45:36.330186+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-a636de03",
+          "req_version": "2026-05-03T11:43:10.588085+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "9b1d953ed4865879",
+      "file": "experiments/bakeoff/FINDINGS-bakeoff-v3-payload-sharpening.md",
+      "lines": "all",
+      "content_hash": "2ebb6df05d6f1087cda90f515c3e57adb4b2915c05618e0feb1b1cfa46b0ac14",
+      "timestamp": "2026-05-06T03:05:28.779997+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-c0b0a242",
+          "req_version": "2026-05-06T02:38:16.555008+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "1d699dcd78a808c6",
+      "file": "experiments/bakeoff/v2_driver/phQ3_crosssession_js_stub_clean_smoke.py",
+      "lines": "all",
+      "content_hash": "999db62606f831e09296484457ac2ccc1a26ee3611c670da5880a106e4116e1a",
+      "timestamp": "2026-05-03T11:43:46.109390+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-65f50316",
+          "req_version": "2026-05-03T11:43:10.162518+00:00"
+        },
+        {
+          "req_id": "REQ-ec36bd89",
+          "req_version": "2026-05-03T11:43:10.014526+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "24ec46356a039af1",
+      "file": "experiments/bakeoff/v2_driver/phQ4_crosssession_js_no_stub_32b_smoke.py",
+      "lines": "all",
+      "content_hash": "1e8728980831493c52b5503eca7fb4ca81312936afe30548e5c4f57b7354bb08",
+      "timestamp": "2026-05-03T11:43:49.301522+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-aaa595ca",
+          "req_version": "2026-05-03T11:43:10.868569+00:00"
+        },
+        {
+          "req_id": "REQ-ec36bd89",
+          "req_version": "2026-05-03T11:43:10.014526+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "c7fd554057b4b58c",
+      "file": "experiments/bakeoff/v2_driver/phQ7_crosssession_js_with_test_refs_smoke.py",
+      "lines": "all",
+      "content_hash": "c758022c9acee2cc4fb53f49b19f1797d031f1c947df69ea4a65d20a7b313b78",
+      "timestamp": "2026-05-03T11:43:52.486186+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        },
+        {
+          "req_id": "REQ-65f50316",
+          "req_version": "2026-05-03T11:43:10.162518+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "bdd49977e4317a90",
+      "file": "experiments/bakeoff/v2_driver/phR_rhetorical_ablation_smoke.py",
+      "lines": "all",
+      "content_hash": "155ed6c2afac89c110aebe1e3b6acac79938e7e0809dd54d1b7f6df2337b242b",
+      "timestamp": "2026-05-03T11:43:55.659042+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-ec36bd89",
+          "req_version": "2026-05-03T11:43:10.014526+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "e2f949d825824f76",
+      "file": "experiments/bakeoff/v2_driver/phS_anti_rationale_smoke.py",
+      "lines": "all",
+      "content_hash": "cb4246e81e6b41fbb5411133ff2991aa4b5d5b3e0401dd4de93f7dbcb7a67a23",
+      "timestamp": "2026-05-03T11:43:58.854367+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-ec36bd89",
+          "req_version": "2026-05-03T11:43:10.014526+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "c7214f9142226a40",
+      "file": "src/loom/indexers_js.py",
+      "lines": "all",
+      "content_hash": "e081ccf8b8f2e6d49983de1318f8937edeaa3bc608d3363830e593e6c45b72df",
+      "timestamp": "2026-05-03T11:44:08.855030+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-2a621c40",
+          "req_version": "2026-05-03T11:43:10.310289+00:00"
+        },
+        {
+          "req_id": "REQ-65f50316",
+          "req_version": "2026-05-03T11:43:10.162518+00:00"
+        }
+      ]
+    },
+    {
+      "impl_id": "a18fe1bed6a3e9c7",
+      "file": "experiments/pilot/warrants_l2_results.json",
+      "lines": "all",
+      "content_hash": "357a67145de8d2186e737585dde34b663d303c86fefdc875fbdf8be7f25fd6eb",
+      "timestamp": "2026-05-05T12:15:04.777740+00:00",
+      "satisfies": [
+        {
+          "req_id": "REQ-bdb1e667",
+          "req_version": "2026-05-04T14:04:00.055929+00:00"
+        }
+      ]
+    }
+  ]
+}

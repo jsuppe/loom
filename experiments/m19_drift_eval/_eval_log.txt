@@ -1,0 +1,39 @@
+﻿Eval at git HEAD e970104c7d44 against lock from 2026-05-26T01:11:43.217161+00:00
+Lock'd git HEAD = e970104c7d44
+
+--- experiments/bakeoff/v2_driver/phT_rule_precedence_smoke.py (impl=ea3d725d, satisfies=REQ-a636de03) ---
+  [DRIFT] 70f52fb5cd5c 2026-05-10 feat(bakeoff-v2): generalized rule-precedence harness with s
+  [DRIFT] 2efcfeea630a 2026-05-10 feat(bakeoff-v2): port phR/phS/phT/phU to Claude CLI shell-o
+  [DRIFT] ee054ac356fa 2026-05-03 feat(bakeoff-v2): phT rule precedence � Lesson 9 (imperative
+--- experiments/bakeoff/v2_driver/phU_imperative_followups_smoke.py (impl=0bf90e61, satisfies=REQ-a636de03) ---
+  [DRIFT] 2efcfeea630a 2026-05-10 feat(bakeoff-v2): port phR/phS/phT/phU to Claude CLI shell-o
+  [DRIFT] 65e6efbd1753 2026-05-03 feat(bakeoff-v2): phU imperative follow-ups � Lesson 9 sharp
+--- experiments/bakeoff/FINDINGS-bakeoff-v3-payload-sharpening.md (impl=9b1d953e, satisfies=REQ-c0b0a242) ---
+  [DRIFT] ea98bf7a8d05 2026-05-05 feat(drift): L9-imperative drift warning + M13.6d ablation
+--- experiments/bakeoff/v2_driver/phQ3_crosssession_js_stub_clean_smoke.py (impl=1d699dcd, satisfies=REQ-65f50316,REQ-ec36bd89) ---
+  [DRIFT] 265be4891fea 2026-05-02 feat(bakeoff-v2): phQ3 � JS clean-stub falsification (N=40)
+--- experiments/bakeoff/v2_driver/phQ4_crosssession_js_no_stub_32b_smoke.py (impl=24ec4635, satisfies=REQ-aaa595ca,REQ-ec36bd89) ---
+  [DRIFT] e5a371ba2e2e 2026-05-02 feat(bakeoff-v2): phQ4 � JS 32b no-stub baseline (N=40), iso
+--- experiments/bakeoff/v2_driver/phQ7_crosssession_js_with_test_refs_smoke.py (impl=c7fd5540, satisfies=REQ-2a621c40,REQ-65f50316) ---
+  [DRIFT] c8a7a30a18c2 2026-05-02 feat(bakeoff-v2): phQ7 � test-reference surfacing confirms h
+--- experiments/bakeoff/v2_driver/phR_rhetorical_ablation_smoke.py (impl=bdd49977, satisfies=REQ-ec36bd89) ---
+  [DRIFT] 2efcfeea630a 2026-05-10 feat(bakeoff-v2): port phR/phS/phT/phU to Claude CLI shell-o
+  [DRIFT] 820bffb6e756 2026-05-02 feat(bakeoff-v2): phR rhetorical ablation � sharpens Lesson 
+--- experiments/bakeoff/v2_driver/phS_anti_rationale_smoke.py (impl=e2f949d8, satisfies=REQ-ec36bd89) ---
+  [DRIFT] 2efcfeea630a 2026-05-10 feat(bakeoff-v2): port phR/phS/phT/phU to Claude CLI shell-o
+  [DRIFT] 69906a4aea0e 2026-05-02 feat(bakeoff-v2): phS anti-rationale ablation � Lesson 1 str
+--- src/loom/indexers_js.py (impl=c7214f91, satisfies=REQ-2a621c40,REQ-65f50316) ---
+  [DRIFT] 504702230d24 2026-05-02 feat(cli): loom indexer-doctor + SemanticIndexer.health() (M
+  [DRIFT] b19ddb5eb2e9 2026-05-02 feat(indexers): JsIndexer v2 � filter import refs + adjacent
+  [DRIFT] 5d094d13c1c2 2026-05-02 feat(indexers): JsIndexer � LSP-backed JS/TS indexer (M10.3c
+--- experiments/pilot/warrants_l2_results.json (impl=a18fe1be, satisfies=REQ-bdb1e667) ---
+  [DRIFT] 72b3b0c97764 2026-05-04 feat(warrants): Phase L2 � Toulmin@v1 LLM-driven validator (
+
+Wrote 17 rows to C:\Users\jonsu\dev\loom\experiments\m19_drift_eval\m19_classifications.csv
+  drift_fires=yes : 17
+  drift_fires=no  : 0
+  excluded        : 0  reasons={}
+
+Next: hand-classify each drift_fires=yes row in m19_classifications.csv
+  Set bin_code (M-API / M-Behav / M-Intent / C-White / C-Rename / C-Comment / C-Dead / Mixed / Ambig)
+  Set tp_fp_ambig (TP / FP / Ambig)
