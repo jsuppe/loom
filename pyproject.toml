@@ -48,6 +48,13 @@ mcp = ["mcp>=1.0"]
 # False and the inbound channel silently degrades — agent gets
 # the M11.5/M12-era context as if M13.5 didn't exist.
 driftgraph = ["neo4j>=5.0"]
+# M16.3 — Python LSP indexer (PyIndexer). Without this extra,
+# `loom.indexers_py.PyIndexer.health()` returns ok=False and
+# context_for() returns "" with a warning on first call. The
+# JS indexer's LSP dep (typescript-language-server) is npm-managed
+# so it doesn't appear here; pylsp ships from PyPI so it can be
+# an optional dependency.
+indexer-py = ["python-lsp-server>=1.7"]
 dev = [
     "pytest>=8.0",
     "pytest-xdist>=3.0",

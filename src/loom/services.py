@@ -2905,7 +2905,8 @@ def indexer_doctor(store: LoomStore) -> dict[str, Any]:
         warnings.append(
             "No real indexer is registered (only NoOp). The structural "
             "drift channel in `loom check` will always be False. "
-            "Register an indexer (e.g. `loom.indexers_js.JsIndexer`) "
+            "Register an indexer (e.g. `loom.indexers_js.JsIndexer` "
+            "for JS/TS or `loom.indexers_py.PyIndexer` for Python) "
             "to enable it."
         )
     if not all_indexers_ok:
