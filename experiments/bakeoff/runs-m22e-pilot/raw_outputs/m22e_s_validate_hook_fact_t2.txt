@@ -1,0 +1,22 @@
+```js
+export function validate(input, rules) {
+  const errors = [];
+
+  for (const rule of rules) {
+    const { field, check, message } = rule;
+
+    if (!(field in input)) {
+      continue;
+    }
+
+    if (!check(input[field])) {
+      errors.push({ field, message });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+```

@@ -1,0 +1,69 @@
+```js
+/**
+ * @typedef {Object} RetryOptions
+ * @property {number} [maxAttempts] - Maximum number of retry attempts. Default is 3.
+ * @property {number} [baseDelayMs] - Base delay in milliseconds between retries. Default is 1000.
+ * @property {Function} [isRetriable] - Optional predicate function to determine if an error is retriable. Default checks for specific error codes.
+ */
+
+/**
+ * Retries an async function with exponential backoff.
+ *
+ * @template T
+ * @param {Function} fn - The async function to retry.
+ * @param {RetryOptions} opts - Options for retry behavior.
+ * @returns {Promise<T>} The result of the function if successful, or throws the last error.
+ */
+export async function retry(fn, opts) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 1000,
+    isRetriable = defaultIsRetriable,
+  } = opts;
+
+  let lastError;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isRetriable(error)) {
+        throw error;
+      }
+      if (attempt === maxAttempts - 1) {
+        throw error;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Determines if an error is retriable based on common error codes.
+ *
+ * @param {Error} error - The error to check.
+ * @returns {boolean} True if the error is retriable, false otherwise.
+ */
+export function defaultIsRetriable(error) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = error.code;
+  const message = error.message?.toLowerCase() || '';
+
+  const retriableCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EPIPE'];
+  const retriableMessages = ['timeout', 'connection reset', 'connection refused', 'not found', 'broken pipe'];
+
+  if (retriableCodes.includes(code)) {
+    return true;
+  }
+
+  if (retriableMessages.some((m) => message.includes(m))) {
+    return true;
+  }
+
+  return false;
+}
+```

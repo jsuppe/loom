@@ -1,0 +1,63 @@
+```js
+/**
+ * Aggregates an array of event objects by a specified field and applies reducers to each group.
+ * 
+ * @param {Array<Object>} events - Array of event objects to aggregate.
+ * @param {Object} opts - Options object containing:
+ *   - groupBy: The field name to group events by.
+ *   - reducers: An object where keys are reducer names and values are { initial, step } functions.
+ * @returns {Object} - A summary object with group keys as top-level keys and reducer results as nested values.
+ */
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  // Validate inputs
+  if (!Array.isArray(events)) {
+    throw new TypeError('events must be an array');
+  }
+  if (typeof groupBy !== 'string') {
+    throw new TypeError('groupBy must be a string');
+  }
+  if (typeof reducers !== 'object' || reducers === null) {
+    throw new TypeError('reducers must be a non-null object');
+  }
+
+  // Group events by the specified field
+  const groups = new Map();
+
+  for (const event of events) {
+    const key = event[groupBy];
+    
+    // Handle undefined or null group keys by grouping them under a special key
+    if (key === undefined || key === null) {
+      key = '__undefined__';
+    }
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(event);
+  }
+
+  // Initialize result object
+  const result = {};
+
+  // Process each group
+  for (const [groupKey, groupEvents] of groups.entries()) {
+    result[groupKey] = {};
+
+    // Apply each reducer to the group
+    for (const [reducerKey, { initial, step }] of Object.entries(reducers)) {
+      let value = initial();
+
+      for (const event of groupEvents) {
+        value = step(value, event);
+      }
+
+      result[groupKey][reducerKey] = value;
+    }
+  }
+
+  return result;
+}
+```

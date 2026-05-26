@@ -1,0 +1,41 @@
+```js
+/**
+ * Validates an input object against a list of declarative rules.
+ * 
+ * @param {Object} input - The object to validate.
+ * @param {Array<{field: string, check: Function, message: string}>} rules - The validation rules.
+ * @returns {{valid: boolean, errors: Array<{field: string, message: string}>}}
+ */
+export function validate(input, rules) {
+  const errors = [];
+
+  for (const rule of rules) {
+    const { field, check, message } = rule;
+
+    // Ensure the field exists in the input object
+    if (!(field in input)) {
+      errors.push({
+        field,
+        message: message || `Field "${field}" is required.`
+      });
+      continue;
+    }
+
+    // Run the check function on the value
+    const value = input[field];
+    const isValid = check(value);
+
+    if (!isValid) {
+      errors.push({
+        field,
+        message: message || `Validation failed for field "${field}".`
+      });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+```

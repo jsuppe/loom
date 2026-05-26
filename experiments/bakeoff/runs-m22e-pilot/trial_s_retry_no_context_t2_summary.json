@@ -1,0 +1,42 @@
+{
+  "study": "m22e-pilot",
+  "scenario_id": "s_retry",
+  "arm": "no_context",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "test_fail",
+  "compile_plus_link_pass": true,
+  "sub_passed": 21,
+  "sub_failed": 5,
+  "sub_expected": 26,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 369487054,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 369487054,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [
+    "temperature: recorded=0.3 but lock expects 0",
+    "top_p: recorded=0.9 but lock expects 1",
+    "seed: recorded=369487054 but lock expects 42"
+  ],
+  "raw_output_path": "raw_outputs\\m22e_s_retry_no_context_t2.txt",
+  "input_tokens": 162,
+  "output_tokens": 611,
+  "llm_elapsed_s": 3.9,
+  "wall_s": 4.1,
+  "grade_stdout_tail": "le:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_retry_k7lluozt/test/retry_test.js:184:3)\n      at async Test.run (node:internal/test_runner/test:1125:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    operator: 'rejects',\n    diff: 'simple'\n  }\n\ntest at test\\retry_test.js:187:1\n✖ throws TypeError when maxAttempts < 1 (0.0593ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection (TypeError).\n      at async TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_retry_k7lluozt/test/retry_test.js:188:3)\n      at async Test.run (node:internal/test_runner/test:1125:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    operator: 'rejects',\n    diff: 'simple'\n  }\n\ntest at test\\retry_test.js:191:1\n✖ throws TypeError when baseDelayMs is negative (0.0494ms)\n  AssertionError [ERR_ASSERTION]: Missing expected rejection (TypeError).\n      at async TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_retry_k7lluozt/test/retry_test.js:192:3)\n      at async Test.run (node:internal/test_runner/test:1125:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    operator: 'rejects',\n    diff: 'simple'\n  }\n\n"
+}

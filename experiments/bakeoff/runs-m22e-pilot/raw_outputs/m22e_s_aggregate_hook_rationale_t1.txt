@@ -1,0 +1,44 @@
+```js
+/**
+ * @typedef {Object} AggregateOptions
+ * @property {string} groupBy - The field name in each event to group by.
+ * @property {Record<string, { initial: any, step: (acc: any, event: any) => any }>} reducers - Map of reducer keys to reducer functions.
+ */
+
+/**
+ * Groups events by a specific field and applies reducers to each group.
+ * @param {Array<Object>} events - Array of event objects.
+ * @param {AggregateOptions} opts - Options for aggregation.
+ * @returns {Record<string, Record<string, any>>} - Aggregated results.
+ */
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  // Initialize groups map
+  const groups = new Map();
+
+  // First pass: group events
+  for (const event of events) {
+    const key = event[groupBy];
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(event);
+  }
+
+  // Second pass: apply reducers to each group
+  const result = {};
+  for (const [groupKey, groupEvents] of groups.entries()) {
+    result[groupKey] = {};
+    for (const [reducerKey, { initial, step }] of Object.entries(reducers)) {
+      let value = initial;
+      for (const event of groupEvents) {
+        value = step(value, event);
+      }
+      result[groupKey][reducerKey] = value;
+    }
+  }
+
+  return result;
+}
+```

@@ -1,0 +1,35 @@
+```js
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  if (!Array.isArray(events) || typeof groupBy !== 'string' || typeof reducers !== 'object') {
+    throw new Error('Invalid options: events must be an array, groupBy must be a string, and reducers must be an object.');
+  }
+
+  const groups = {};
+
+  for (const event of events) {
+    const key = event[groupBy];
+    if (!groups[key]) {
+      groups[key] = {};
+    }
+
+    for (const [reducerKey, reducer] of Object.entries(reducers)) {
+      if (!reducer) continue;
+
+      const { initial, step } = reducer;
+      if (typeof initial !== 'function' || typeof step !== 'function') {
+        throw new Error(`Reducer for key "${reducerKey}" must have "initial" and "step" functions.`);
+      }
+
+      if (groups[key][reducerKey] === undefined) {
+        groups[key][reducerKey] = initial();
+      }
+
+      groups[key][reducerKey] = step(groups[key][reducerKey], event);
+    }
+  }
+
+  return groups;
+}
+```

@@ -1,0 +1,55 @@
+```js
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  if (!Array.isArray(events)) {
+    throw new TypeError('events must be an array');
+  }
+
+  if (typeof groupBy !== 'string') {
+    throw new TypeError('groupBy must be a string');
+  }
+
+  if (typeof reducers !== 'object' || reducers === null) {
+    throw new TypeError('reducers must be a non-null object');
+  }
+
+  const groups = new Map();
+
+  for (const event of events) {
+    const key = event[groupBy];
+    if (!groups.has(key)) {
+      groups.set(key, {});
+    }
+
+    const group = groups.get(key);
+
+    for (const [reducerKey, reducer] of Object.entries(reducers)) {
+      const { initial, step } = reducer;
+
+      if (typeof initial !== 'function') {
+        throw new TypeError(`reducer for key "${reducerKey}" must have an "initial" function`);
+      }
+
+      if (typeof step !== 'function') {
+        throw new TypeError(`reducer for key "${reducerKey}" must have a "step" function`);
+      }
+
+      let value = initial();
+
+      if (group[reducerKey] === undefined) {
+        group[reducerKey] = value;
+      } else {
+        group[reducerKey] = step(group[reducerKey], event);
+      }
+    }
+  }
+
+  const result = {};
+  for (const [key, group] of groups) {
+    result[key] = group;
+  }
+
+  return result;
+}
+```

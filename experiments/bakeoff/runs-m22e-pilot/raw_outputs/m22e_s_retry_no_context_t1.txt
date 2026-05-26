@@ -1,0 +1,61 @@
+```js
+/**
+ * retry.js
+ * 
+ * Provides a utility to retry async functions with exponential backoff.
+ * 
+ * Exports:
+ * - retry(fn, opts): Async function that wraps `fn` and retries on failure.
+ * - defaultIsRetriable(err): Predicate to determine if an error is retriable.
+ * 
+ * Options:
+ * - maxAttempts: Number of attempts (default: 3)
+ * - baseDelayMs: Initial delay in milliseconds (default: 100)
+ * - isRetriable?: Custom predicate function (default: defaultIsRetriable)
+ */
+
+export function defaultIsRetriable(err) {
+  if (err && typeof err === 'object') {
+    const codes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EPIPE'];
+    if (err.code && codes.includes(err.code)) return true;
+    if (err.message && err.message.includes('timeout')) return true;
+    if (err.message && err.message.includes('network')) return true;
+  }
+  return false;
+}
+
+export function retry(fn, opts = {}) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 100,
+    isRetriable = defaultIsRetriable
+  } = opts;
+
+  return async (...args) => {
+    let lastError = null;
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        return await fn(...args);
+      } catch (err) {
+        lastError = err;
+        
+        if (!isRetriable(err)) {
+          throw err;
+        }
+
+        if (attempt === maxAttempts) {
+          throw err;
+        }
+
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  };
+}
+```

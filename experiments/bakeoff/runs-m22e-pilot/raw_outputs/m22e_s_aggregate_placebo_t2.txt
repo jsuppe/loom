@@ -1,0 +1,34 @@
+```js
+/**
+ * Aggregates an array of event objects by a specified key and applies reducers to each group.
+ *
+ * @param {Array<Object>} events - Array of event objects to aggregate.
+ * @param {Object} opts - Options object containing grouping and reduction logic.
+ * @param {string} opts.groupBy - The key in each event object to group by.
+ * @param {Object} opts.reducers - Object mapping reducer keys to { initial, step } definitions.
+ * @returns {Object} - Aggregated result object with groups as keys and reduced values.
+ */
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  const result = {};
+
+  for (const event of events) {
+    const key = event[groupBy];
+
+    if (!result[key]) {
+      result[key] = {};
+      for (const reducerKey of Object.keys(reducers)) {
+        result[key][reducerKey] = reducers[reducerKey].initial;
+      }
+    }
+
+    for (const reducerKey of Object.keys(reducers)) {
+      const reducer = reducers[reducerKey];
+      result[key][reducerKey] = reducer.step(result[key][reducerKey], event);
+    }
+  }
+
+  return result;
+}
+```

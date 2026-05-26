@@ -1,0 +1,42 @@
+{
+  "study": "m22e-pilot",
+  "scenario_id": "s_retry",
+  "arm": "hook_rationale",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "compile_fail",
+  "compile_plus_link_pass": false,
+  "sub_passed": 0,
+  "sub_failed": 1,
+  "sub_expected": 26,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 81513262,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 81513262,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [
+    "temperature: recorded=0.3 but lock expects 0",
+    "top_p: recorded=0.9 but lock expects 1",
+    "seed: recorded=81513262 but lock expects 42"
+  ],
+  "raw_output_path": "raw_outputs\\m22e_s_retry_hook_rationale_t2.txt",
+  "input_tokens": 237,
+  "output_tokens": 312,
+  "llm_elapsed_s": 2.1,
+  "wall_s": 2.2,
+  "grade_stdout_tail": "file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_retry_p0f1spja/src/retry.js:13\n      return await fn();\n             ^^^^^\n\nSyntaxError: Unexpected reserved word\n    at compileSourceTextModule (node:internal/modules/esm/utils:305:16)\n    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:110:18)\n    at #translate (node:internal/modules/esm/loader:467:20)\n    at afterLoad (node:internal/modules/esm/loader:523:29)\n    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:528:12)\n    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:571:36)\n    at afterResolve (node:internal/modules/esm/loader:619:52)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:625:12)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33)\n    at ModuleJob.link (node:internal/modules/esm/module_job:245:17)\n\nNode.js v25.6.0\n✖ test\\retry_test.js (50.941ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 55.2437\n\n✖ failing tests:\n\ntest at test\\retry_test.js:1:1\n✖ test\\retry_test.js (50.941ms)\n  'test failed'\n\n"
+}

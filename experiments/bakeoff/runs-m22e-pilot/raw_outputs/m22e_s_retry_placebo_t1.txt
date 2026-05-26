@@ -1,0 +1,64 @@
+```js
+/**
+ * @file Provides retry logic with exponential backoff for async functions.
+ */
+
+/**
+ * Determines if an error is retriable based on the provided predicate.
+ *
+ * @param {Error} err - The error object to check.
+ * @param {Function} [customPredicate] - Optional custom predicate function.
+ * @returns {boolean} True if the error should trigger a retry, false otherwise.
+ */
+export function defaultIsRetriable(err, customPredicate = null) {
+  if (customPredicate) {
+    return customPredicate(err);
+  }
+
+  // Default to retrying on common transient errors
+  const transientErrors = ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND'];
+  return transientErrors.includes(err.code) || err.message.includes('timeout');
+}
+
+/**
+ * Executes an async function with retry logic and exponential backoff.
+ *
+ * @param {Function} fn - The async function to execute.
+ * @param {Object} opts - Configuration options.
+ * @param {number} opts.maxAttempts - Maximum number of attempts (default: 3).
+ * @param {number} opts.baseDelayMs - Base delay in milliseconds between retries (default: 1000).
+ * @param {Function} [opts.isRetriable] - Optional predicate to determine if an error is retriable.
+ * @returns {Promise} The result of the function on success, or throws on final failure.
+ */
+export async function retry(fn, opts) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 1000,
+    isRetriable = defaultIsRetriable,
+  } = opts;
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+
+      // If not retriable, throw immediately
+      if (!isRetriable(err)) {
+        throw err;
+      }
+
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxAttempts) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // Should not reach here if isRetriable is used correctly, but throw last error for safety
+  throw lastError;
+}
+```

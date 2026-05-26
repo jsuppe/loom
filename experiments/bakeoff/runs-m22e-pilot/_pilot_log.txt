@@ -1,0 +1,51 @@
+﻿M22e-pilot: 3 scenarios × 4 arms × 2 trials = 24 trials on qwen3.5:latest
+Output: C:\Users\jonsu\dev\loom\experiments\bakeoff\runs-m22e-pilot
+
+Already complete: 2/24 (resume mode)
+
+[1/24] s_retry      | placebo         | t2
+    ✓ bin=test_fail     pass=20/26 wall=4.1s
+[2/24] s_validate   | placebo         | t2
+    ✓ bin=test_fail     pass=20/25 wall=1.5s
+[3/24] s_aggregate  | no_context      | t1
+    ✓ bin=test_fail     pass=7/25 wall=3.2s
+[4/24] s_retry      | hook_rationale  | t2
+    ✗ bin=compile_fail  pass=0/1 wall=2.2s
+[5/24] s_validate   | placebo         | t1
+    ✓ bin=test_fail     pass=20/25 wall=1.4s
+[6/24] s_retry      | hook_fact       | t1
+    ✓ bin=test_fail     pass=20/26 wall=4.1s
+[7/24] s_retry      | no_context      | t1
+    ✓ bin=test_fail     pass=6/26 wall=3.1s
+[8/24] s_retry      | placebo         | t1
+    ✓ bin=test_fail     pass=19/26 wall=3.8s
+[10/24] s_aggregate  | hook_fact       | t2
+    ✓ bin=test_fail     pass=4/25 wall=2.0s
+[11/24] s_aggregate  | hook_rationale  | t2
+    ✓ bin=test_fail     pass=22/25 wall=2.8s
+[12/24] s_validate   | hook_fact       | t1
+    ✓ bin=test_fail     pass=18/25 wall=1.0s
+[13/24] s_retry      | hook_fact       | t2
+    ✓ bin=test_fail     pass=17/26 wall=3.2s
+[14/24] s_aggregate  | no_context      | t2
+    ✓ bin=test_fail     pass=22/25 wall=2.2s
+[15/24] s_aggregate  | placebo         | t2
+    ✓ bin=test_fail     pass=22/25 wall=2.1s
+[16/24] s_retry      | no_context      | t2
+    ✓ bin=test_fail     pass=21/26 wall=4.1s
+[17/24] s_retry      | hook_rationale  | t1
+    ✓ bin=test_fail     pass=22/26 wall=5.3s
+[18/24] s_validate   | hook_fact       | t2
+    ✓ bin=test_fail     pass=18/25 wall=0.9s
+[19/24] s_aggregate  | hook_fact       | t1
+    ✓ bin=test_fail     pass=7/25 wall=2.6s
+[20/24] s_aggregate  | hook_rationale  | t1
+    ✓ bin=test_fail     pass=22/25 wall=2.5s
+[22/24] s_validate   | hook_rationale  | t1
+    ✓ bin=test_fail     pass=20/25 wall=2.8s
+[23/24] s_aggregate  | placebo         | t1
+    ✓ bin=test_fail     pass=22/25 wall=2.4s
+[24/24] s_validate   | hook_rationale  | t2
+    ✓ bin=test_fail     pass=20/25 wall=2.3s
+
+Sweep complete. 22 new trials in 60s.

@@ -29,6 +29,91 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-25 (continued) — M22d killed in design + M22e ceiling-failed at pilot
+
+### What we did
+
+- **M22d methodology-review sub-agent** flagged 6 fixes including
+  two pivot-killer questions (Q1: benchmark contamination — answered
+  LOW for local models; Q2: failure-mode dominance — answered "100%
+  of M22c trials hallucinate file paths from training-data priors").
+  Q2 killed M22d: a stronger Dart model would hallucinate the
+  standard layout MORE confidently, not less. **Captured structural
+  finding REQ-7e2d6518: layout-hallucination is the M22c root cause.**
+- **M22e (workload-arm pivot)** pre-reg locked: single-file JS/TS
+  workload where the import_block is given explicitly in every arm's
+  prompt, eliminating the M22c confound while leaving model + grading
+  + arms + integrity rules unchanged.
+- **M22e.1a independent leak-grading** (different sub-agent, not
+  briefed on hypothesis): 3/3 rationales PASS at locked ≤1 threshold.
+- **M22e.2 scaffolding:** built benchmarks/js-singlefile/ with 3
+  scenarios (validate, aggregate, retry) + 76 oracle sub-tests, all
+  reference solutions pass.
+- **M22e.3 harness:** 4-arm pilot runner. Two documented amendments
+  discovered during smoke-test:
+  - **Amendment 1** (placebo source): borrowing OTHER scenarios'
+    rationales caused semantic interference (runaway comment loops).
+    Replaced with task-orthogonal CI/formatting/release notes.
+  - **Amendment 2** (sampling regime): temp=0 + fixed seed (inherited
+    from M22c) produces bit-identical trials, collapsing planned
+    N=120 sweep to N=12 unique outcomes. Moved to temp=0.3 +
+    per-trial deterministic seed so each trial is real and replayable.
+- **M22e.4 pilot N=24:** ran in 60 seconds. Compile+link saturated
+  at 100% for 3/4 arms; hook_rationale 83.3% from a single
+  compile_fail trial. **Gate 6 (ceiling) + gate 7 (no-discriminate)
+  both FAIL. Sweep NOT run.**
+
+### What we decided
+
+- **REFUTED-VIA-CEILING.** The compile+link metric is saturated at
+  100% for no_context on this workload — there's no room for
+  rationale-shaped signal. Per pre-reg pivot-killer commitment Q1,
+  the verdict is "this workload + metric combo cannot measure
+  hook-rationale signal at qwen3.5:latest's capability tier."
+- **Pre-reg locks held under temptation.** Sub-test pass rate data
+  is RICHER and shows real patterns (placebo highest at 20.5,
+  hook_fact worst at 14.0, hook_rationale bimodal). But the
+  anti-Texas-sharpshooter rule forbids upgrading to sub-test
+  metric post-hoc. We did NOT do that. Patterns are recorded as
+  DESCRIPTIVE-only.
+- **The augmentation-effectiveness arc on compile/test grading is
+  now done.** M22c floor-failed; M22e ceiling-failed; each
+  eliminated confound revealed a new one. M22a-regrade's engagement
+  4-bin signal stands as the existing positive evidence for
+  loom-rationale.
+- **Methodology pattern REQ-3896db58 = 7/7.** Stopped second
+  consecutive study in M22-arc before sweep cost was paid (~70s
+  pilot vs ~5min sweep + writeup-of-saturated-result cost).
+- **Three pivot options surfaced for user** (each = new pre-reg):
+  M22f hardness-pivot, M22g metric-pivot with fresh pre-reg
+  (NOT M22e data), or accept-and-shift-to-operational-work.
+
+### What's still open
+
+- User decision on next direction. No autonomous follow-up.
+- Lower-priority queue items unchanged: M16.3 Python LSP, M17.4
+  exports, M18.4 Sonnet replication, M20.3 L4 productionization,
+  M20.4 Driftgraph webhook, M19 real-world drift evaluation, M21
+  transcript-eval, M14.4 interactive triage, M15.4 hard-require
+  `--reason`.
+
+### Pointers
+
+- **Commits (this session, ahead of origin):** `239b00a` (M22c
+  harness), `4be7af6` (M22c pilot+findings, pushed), `fa33b54`
+  (M22e pre-reg), `d7d45d4` (M22e leak-grading), `f8eae8d`
+  (M22e scaffolding) + this session's M22e.3/.4/.6 commits
+- **Findings docs:**
+  - `experiments/bakeoff/m22c_pilot/M22C_PILOT_FINDINGS.md`
+  - `experiments/bakeoff/m22e_pilot/M22E_PILOT_FINDINGS.md`
+  - `experiments/bakeoff/m22e_pilot/M22E_PREREGISTRATION_AMENDMENTS.md`
+- **Findings captured (loom store):**
+  - REQ-9f24f46e (M22c pilot result)
+  - REQ-7e2d6518 (layout-hallucination structural root-cause)
+  - REQ-73bcd158 (M22e ceiling-saturation pilot result)
+
+---
+
 ## 2026-05-25 — M22c pilot — pre-reg gates stopped the sweep
 
 ### What we did

@@ -1,0 +1,95 @@
+```js
+/**
+ * src/retry.js
+ * 
+ * Provides a retry mechanism for async functions with exponential backoff.
+ * Distinguishes between retriable errors (network, timeout, 5xx) and terminal errors (validation, 4xx).
+ */
+
+/**
+ * Determines if an error is retriable.
+ * Retriable: Network errors, timeouts, and server errors (5xx).
+ * Terminal: Validation errors and client errors (4xx).
+ * 
+ * @param {Error} err - The error to check.
+ * @returns {boolean} True if the error is retriable, false otherwise.
+ */
+export function defaultIsRetriable(err) {
+  if (!err) {
+    return false;
+  }
+
+  const code = err.code;
+  const status = err.status;
+  const message = err.message?.toLowerCase() || '';
+
+  // Check for specific retriable error codes
+  if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
+    return true;
+  }
+
+  // Check for specific retriable error statuses (5xx)
+  if (status !== undefined && status >= 500 && status < 600) {
+    return true;
+  }
+
+  // Check for specific terminal error statuses (4xx)
+  if (status !== undefined && status >= 400 && status < 500) {
+    return false;
+  }
+
+  // Check for specific terminal error messages
+  if (message.includes('invalid') || message.includes('not found') || message.includes('unauthorized')) {
+    return false;
+  }
+
+  // Default: assume retriable if it's an Error object and not explicitly terminal
+  return err instanceof Error;
+}
+
+/**
+ * Retries an async function with exponential backoff.
+ * 
+ * @param {Function} fn - The async function to execute.
+ * @param {Object} opts - Options for the retry logic.
+ * @param {number} opts.maxAttempts - Maximum number of attempts (default: 3).
+ * @param {number} opts.baseDelayMs - Base delay in milliseconds for backoff (default: 100).
+ * @param {Function} opts.isRetriable - Optional custom predicate to determine if an error is retriable (default: defaultIsRetriable).
+ * @returns {Promise} The result of the function on success.
+ * @throws {Error} Re-throws terminal errors immediately.
+ */
+export async function retry(fn, opts = {}) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 100,
+    isRetriable = defaultIsRetriable
+  } = opts;
+
+  let lastError = null;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+
+      // If the error is not retriable, throw immediately
+      if (!isRetriable(err)) {
+        throw err;
+      }
+
+      // If we haven't exceeded max attempts, calculate delay and retry
+      if (attempt < maxAttempts) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // This line should theoretically not be reached if the loop condition is correct,
+  // but included for safety in case maxAttempts is 0 or logic changes.
+  throw lastError;
+}
+```

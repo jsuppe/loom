@@ -1,0 +1,42 @@
+{
+  "study": "m22e-pilot",
+  "scenario_id": "s_aggregate",
+  "arm": "no_context",
+  "trial_n": 1,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "test_fail",
+  "compile_plus_link_pass": true,
+  "sub_passed": 7,
+  "sub_failed": 18,
+  "sub_expected": 25,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 1685148379,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 1685148379,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [
+    "temperature: recorded=0.3 but lock expects 0",
+    "top_p: recorded=0.9 but lock expects 1",
+    "seed: recorded=1685148379 but lock expects 42"
+  ],
+  "raw_output_path": "raw_outputs\\m22e_s_aggregate_no_context_t1.txt",
+  "input_tokens": 163,
+  "output_tokens": 474,
+  "llm_elapsed_s": 3.1,
+  "wall_s": 3.2,
+  "grade_stdout_tail": "ross groups (0.0683ms)\n  TypeError: initial is not a function\n      at aggregate (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_act58kl8/src/aggregate.js:50:19)\n      at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_act58kl8/test/aggregate_test.js:208:13)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1118:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n      at Test.postRun (node:internal/test_runner/test:1247:19)\n      at Test.run (node:internal/test_runner/test:1175:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7)\n\ntest at test\\aggregate_test.js:219:1\n✖ initial value is deep-independent across groups (object initial) (0.0815ms)\n  TypeError: initial is not a function\n      at aggregate (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_act58kl8/src/aggregate.js:50:19)\n      at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_act58kl8/test/aggregate_test.js:220:13)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1118:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n      at Test.postRun (node:internal/test_runner/test:1247:19)\n      at Test.run (node:internal/test_runner/test:1175:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7)\n\n"
+}

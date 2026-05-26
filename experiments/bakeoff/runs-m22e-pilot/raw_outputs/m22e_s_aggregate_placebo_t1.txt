@@ -1,0 +1,42 @@
+```js
+/**
+ * Aggregates an array of event objects by a specified key and applies reducers to each group.
+ *
+ * @param {Array<Object>} events - The array of event objects to aggregate.
+ * @param {Object} opts - Options for aggregation.
+ * @param {string} opts.groupBy - The field name to group events by.
+ * @param {Record<string, {initial: any, step: Function}>} opts.reducers - Reducers to apply to each group.
+ * @returns {Record<string, Record<string, any>>} - The aggregated result object.
+ */
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  // Initialize groups map
+  const groups = new Map();
+
+  // Group events
+  for (const event of events) {
+    const key = event[groupBy];
+    if (!groups.has(key)) {
+      groups.set(key, {});
+    }
+    const group = groups.get(key);
+
+    // Apply each reducer
+    for (const [reducerKey, { initial, step }] of Object.entries(reducers)) {
+      if (!group[reducerKey]) {
+        group[reducerKey] = initial;
+      }
+      group[reducerKey] = step(group[reducerKey], event);
+    }
+  }
+
+  // Convert Map to plain object
+  const result = {};
+  for (const [key, value] of groups.entries()) {
+    result[key] = value;
+  }
+
+  return result;
+}
+```

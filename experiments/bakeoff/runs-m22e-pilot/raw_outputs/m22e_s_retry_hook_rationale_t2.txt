@@ -1,0 +1,46 @@
+```js
+export function retry(fn, opts) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 100,
+    isRetriable = defaultIsRetriable,
+  } = opts;
+
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRetriable(err)) {
+        throw err;
+      }
+
+      if (attempt === maxAttempts) {
+        throw err;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+export function defaultIsRetriable(err) {
+  if (err && typeof err === 'object') {
+    const code = err.code ?? err.status ?? err.statusCode;
+    if (code) {
+      const num = Number(code);
+      if (!Number.isNaN(num) && num >= 500) {
+        return true;
+      }
+    }
+    const message = err.message ?? '';
+    if (message.includes('ETIMEDOUT') || message.includes('ECONNRESET') || message.includes('ENOTFOUND')) {
+      return true;
+    }
+  }
+  return false;
+}
+```

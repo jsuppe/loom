@@ -1,0 +1,42 @@
+{
+  "study": "m22e-pilot",
+  "scenario_id": "s_aggregate",
+  "arm": "no_context",
+  "trial_n": 2,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "test_fail",
+  "compile_plus_link_pass": true,
+  "sub_passed": 22,
+  "sub_failed": 3,
+  "sub_expected": 25,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 964601362,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 964601362,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [
+    "temperature: recorded=0.3 but lock expects 0",
+    "top_p: recorded=0.9 but lock expects 1",
+    "seed: recorded=964601362 but lock expects 42"
+  ],
+  "raw_output_path": "raw_outputs\\m22e_s_aggregate_no_context_t2.txt",
+  "input_tokens": 163,
+  "output_tokens": 305,
+  "llm_elapsed_s": 2.0,
+  "wall_s": 2.2,
+  "grade_stdout_tail": "opts must contain groupBy and reducers\n      at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_dm8prxhy/test/aggregate_test.js:173:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1118:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n      at Test.postRun (node:internal/test_runner/test:1247:19)\n      at Test.run (node:internal/test_runner/test:1175:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: Error: opts must contain groupBy and reducers\n        at aggregate (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_dm8prxhy/src/aggregate.js:6:11)\n        at file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_dm8prxhy/test/aggregate_test.js:173:23\n        at getActual (node:assert:586:5)\n        at strict.throws (node:assert:734:24)\n        at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_dm8prxhy/test/aggregate_test.js:173:10)\n        at Test.runInAsyncScope (node:async_hooks:226:14)\n        at Test.run (node:internal/test_runner/test:1118:25)\n        at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n        at Test.postRun (node:internal/test_runner/test:1247:19)\n        at Test.run (node:internal/test_runner/test:1175:12),\n    operator: 'throws',\n    diff: 'simple'\n  }\n\n"
+}

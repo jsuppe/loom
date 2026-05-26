@@ -1,0 +1,42 @@
+{
+  "study": "m22e-pilot",
+  "scenario_id": "s_aggregate",
+  "arm": "placebo",
+  "trial_n": 1,
+  "model": "qwen3.5:latest",
+  "outcome_bin": "test_fail",
+  "compile_plus_link_pass": true,
+  "sub_passed": 22,
+  "sub_failed": 3,
+  "sub_expected": 25,
+  "returncode": 1,
+  "no_code_extracted": false,
+  "sampling_options": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 945879263,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_recorded": {
+    "model": "qwen3.5:latest",
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "seed": 945879263,
+    "repeat_penalty": 1.0,
+    "num_predict": 4096
+  },
+  "sampling_drift": [
+    "temperature: recorded=0.3 but lock expects 0",
+    "top_p: recorded=0.9 but lock expects 1",
+    "seed: recorded=945879263 but lock expects 42"
+  ],
+  "raw_output_path": "raw_outputs\\m22e_s_aggregate_placebo_t1.txt",
+  "input_tokens": 224,
+  "output_tokens": 345,
+  "llm_elapsed_s": 2.3,
+  "wall_s": 2.4,
+  "grade_stdout_tail": "tion (TypeError).\n      at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_u5eomtzg/test/aggregate_test.js:169:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1118:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n      at Test.postRun (node:internal/test_runner/test:1247:19)\n      at Test.run (node:internal/test_runner/test:1175:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n\ntest at test\\aggregate_test.js:172:1\n✖ throws TypeError when reducers is missing (0.0536ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception (TypeError).\n      at TestContext.<anonymous> (file:///C:/Users/jonsu/AppData/Local/Temp/m22e_s_aggregate_u5eomtzg/test/aggregate_test.js:173:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1118:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)\n      at Test.postRun (node:internal/test_runner/test:1247:19)\n      at Test.run (node:internal/test_runner/test:1175:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n\n"
+}

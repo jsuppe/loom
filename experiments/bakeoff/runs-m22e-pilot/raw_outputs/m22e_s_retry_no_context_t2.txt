@@ -1,0 +1,82 @@
+```js
+/**
+ * src/retry.js
+ * 
+ * Provides a simple retry mechanism with exponential backoff for async functions.
+ * 
+ * Exports:
+ * - retry(fn, opts): Wraps an async function to retry on failure.
+ * - defaultIsRetriable(err): Predicate to determine if an error is retriable.
+ * 
+ * Options:
+ * - maxAttempts: Maximum number of attempts (default: 3)
+ * - baseDelayMs: Base delay in milliseconds for backoff (default: 100)
+ * - isRetriable?: Custom predicate to override defaultIsRetriable (default: undefined)
+ */
+
+export function retry(fn, opts) {
+  const {
+    maxAttempts = 3,
+    baseDelayMs = 100,
+    isRetriable = defaultIsRetriable
+  } = opts || {};
+
+  const attempts = [];
+
+  async function execute() {
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        return await fn();
+      } catch (err) {
+        if (!isRetriable(err)) {
+          throw err;
+        }
+
+        if (i < maxAttempts) {
+          const delay = baseDelayMs * Math.pow(2, i - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          attempts.push({ attempt: i, error: err, delay });
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  return execute();
+}
+
+export function defaultIsRetriable(err) {
+  if (err == null) return false;
+  
+  const code = err.code;
+  const message = err.message?.toLowerCase() || '';
+  
+  // Network related errors
+  if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND') {
+    return true;
+  }
+  
+  // Timeout errors
+  if (message.includes('timeout') || message.includes('timed out')) {
+    return true;
+  }
+  
+  // Specific retryable HTTP status codes (5xx)
+  if (typeof err.status === 'number' && err.status >= 500 && err.status < 600) {
+    return true;
+  }
+  
+  // Specific retryable HTTP status codes (429 Too Many Requests)
+  if (err.status === 429) {
+    return true;
+  }
+  
+  // Generic retryable errors
+  if (message.includes('retry') || message.includes('rate limit') || message.includes('quota')) {
+    return true;
+  }
+
+  return false;
+}
+```

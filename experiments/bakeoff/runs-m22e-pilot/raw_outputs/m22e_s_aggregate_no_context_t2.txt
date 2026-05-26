@@ -1,0 +1,44 @@
+```js
+export function aggregate(events, opts) {
+  const { groupBy, reducers } = opts;
+
+  // Guard against missing or invalid configuration
+  if (!groupBy || !reducers) {
+    throw new Error('opts must contain groupBy and reducers');
+  }
+
+  // Initialize the accumulator map
+  const groups = new Map();
+
+  // Iterate over each event
+  for (const event of events) {
+    const key = event[groupBy];
+
+    // Ensure the group exists in the map
+    if (!groups.has(key)) {
+      groups.set(key, {});
+    }
+
+    const group = groups.get(key);
+
+    // Apply each reducer to the current group
+    for (const [reducerKey, { initial, step }] of Object.entries(reducers)) {
+      // Initialize the value if this is the first time we see this reducer for this group
+      if (!(reducerKey in group)) {
+        group[reducerKey] = initial;
+      }
+
+      // Update the value using the step function
+      group[reducerKey] = step(group[reducerKey], event);
+    }
+  }
+
+  // Convert the Map to a plain object for the return value
+  const result = {};
+  for (const [key, value] of groups.entries()) {
+    result[key] = value;
+  }
+
+  return result;
+}
+```

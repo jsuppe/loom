@@ -1,0 +1,59 @@
+```js
+/**
+ * Retry a function with exponential backoff.
+ * 
+ * @template T
+ * @param {() => Promise<T>} fn - The async function to retry.
+ * @param {{maxAttempts: number, baseDelayMs: number, isRetriable?: (err: unknown) => boolean}} opts - Retry options.
+ * @returns {Promise<T>} - The result of the function.
+ */
+export async function retry(fn, opts) {
+  const { maxAttempts, baseDelayMs, isRetriable } = opts;
+
+  let lastError;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      attempt++;
+
+      if (attempt >= maxAttempts) {
+        throw err;
+      }
+
+      // Determine if this error should trigger a retry
+      if (!isRetriable || isRetriable(err)) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Default predicate to determine if an error is retriable.
+ * Currently only considers 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED',
+ * 'ENOTFOUND', and 'ERR_BAD_REQUEST' as retriable.
+ * 
+ * @param {unknown} err - The error to check.
+ * @returns {boolean} - True if the error is retriable.
+ */
+export function defaultIsRetriable(err) {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = err.code;
+    return (
+      code === 'ETIMEDOUT' ||
+      code === 'ECONNRESET' ||
+      code === 'ECONNREFUSED' ||
+      code === 'ENOTFOUND' ||
+      code === 'ERR_BAD_REQUEST'
+    );
+  }
+  return false;
+}
+```

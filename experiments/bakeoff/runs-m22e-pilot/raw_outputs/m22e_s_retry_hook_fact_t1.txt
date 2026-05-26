@@ -1,0 +1,81 @@
+```js
+/**
+ * Retry a function with exponential backoff.
+ * 
+ * @template T
+ * @param {() => Promise<T>} fn - The async function to retry.
+ * @param {Object} opts - Retry options.
+ * @param {number} opts.maxAttempts - Maximum number of attempts (including the first).
+ * @param {number} opts.baseDelayMs - Base delay in milliseconds between retries.
+ * @param {(err: Error) => boolean} [opts.isRetriable] - Optional predicate to determine if an error is retriable.
+ * @returns {Promise<T>} - The result of the function on success.
+ * @throws {Error} - Throws the last error if all attempts fail.
+ */
+export async function retry(fn, opts) {
+  const {
+    maxAttempts,
+    baseDelayMs,
+    isRetriable = defaultIsRetriable
+  } = opts;
+
+  let lastError;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      
+      if (!isRetriable(err)) {
+        throw err;
+      }
+
+      if (attempt < maxAttempts) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Default predicate to determine if an error is retriable.
+ * Considers errors with codes like ECONNRESET, ECONNREFUSED, ETIMEDOUT, or those marked as transient.
+ * 
+ * @param {Error} err - The error to check.
+ * @returns {boolean} - True if the error should be retried.
+ */
+export function defaultIsRetriable(err) {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+
+  const code = err.code;
+  const message = err.message.toLowerCase();
+
+  // Check for common transient network errors
+  const transientCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EPIPE'];
+  if (transientCodes.includes(code)) {
+    return true;
+  }
+
+  // Check for common transient error messages
+  const transientMessages = [
+    'connection reset',
+    'connection refused',
+    'timed out',
+    'network timeout',
+    'no such host',
+    'not found'
+  ];
+  if (transientMessages.some(msg => message.includes(msg))) {
+    return true;
+  }
+
+  return false;
+}
+```

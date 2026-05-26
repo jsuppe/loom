@@ -1,0 +1,71 @@
+```js
+export function validate(input, rules) {
+  const errors = [];
+
+  if (!Array.isArray(rules)) {
+    errors.push({
+      field: 'rules',
+      message: 'rules must be an array'
+    });
+  }
+
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+
+    if (rule === null || rule === undefined) {
+      errors.push({
+        field: `rules[${i}]`,
+        message: 'rule is null or undefined'
+      });
+      continue;
+    }
+
+    if (typeof rule !== 'object') {
+      errors.push({
+        field: `rules[${i}]`,
+        message: 'rule must be an object'
+      });
+      continue;
+    }
+
+    if (typeof rule.field !== 'string') {
+      errors.push({
+        field: `rules[${i}].field`,
+        message: 'field must be a string'
+      });
+      continue;
+    }
+
+    if (typeof rule.check !== 'function') {
+      errors.push({
+        field: `rules[${i}].check`,
+        message: 'check must be a function'
+      });
+      continue;
+    }
+
+    if (typeof rule.message !== 'string') {
+      errors.push({
+        field: `rules[${i}].message`,
+        message: 'message must be a string'
+      });
+      continue;
+    }
+
+    const value = input[rule.field];
+    const isValid = rule.check(value);
+
+    if (!isValid) {
+      errors.push({
+        field: rule.field,
+        message: rule.message
+      });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+```
