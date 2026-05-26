@@ -1,0 +1,156 @@
+{
+  "version": "m19v3-tight-links-v1",
+  "locked_at": "2026-05-26",
+  "git_head_at_curation": "67dd9ab",
+  "project": "loom",
+  "_notes": "Hand-curated (file, req) pairs per M19V3_PREREGISTRATION.md M19v3.1. User-locked: all 21 candidates included (8 TIGHT + 5 MODERATE + 8 EVIDENCE). Each entry includes confidence + one-line rationale for transparency.",
+  "links": [
+    {
+      "file": "src/loom/indexers_js.py",
+      "req_id": "REQ-2a621c40",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates JsIndexer (and similar LSP-backed indexers) be pointed at project root including test files. File IS the JsIndexer implementation."
+    },
+    {
+      "file": "src/loom/indexers_py.py",
+      "req_id": "REQ-2a621c40",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Same req covers 'similar LSP-backed indexers'. PyIndexer follows the same pattern as JsIndexer."
+    },
+    {
+      "file": "src/loom/intake.py",
+      "req_id": "REQ-ec36bd89",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates rationale on loom requirements; bare-rule reqs rejected. Intake hook enforces this at capture time via six-branch decision tree."
+    },
+    {
+      "file": "src/loom/exec_cli.py",
+      "req_id": "REQ-aaa595ca",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates executor selection consider spec contrarian-shape, not just language. File is the loom_exec executor; executor-selection is its concern."
+    },
+    {
+      "file": "src/loom/driftgraph_http.py",
+      "req_id": "REQ-6c353203",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates push-based webhook architecture for foundation drift events. File implements the HTTP push/webhook surface."
+    },
+    {
+      "file": "experiments/bakeoff/sampling.lock",
+      "req_id": "REQ-019da056",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates bake-off harnesses lock sampling parameters. File IS the locked sampling artifact."
+    },
+    {
+      "file": "experiments/bakeoff/_methodology.py",
+      "req_id": "REQ-1d49ce5b",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req mandates bake-off harnesses retain every model response. File implements retain_output + related methodology helpers."
+    },
+    {
+      "file": "src/loom/testspec.py",
+      "req_id": "REQ-c9fb1238",
+      "confidence": "TIGHT",
+      "link_type": "implementation",
+      "rationale": "Req says 'we should create an evaluation set of tasks to track changes'. File implements TestSpec store (JSON-backed)."
+    },
+    {
+      "file": "src/loom/indexers.py",
+      "req_id": "REQ-2a621c40",
+      "confidence": "MODERATE",
+      "link_type": "implementation",
+      "rationale": "Same req as JsIndexer/PyIndexer. File is the indexer REGISTRY (abstract surface), not a specific LSP indexer."
+    },
+    {
+      "file": "src/loom/intake_filters.py",
+      "req_id": "REQ-ec36bd89",
+      "confidence": "MODERATE",
+      "link_type": "implementation",
+      "rationale": "Same req as intake.py. File implements specific filter detectors (softener, domain whitelist, daily budget) supporting the rationale-required rule."
+    },
+    {
+      "file": "src/loom/driftgraph_cache.py",
+      "req_id": "REQ-6c353203",
+      "confidence": "MODERATE",
+      "link_type": "implementation",
+      "rationale": "Same req as driftgraph_http.py. File caches webhook events; indirect support for push architecture."
+    },
+    {
+      "file": "src/loom/driftgraph_query.py",
+      "req_id": "REQ-6c353203",
+      "confidence": "MODERATE",
+      "link_type": "implementation",
+      "rationale": "Same req. File queries Driftgraph's Neo4j directly (Architecture B); related to webhook architecture but a different concern."
+    },
+    {
+      "file": "src/loom/store.py",
+      "req_id": "REQ-27023c4b",
+      "confidence": "MODERATE",
+      "link_type": "implementation",
+      "rationale": "Req: 'system must maintain a log to enable tracking back on previous information or decision'. store.py IS the SQLite-backed log; broader than just 'log' but close."
+    },
+    {
+      "file": "experiments/bakeoff/m22c_pilot/M22C_PILOT_FINDINGS.md",
+      "req_id": "REQ-9f24f46e",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "File IS the M22c pilot finding writeup."
+    },
+    {
+      "file": "experiments/bakeoff/m22e_pilot/M22E_PILOT_FINDINGS.md",
+      "req_id": "REQ-73bcd158",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "File IS the M22e pilot finding writeup."
+    },
+    {
+      "file": "experiments/m19_drift_eval/M19_FINDINGS.md",
+      "req_id": "REQ-56811be1",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "File IS the M19v1 finding writeup."
+    },
+    {
+      "file": "experiments/m19_drift_eval/M19V2_FINDINGS.md",
+      "req_id": "REQ-6834d5b6",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "File IS the M19v2 finding writeup."
+    },
+    {
+      "file": "experiments/bakeoff/m22a_pilot/REGRADE_PREREGISTRATION.md",
+      "req_id": "REQ-40b70660",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "File IS the M22a-regrade pre-reg; finding is the 4-bin re-grade result."
+    },
+    {
+      "file": "experiments/bakeoff/m22c_pilot/M22C_PREREGISTRATION.md",
+      "req_id": "REQ-9f24f46e",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "Pre-reg authored for the M22c result; legitimate evidence link to that finding."
+    },
+    {
+      "file": "experiments/bakeoff/m22e_pilot/M22E_PREREGISTRATION.md",
+      "req_id": "REQ-73bcd158",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "Pre-reg authored for the M22e result; legitimate evidence link to that finding."
+    },
+    {
+      "file": "experiments/bakeoff/m22c_pilot/scenarios.json",
+      "req_id": "REQ-9f24f46e",
+      "confidence": "EVIDENCE",
+      "link_type": "evidences",
+      "rationale": "Locked scenarios that produced the M22c finding."
+    }
+  ]
+}

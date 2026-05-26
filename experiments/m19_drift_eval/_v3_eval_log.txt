@@ -1,0 +1,69 @@
+﻿M19v3 eval at git HEAD 67dd9abe075f
+Lock from 2026-05-26 (HEAD was 67dd9ab)
+21 tight (file, req) pairs locked
+
+--- src/loom/indexers_js.py (TIGHT, implementation) -> REQ-2a621c40 ---
+  [match] 504702230d24 2026-05-02 feat(cli): loom indexer-doctor + SemanticIndexer.h
+  [DRIFT] b19ddb5eb2e9 2026-05-02 feat(indexers): JsIndexer v2 — filter import refs 
+  [DRIFT] 5d094d13c1c2 2026-05-02 feat(indexers): JsIndexer — LSP-backed JS/TS index
+--- src/loom/indexers_py.py (TIGHT, implementation) -> REQ-2a621c40 ---
+  [match] d33f71330c83 2026-05-25 feat(indexers): PyIndexer — LSP-backed Python inde
+--- src/loom/intake.py (TIGHT, implementation) -> REQ-ec36bd89 ---
+  [match] 2ad4911b1005 2026-05-20 feat(intake): M14 — close noise-pollution gap (scr
+  [DRIFT] d806558dcd71 2026-05-03 feat(intake): kind-aware classifier — route findin
+  [DRIFT] 4eb2f684bcc0 2026-05-02 feat(intake): UserPromptSubmit hook scaffold (M11.
+--- src/loom/exec_cli.py (TIGHT, implementation) -> REQ-aaa595ca ---
+  [match] 4c66c13c0040 2026-05-02 fix(executor): pin Ollama keep_alive + retry trans
+  [DRIFT] 39673f8302c4 2026-04-30 feat(packaging): convert to a proper Python packag
+--- src/loom/driftgraph_http.py (TIGHT, implementation) -> REQ-6c353203 ---
+  [match] 99205c684022 2026-05-05 feat(driftgraph_http): enrich + dedupe drifted anc
+  [DRIFT] 6a3be06d3dee 2026-05-05 feat(warrants/driftgraph): L4 partial + HTTP read 
+--- experiments/bakeoff/sampling.lock (TIGHT, implementation) -> REQ-019da056 ---
+  [match] 37bd7c21e0de 2026-05-23 research(methodology): M18.1-.3 + .5 — bake-off me
+--- experiments/bakeoff/_methodology.py (TIGHT, implementation) -> REQ-1d49ce5b ---
+  [match] 37bd7c21e0de 2026-05-23 research(methodology): M18.1-.3 + .5 — bake-off me
+--- src/loom/testspec.py (TIGHT, implementation) -> REQ-c9fb1238 ---
+  [match] 39673f8302c4 2026-04-30 feat(packaging): convert to a proper Python packag
+--- src/loom/indexers.py (MODERATE, implementation) -> REQ-2a621c40 ---
+  [match] 504702230d24 2026-05-02 feat(cli): loom indexer-doctor + SemanticIndexer.h
+  [DRIFT] adf6d32d4946 2026-05-01 feat(indexers): SemanticIndexer scaffolding + C++ 
+--- src/loom/intake_filters.py (MODERATE, implementation) -> REQ-ec36bd89 ---
+  [match] 2ad4911b1005 2026-05-20 feat(intake): M14 — close noise-pollution gap (scr
+--- src/loom/driftgraph_cache.py (MODERATE, implementation) -> REQ-6c353203 ---
+  [match] 6a3be06d3dee 2026-05-05 feat(warrants/driftgraph): L4 partial + HTTP read 
+  [DRIFT] e6e84168a202 2026-05-05 feat(driftgraph): push-based cache + webhook recei
+--- src/loom/driftgraph_query.py (MODERATE, implementation) -> REQ-6c353203 ---
+  [match] 86788dd9cc77 2026-05-04 feat(driftgraph): inbound channel — graph drift in
+--- src/loom/store.py (MODERATE, implementation) -> REQ-27023c4b ---
+  [match] 62aa121a6d61 2026-05-25 feat(slugs+matrix): M17.2-.3 — slug aliases + unif
+  [DRIFT] 9bd1c4c41dca 2026-05-20 feat(unlink): close supersession workflow loop — l
+  [DRIFT] 7f25ecd05977 2026-05-03 feat(status): per-kind lifecycle states (M12.2b)
+  [DRIFT] 1303a3060b7a 2026-05-03 feat(rationale): Requirement.kind field — typologi
+  [DRIFT] b80cdf41da0f 2026-05-02 feat(rationale): is_complete() Phase A + audit-rat
+  [DRIFT] ac42e381ff4a 2026-05-02 feat(rationale): linkage data model + queries + pi
+  [DRIFT] 504702230d24 2026-05-02 feat(cli): loom indexer-doctor + SemanticIndexer.h
+  [DRIFT] adf6d32d4946 2026-05-01 feat(indexers): SemanticIndexer scaffolding + C++ 
+  [DRIFT] 39673f8302c4 2026-04-30 feat(packaging): convert to a proper Python packag
+--- experiments/bakeoff/m22c_pilot/M22C_PILOT_FINDINGS.md (EVIDENCE, evidences) -> REQ-9f24f46e ---
+  [match] 4be7af686b8a 2026-05-25 research(m22c): pilot N=24 FAILED gates 2+6 — swee
+--- experiments/bakeoff/m22e_pilot/M22E_PILOT_FINDINGS.md (EVIDENCE, evidences) -> REQ-73bcd158 ---
+  [match] e970104c7d44 2026-05-25 research(m22e): pilot N=24 ceiling-saturated — swe
+--- experiments/m19_drift_eval/M19_FINDINGS.md (EVIDENCE, evidences) -> REQ-56811be1 ---
+  [match] 4c088ec63ffc 2026-05-25 research(m19): drift-detection precision eval — 10
+--- experiments/m19_drift_eval/M19V2_FINDINGS.md (EVIDENCE, evidences) -> REQ-6834d5b6 ---
+  [match] 387b058f003c 2026-05-26 research(m19v2)+fix(embedding,services): enriched 
+--- experiments/bakeoff/m22a_pilot/REGRADE_PREREGISTRATION.md (EVIDENCE, evidences) -> REQ-40b70660 ---
+  [match] 7b668e6ed7db 2026-05-25 research(m22a-regrade): 4-bin re-grade refines F2,
+--- experiments/bakeoff/m22c_pilot/M22C_PREREGISTRATION.md (EVIDENCE, evidences) -> REQ-9f24f46e ---
+  [match] 82df6c31508c 2026-05-25 research(m22c): design phase — pre-registration lo
+--- experiments/bakeoff/m22e_pilot/M22E_PREREGISTRATION.md (EVIDENCE, evidences) -> REQ-73bcd158 ---
+  [match] fa33b544143e 2026-05-25 research(m22e): pre-reg locked — workload-arm pivo
+--- experiments/bakeoff/m22c_pilot/scenarios.json (EVIDENCE, evidences) -> REQ-9f24f46e ---
+  [match] 239b00abf580 2026-05-25 research(m22c): scenarios + harness — single-bench
+
+Wrote 37 rows to m19v3_classifications.csv
+  drift_fires=yes : 16
+  drift_fires=no  : 21
+  excluded        : 0  reasons={}
+
+Next: AI-classify (M19v3.4) then user 20% spot-check for kappa
