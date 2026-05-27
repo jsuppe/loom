@@ -20,6 +20,26 @@ from loom import services  # noqa: E402
 from loom.store import LoomStore, Requirement, Implementation, generate_content_hash  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _bypass_spec_check(monkeypatch):
+    """REQ-7df25683 forbids direct req→impl links in production. The
+    test_services.py module predates that rule and exercises link()
+    for OTHER concerns (event recording, metrics, symbol resolution,
+    drift detection, etc.). Default the bypass kwarg to True module-
+    wide so those tests keep working. Tests that specifically validate
+    the rule live in tests/test_spec_required.py and do NOT use this
+    fixture (different module).
+    """
+    original_link = services.link
+
+    def wrapped(*args, **kwargs):
+        kwargs.setdefault("_bypass_spec_check_for_tests", True)
+        return original_link(*args, **kwargs)
+
+    monkeypatch.setattr(services, "link", wrapped)
+    yield
+
+
 @pytest.fixture
 def store():
     tmp = Path(tempfile.mkdtemp())

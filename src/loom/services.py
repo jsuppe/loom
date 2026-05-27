@@ -848,6 +848,37 @@ def doctor(store: LoomStore) -> dict[str, Any]:
             f"{drift_count} implementation(s) linked to superseded requirements"
         )
 
+    # M25 — REQ-7df25683 compliance: detect direct Requirement→Impl
+    # links (link_type=satisfies, no spec mediating) that predate the
+    # rule. Findings/hypothesis evidence links are unaffected.
+    legacy_direct_count = 0
+    legacy_examples: list[str] = []
+    for meta in all_impls.get("metadatas", []):
+        sats_specs = _json.loads(meta.get("satisfies_specs", "[]") or "[]")
+        if sats_specs and sats_specs != ["TBD"]:
+            continue  # spec-mediated, fine
+        for sat in _json.loads(meta.get("satisfies", "[]")):
+            if sat.get("link_type", "satisfies") == "evidences":
+                continue  # evidence link, fine
+            req = store.get_requirement(sat["req_id"])
+            if req is None or req.kind != "requirement":
+                continue  # already counted as orphan, or non-req kind
+            legacy_direct_count += 1
+            if len(legacy_examples) < 5:
+                legacy_examples.append(
+                    f"{meta.get('file', '?')} → {sat['req_id']}"
+                )
+    checks["legacy_direct_links"] = {
+        "count": legacy_direct_count,
+        "examples": legacy_examples,
+    }
+    if legacy_direct_count > 0:
+        warnings.append(
+            f"{legacy_direct_count} legacy direct Requirement→Implementation "
+            f"link(s) predate REQ-7df25683. Run the M25 migration to "
+            f"backfill specs, or migrate by hand via `loom spec <REQ-id>`."
+        )
+
     # M15.3 — stale-pending kind=requirement alarm. Catches reqs that
     # have been sitting at status=pending for >30 days with no linked
     # implementations — usually a sign of triage debt (the M14.4
@@ -3309,6 +3340,7 @@ def link(
     symbol: str | None = None,
     language: str | None = None,
     link_type: str | None = None,
+    _bypass_spec_check_for_tests: bool = False,
 ) -> dict[str, Any]:
     """Link a file (or line range, or resolved symbol) to requirements
     and/or specifications.
@@ -3467,6 +3499,28 @@ def link(
             warnings.append(
                 f"{rid} is kind={req.kind!r}; --evidences is normally "
                 f"used for finding/hypothesis. Linking anyway."
+            )
+
+        # REQ-7df25683 — direct Requirement→Implementation links via
+        # link_type=satisfies are forbidden. Use Requirement→Spec→Impl
+        # instead. Evidence links (link_type=evidences, typically for
+        # kind=finding/hypothesis) are unaffected — they're a different
+        # relationship entirely.
+        #
+        # ``_bypass_spec_check_for_tests`` is an opt-out for test
+        # fixtures whose concern is something OTHER than link-routing
+        # (e.g. testing event recording, metrics counts, drift detection).
+        # Production callers (CLI, MCP, hooks) MUST NOT set it. The
+        # leading underscore + the long name + this comment exist to
+        # make the opt-out embarrassing to use casually.
+        if (this_link_type == "satisfies" and not spec_ids
+                and not _bypass_spec_check_for_tests):
+            raise ValueError(
+                f"REQ-7df25683 forbids direct Requirement→Implementation "
+                f"links. {rid} is kind={req.kind!r} which requires a "
+                f"Specification intermediary. Create one with:\n"
+                f"  loom spec {rid} \"<spec text describing the contract>\"\n"
+                f"then link with --spec <SPEC-id> instead of --req {rid}."
             )
 
         if not any(s["req_id"] == rid for s in satisfies):

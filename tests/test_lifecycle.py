@@ -28,6 +28,22 @@ from loom.services import (
 from loom.store import LoomStore, Requirement
 
 
+@pytest.fixture(autouse=True)
+def _bypass_spec_check(monkeypatch):
+    """REQ-7df25683 forbids direct req→impl links in production.
+    test_lifecycle.py exercises link() for status-progression /
+    lifecycle concerns, not link-routing. See test_services.py's
+    identical fixture for the full rationale."""
+    original_link = services.link
+
+    def wrapped(*args, **kwargs):
+        kwargs.setdefault("_bypass_spec_check_for_tests", True)
+        return original_link(*args, **kwargs)
+
+    monkeypatch.setattr(services, "link", wrapped)
+    yield
+
+
 @pytest.fixture
 def store(tmp_path) -> LoomStore:
     return LoomStore("test-lifecycle", data_dir=tmp_path)
