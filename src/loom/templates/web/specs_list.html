@@ -19,7 +19,7 @@
       <td class="req-id"><a href="/specs/{{ s.id }}">{{ s.id }}</a></td>
       <td class="req-id"><a href="/reqs/{{ s.parent_req }}">{{ s.parent_req or '—' }}</a></td>
       <td><span class="chip chip-{{ (s.status or 'draft')|status_color }}">{{ s.status or 'draft' }}</span></td>
-      <td>{{ (s.value or '')[:140] }}{% if (s.value or '')|length > 140 %}…{% endif %}</td>
+      <td>{{ (s.description or '')[:140] }}{% if (s.description or '')|length > 140 %}…{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>

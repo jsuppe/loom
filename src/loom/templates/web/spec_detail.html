@@ -11,12 +11,19 @@
 </div>
 
 <div class="panel">
-  <h3>Value</h3>
-  <p style="white-space:pre-wrap;line-height:1.6;">{{ spec.value }}</p>
+  <h3>Description</h3>
+  <p style="white-space:pre-wrap;line-height:1.6;">{{ spec.description }}</p>
 
-  {% if spec.elaboration %}
-  <h3>Elaboration</h3>
-  <p style="white-space:pre-wrap;color:var(--muted);line-height:1.6;">{{ spec.elaboration }}</p>
+  {% if spec.acceptance_criteria and spec.acceptance_criteria != ["TBD"] %}
+  <h3>Acceptance criteria</h3>
+  <ul>
+    {% for c in spec.acceptance_criteria %}<li>{{ c }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if spec.source_doc %}
+  <h3>Source</h3>
+  <p class="small muted">{{ spec.source_doc }}</p>
   {% endif %}
 
   <h3>Metadata</h3>
