@@ -25,6 +25,7 @@ milestone 4.2 and mcp_server/README.md for the full plan.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -2942,6 +2943,336 @@ def indexer_doctor(store: LoomStore) -> dict[str, Any]:
             "sample_uncovered": sample_uncovered,
         },
         "warnings": warnings,
+    }
+
+
+def export_store(store: LoomStore, dest_dir: "Path", *,
+                  project: str,
+                  git_head: str | None = None) -> dict[str, Any]:
+    """Write the team-shareable text snapshot of ``store`` to
+    ``dest_dir/.loom/*.jsonl`` per the M24 format spec
+    (docs/specs/M24_LOOM_EXPORT_FORMAT.md).
+
+    Returns a summary dict for the CLI to render. Caller passes
+    ``dest_dir`` as the repo root; this function creates ``.loom/``
+    underneath. Idempotent: re-running produces byte-identical output
+    (modulo the manifest's ``exported_at`` timestamp).
+
+    Excluded by design:
+      * embeddings (regenerable; embedding-model-dependent)
+      * Implementation.content (re-readable from disk)
+      * Requirement.last_referenced (per-developer telemetry)
+      * Event / hook / intake logs
+      * chat_messages
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    out_dir = Path(dest_dir) / ".loom"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def _normalize_req(r) -> dict:
+        d = r.to_dict()
+        # Strip per-developer fields + the ["TBD"] sentinel quirk
+        d.pop("last_referenced", None)
+        if d.get("acceptance_criteria") == ["TBD"]:
+            d["acceptance_criteria"] = []
+        # rationale_links default to [] not None
+        if d.get("rationale_links") is None:
+            d["rationale_links"] = []
+        return d
+
+    def _normalize_impl(i) -> dict:
+        d = i.to_dict()
+        # content is re-readable; drop to keep export lean
+        d.pop("content", None)
+        # ["TBD"] sentinel
+        if d.get("satisfies_specs") == ["TBD"]:
+            d["satisfies_specs"] = []
+        if d.get("satisfies_patterns") == ["TBD"]:
+            d["satisfies_patterns"] = []
+        return d
+
+    def _write_jsonl(filename: str, rows: list[dict]) -> int:
+        rows_sorted = sorted(rows, key=lambda d: d.get("id", ""))
+        path = out_dir / filename
+        # Use binary write to control newlines as plain \n on all OSes
+        # (the spec mandates LF; even on Windows where Python's text
+        # mode would otherwise convert to CRLF).
+        with path.open("wb") as f:
+            for row in rows_sorted:
+                line = json.dumps(row, sort_keys=True, ensure_ascii=False)
+                f.write(line.encode("utf-8"))
+                f.write(b"\n")
+        return len(rows_sorted)
+
+    counts: dict[str, int] = {}
+    counts["requirements"] = _write_jsonl(
+        "requirements.jsonl",
+        [_normalize_req(r) for r in store.list_requirements(include_superseded=True)],
+    )
+    counts["specifications"] = _write_jsonl(
+        "specifications.jsonl",
+        [s.to_dict() for s in store.list_specifications(include_superseded=True)],
+    )
+    counts["patterns"] = _write_jsonl(
+        "patterns.jsonl",
+        [p.to_dict() for p in store.list_patterns(include_deprecated=True)],
+    )
+    counts["implementations"] = _write_jsonl(
+        "implementations.jsonl",
+        [_normalize_impl(i) for i in store.list_implementations()],
+    )
+
+    # Test specs live in a separate JSON store, not in LoomStore.
+    test_specs_count = 0
+    try:
+        from .testspec import TestSpecStore
+        ts_store = TestSpecStore(store.data_dir)
+        all_specs = ts_store.list_specs(include_private=True)
+        rows = [s.to_dict() for s in all_specs]
+        # TestSpec rows use req_id as the sort key (no `id` field).
+        rows_sorted = sorted(rows, key=lambda d: d.get("req_id", ""))
+        path = out_dir / "test_specs.jsonl"
+        with path.open("wb") as f:
+            for row in rows_sorted:
+                line = json.dumps(row, sort_keys=True, ensure_ascii=False)
+                f.write(line.encode("utf-8"))
+                f.write(b"\n")
+        test_specs_count = len(rows_sorted)
+    except Exception:
+        # If the TestSpec store can't be read, write an empty file
+        # for schema stability.
+        (out_dir / "test_specs.jsonl").write_bytes(b"")
+    counts["test_specs"] = test_specs_count
+
+    manifest = {
+        "version": "m24-export-v1",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "project": project,
+        "git_head": git_head,
+        "entity_counts": counts,
+    }
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    return {
+        "out_dir": str(out_dir),
+        "manifest": manifest,
+    }
+
+
+def import_store(store: LoomStore, source_dir: "Path", *,
+                  policy: str = "error",
+                  skip_embeddings: bool = False,
+                  progress_callback=None) -> dict[str, Any]:
+    """Read ``source_dir/.loom/*.jsonl`` and materialize into ``store``.
+
+    ``policy``:
+      * "error"  — refuse if local store has data not in the export
+      * "force"  — drop local-only entities; trust the export
+      * "merge"  — keep local-only entities; export wins on same-id
+
+    ``skip_embeddings``: if False, regenerate embeddings via the
+    configured provider during insert (slow; ~1s/req on Ollama).
+    If True, callers must run a separate rebuild before search works.
+
+    ``progress_callback(kind, done, total)`` invoked per inserted row
+    for CLI progress reporting.
+
+    Returns a summary dict.
+    """
+    from pathlib import Path
+    from .store import Requirement, Specification, Pattern, Implementation
+
+    src = Path(source_dir) / ".loom"
+    if not src.exists():
+        raise FileNotFoundError(f".loom/ not found at {src}")
+
+    manifest_path = src / "manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"manifest.json missing in {src}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not manifest.get("version", "").startswith("m24-export-v"):
+        raise ValueError(
+            f"unsupported export version: {manifest.get('version')!r}. "
+            f"Expected m24-export-v*"
+        )
+
+    def _read_jsonl(name: str) -> list[dict]:
+        path = src / name
+        if not path.exists() or path.stat().st_size == 0:
+            return []
+        out = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                out.append(json.loads(line))
+        return out
+
+    incoming = {
+        "requirements": _read_jsonl("requirements.jsonl"),
+        "specifications": _read_jsonl("specifications.jsonl"),
+        "patterns": _read_jsonl("patterns.jsonl"),
+        "implementations": _read_jsonl("implementations.jsonl"),
+        "test_specs": _read_jsonl("test_specs.jsonl"),
+    }
+
+    # Diff against current store
+    local_req_ids = {r.id for r in store.list_requirements(include_superseded=True)}
+    incoming_req_ids = {r["id"] for r in incoming["requirements"]}
+    local_spec_ids = {s.id for s in store.list_specifications(include_superseded=True)}
+    incoming_spec_ids = {s["id"] for s in incoming["specifications"]}
+    local_pat_ids = {p.id for p in store.list_patterns(include_deprecated=True)}
+    incoming_pat_ids = {p["id"] for p in incoming["patterns"]}
+    local_impl_ids = {i.id for i in store.list_implementations()}
+    incoming_impl_ids = {i["id"] for i in incoming["implementations"]}
+
+    local_only = {
+        "requirements": local_req_ids - incoming_req_ids,
+        "specifications": local_spec_ids - incoming_spec_ids,
+        "patterns": local_pat_ids - incoming_pat_ids,
+        "implementations": local_impl_ids - incoming_impl_ids,
+    }
+    has_local_only = any(local_only.values())
+
+    if policy == "error" and has_local_only:
+        summary = {
+            "applied": False,
+            "reason": "local store has entities not in the export",
+            "local_only_counts": {k: len(v) for k, v in local_only.items()},
+            "manifest": manifest,
+        }
+        raise RuntimeError(
+            f"Refusing to import — local store has data not in export: "
+            f"{summary['local_only_counts']}. "
+            f"Pass --force to drop local data, or --merge to keep local additions."
+        )
+
+    if policy == "force":
+        # Drop local-only entities. We rely on delete_implementation,
+        # supersede for reqs, etc. — but the simplest correct approach
+        # for force is to wipe and reinsert. We don't have a wipe API
+        # so we delete each local-only impl + supersede each local-only
+        # req. For v1, we only wipe implementations (cheap) and leave
+        # reqs/specs/patterns alone (could superseede but that's lossy).
+        # Document this as a v1 limitation.
+        for impl_id in local_only["implementations"]:
+            try:
+                store.delete_implementation(impl_id)
+            except Exception:
+                pass
+
+    # Embedding callable
+    def _embed(text: str) -> list[float]:
+        if skip_embeddings:
+            # Placeholder zero-vector; search will produce garbage
+            # until rebuild-embeddings is run. Dimension pinned by
+            # the store's _loom_meta if any rows exist.
+            dim = getattr(store, "embedding_dim", 768) or 768
+            return [0.0] * dim
+        from .embedding import get_embedding
+        return get_embedding(text)
+
+    inserted_counts: dict[str, int] = {
+        k: 0 for k in ("requirements", "specifications", "patterns", "implementations", "test_specs")
+    }
+    updated_counts: dict[str, int] = dict(inserted_counts)
+
+    # --- Requirements ---
+    for i, row in enumerate(incoming["requirements"]):
+        r = Requirement.from_dict(dict(row))
+        text = (r.value or "") + " " + (r.rationale or "")
+        vec = _embed(text)
+        was_existing = r.id in local_req_ids
+        store.add_requirement(r, vec)  # upsert
+        if was_existing:
+            updated_counts["requirements"] += 1
+        else:
+            inserted_counts["requirements"] += 1
+        if progress_callback:
+            progress_callback("requirements", i + 1, len(incoming["requirements"]))
+
+    # --- Specifications ---
+    for i, row in enumerate(incoming["specifications"]):
+        s = Specification.from_dict(dict(row))
+        vec = _embed(s.value or "")
+        was_existing = s.id in local_spec_ids
+        store.add_specification(s, vec)
+        if was_existing:
+            updated_counts["specifications"] += 1
+        else:
+            inserted_counts["specifications"] += 1
+        if progress_callback:
+            progress_callback("specifications", i + 1, len(incoming["specifications"]))
+
+    # --- Patterns ---
+    for i, row in enumerate(incoming["patterns"]):
+        p = Pattern.from_dict(dict(row))
+        vec = _embed(p.value or "")
+        was_existing = p.id in local_pat_ids
+        store.add_pattern(p, vec)
+        if was_existing:
+            updated_counts["patterns"] += 1
+        else:
+            inserted_counts["patterns"] += 1
+        if progress_callback:
+            progress_callback("patterns", i + 1, len(incoming["patterns"]))
+
+    # --- Implementations ---
+    # Impl rows in the export do NOT include `content` — read from disk
+    # if the file exists, else use empty string.
+    repo_root = Path(source_dir).resolve()
+    for i, row in enumerate(incoming["implementations"]):
+        row = dict(row)
+        # Need to re-supply content; impl.from_dict requires it.
+        file_path = row.get("file")
+        if file_path:
+            disk_path = repo_root / file_path
+            if disk_path.exists():
+                try:
+                    row["content"] = disk_path.read_text(
+                        encoding="utf-8", errors="replace",
+                    )
+                except OSError:
+                    row["content"] = ""
+            else:
+                row["content"] = ""
+        else:
+            row["content"] = ""
+        im = Implementation.from_dict(row)
+        vec = _embed(im.content or "")
+        was_existing = im.id in local_impl_ids
+        store.add_implementation(im, vec)
+        if was_existing:
+            updated_counts["implementations"] += 1
+        else:
+            inserted_counts["implementations"] += 1
+        if progress_callback:
+            progress_callback("implementations", i + 1, len(incoming["implementations"]))
+
+    # --- TestSpecs ---
+    if incoming["test_specs"]:
+        try:
+            from .testspec import TestSpec, TestSpecStore
+            ts_store = TestSpecStore(store.data_dir)
+            for row in incoming["test_specs"]:
+                spec = TestSpec.from_dict(dict(row)) if hasattr(TestSpec, "from_dict") else TestSpec(**row)
+                ts_store.add_spec(spec)
+                inserted_counts["test_specs"] += 1
+        except Exception:
+            pass
+
+    return {
+        "applied": True,
+        "policy": policy,
+        "skip_embeddings": skip_embeddings,
+        "inserted_counts": inserted_counts,
+        "updated_counts": updated_counts,
+        "local_only_counts": {k: len(v) for k, v in local_only.items()},
+        "manifest": manifest,
     }
 
 

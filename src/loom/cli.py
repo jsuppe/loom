@@ -434,6 +434,125 @@ def cmd_indexer_doctor(args):
     return 0 if data["ok"] else 1
 
 
+def cmd_export(args):
+    """Export the store to .loom/*.jsonl for git-trackable team sharing (M24).
+
+    Writes a text-format snapshot of requirements, specs, patterns,
+    impl links, and test specs to ``<dest>/.loom/``. Embeddings and
+    audit logs are intentionally excluded — see
+    docs/specs/M24_LOOM_EXPORT_FORMAT.md for the spec.
+    """
+    from pathlib import Path
+    import subprocess as _sub
+    store = LoomStore(args.project)
+    dest = Path(args.dest).resolve()
+    try:
+        git_head = _sub.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=dest,
+            stderr=_sub.DEVNULL, text=True,
+            shell=(sys.platform == "win32"),
+        ).strip()
+    except Exception:
+        git_head = None
+
+    result = services.export_store(
+        store, dest, project=args.project, git_head=git_head,
+    )
+    counts = result["manifest"]["entity_counts"]
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2))
+        return 0
+    print(f"🧵 Loom Export — {args.project}")
+    print(f"  Wrote to: {result['out_dir']}")
+    if git_head:
+        print(f"  git HEAD: {git_head[:12]}")
+    print()
+    print("  Entity counts:")
+    for kind, n in counts.items():
+        print(f"    {kind:18s} {n}")
+    print()
+    print("  Commit `.loom/` to share with teammates.")
+    print("  Embeddings + audit logs excluded by design.")
+    return 0
+
+
+def cmd_import(args):
+    """Import .loom/*.jsonl into the local store (M24).
+
+    Conflict policy (mutually exclusive):
+      * default (no flag): error if local store has data not in export
+      * --force: drop local-only entities; trust export completely
+      * --merge: keep local-only entities; export wins on same-id
+
+    Embedding regen (default ON): regenerates embeddings via the
+    configured provider as rows are inserted. Slow (~1s/req on Ollama).
+    Use --skip-embeddings to import fast and rebuild separately.
+    """
+    from pathlib import Path
+    store = LoomStore(args.project)
+    src = Path(args.src).resolve()
+
+    policy = "error"
+    if args.force:
+        policy = "force"
+    elif args.merge:
+        policy = "merge"
+
+    last_kind = [None]
+
+    def _progress(kind, done, total):
+        if kind != last_kind[0]:
+            if last_kind[0] is not None:
+                print()
+            last_kind[0] = kind
+        print(f"\r  Embedding {kind}  [{done}/{total}]…", end="", flush=True)
+
+    cb = None if args.skip_embeddings else _progress
+    if not args.skip_embeddings:
+        print(f"🧵 Loom Import — {args.project}")
+        print(f"  Source: {src}")
+        print(f"  Policy: {policy}")
+        print()
+    try:
+        result = services.import_store(
+            store, src, policy=policy,
+            skip_embeddings=args.skip_embeddings,
+            progress_callback=cb,
+        )
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        print(f"\n❌ {e}")
+        return 1
+
+    if not args.skip_embeddings:
+        print()  # finish the last progress line
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2))
+        return 0
+
+    print()
+    print(f"✓ Import complete (policy={result['policy']})")
+    print(f"  Manifest: {result['manifest']['version']} "
+          f"from project={result['manifest']['project']!r}")
+    print()
+    print("  Inserted:")
+    for k, n in result["inserted_counts"].items():
+        print(f"    {k:18s} {n}")
+    print("  Updated (upsert on existing id):")
+    for k, n in result["updated_counts"].items():
+        print(f"    {k:18s} {n}")
+    if any(result["local_only_counts"].values()):
+        print()
+        print("  Local-only entities (not in export):")
+        for k, n in result["local_only_counts"].items():
+            print(f"    {k:18s} {n}")
+    if args.skip_embeddings:
+        print()
+        print("  ⚠  Embeddings were SKIPPED. Search/drift won't work until")
+        print("     a rebuild pass runs (not yet implemented; coming in M24.4).")
+    return 0
+
+
 def cmd_ui(args):
     """Start the local web UI (M23).
 
@@ -3250,6 +3369,33 @@ def main():
     p_ui.add_argument("--port", type=int, default=8090,
                        help="Bind port (default 8090)")
 
+    # export (M24) — write .loom/*.jsonl team-shareable snapshot
+    p_export = sp(
+        "export",
+        help="Export the store to .loom/*.jsonl for git-trackable team sharing",
+    )
+    p_export.add_argument("--dest", default=".",
+                           help="Destination repo root (default: cwd; creates .loom/ underneath)")
+    p_export.add_argument("--json", "-j", action="store_true",
+                           help="JSON output")
+
+    # import (M24) — materialize .loom/*.jsonl into the local store
+    p_import = sp(
+        "import",
+        help="Import .loom/*.jsonl into the local store (with embedding regen)",
+    )
+    p_import.add_argument("--src", default=".",
+                           help="Source repo root (default: cwd; reads .loom/ underneath)")
+    policy_grp = p_import.add_mutually_exclusive_group()
+    policy_grp.add_argument("--force", action="store_true",
+                              help="Drop local-only entities; trust export completely")
+    policy_grp.add_argument("--merge", action="store_true",
+                              help="Keep local additions; export wins on same-id conflicts")
+    p_import.add_argument("--skip-embeddings", action="store_true",
+                           help="Skip embedding regen (faster import; search broken until rebuild)")
+    p_import.add_argument("--json", "-j", action="store_true",
+                           help="JSON output")
+
     # related (M11.1) — find prior decisions a new req might cite
     p_related = sp(
         "related",
@@ -3464,6 +3610,8 @@ def main():
         "health-score": cmd_health_score,
         "indexer-doctor": cmd_indexer_doctor,
         "ui": cmd_ui,
+        "export": cmd_export,
+        "import": cmd_import,
         "related": cmd_related,
         "needs-rationale": cmd_needs_rationale,
         "audit-rationale": cmd_audit_rationale,

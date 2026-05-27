@@ -176,6 +176,13 @@ def _ollama_embed(text: str, model: str, max_retries: int) -> list[float]:
     # docstring + top imports + first 1-2 classes fit comfortably.
     if len(text) > 4000:
         text = text[:4000]
+    # Empty input → Ollama returns `{"embeddings": []}` which would
+    # IndexError on result["embeddings"][0]. Surfaced during M24.5
+    # smoke-test when impl rows had missing on-disk content. Send a
+    # whitespace placeholder so the embed succeeds and the caller
+    # gets a deterministic-but-non-informative vector.
+    if not text.strip():
+        text = " "
     last_error: Exception | None = None
     for attempt in range(max_retries):
         try:

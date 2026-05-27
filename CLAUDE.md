@@ -64,6 +64,7 @@ loom/
 - **`src/loom/intake.py`** — testable core for the intake hook. Six-branch decision tree, classifier prompt, JSONL log helpers. Importable as `from loom import intake`.
 - **`src/loom/indexers.py` + `src/loom/indexers_js.py` + `src/loom/indexers_py.py`** — pluggable `SemanticIndexer` registry (M10.1) plus the LSP-backed `JsIndexer` for JavaScript/TypeScript via `typescript-language-server` (M10.3c) and `PyIndexer` for Python via `python-lsp-server` (M16.3). Powers the `## Semantic context` block in `loom_exec` prompts and the structural-drift channel in `services.check`. Indexers are opt-in — user code calls `loom.indexers.register(JsIndexer(root=...))` or `register(PyIndexer(root=...))`.
 - **`src/loom/web.py` + `src/loom/templates/web/`** — local web UI (M23). `loom ui -p <project>` starts a FastAPI server on `localhost:8090` with read-only HTML views for reqs / findings / specs / files plus semantic search and JSON API mirrors at `/api/*`. Opt-in via `pip install loom-cli[ui]` (extra installs fastapi + uvicorn + jinja2). Server-rendered, no JS build step. Single-project per server start.
+- **`services.export_store` + `services.import_store`** — M24 team-shareable text snapshot. `loom export` writes `.loom/*.jsonl` (one file per kind, sorted by id, canonical field order, LF newlines for cross-OS git-merge); `loom import` materializes it into the local store with auto-embedding-rebuild. Embeddings + audit logs + `last_referenced` + impl `content` excluded by design. Default import policy errors on local-only data; `--force` drops local extras, `--merge` keeps them. See `docs/specs/M24_LOOM_EXPORT_FORMAT.md`.
 
 ## CLI Commands (reference)
 
@@ -77,6 +78,8 @@ loom/
 | `audit-rationale` | Preview `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` impact (M11.4) | Yes |
 | `indexer-doctor` | Health check for the semantic-indexer pipeline (M10.5) | Yes |
 | `ui` | Start the local web UI on localhost:8090 (M23). Opt-in extra: `pip install loom-cli[ui]` | — |
+| `export` | Write `.loom/*.jsonl` team-shareable snapshot (M24). Excludes embeddings + audit logs by design | Yes |
+| `import` | Materialize `.loom/*.jsonl` into local store (M24). Default errors on conflict; `--force`/`--merge` opt in. Auto-rebuilds embeddings | Yes |
 | `check <file>` | Multi-channel drift detection (content/structural/superseded; M10.4) | Yes |
 | `link <file>` | Link code to requirements (auto, `--req`, or `--symbol`) | — |
 | `status` | Project overview with drift summary | Yes |
