@@ -4,6 +4,8 @@
 
 Loom is a semantic requirements-traceability system for AI-assisted development, and a context substrate for running atomic code tasks on small local models. It extracts requirements from conversations, embeds them in a local SQLite store, links them to code, detects drift and conflicts, and now — with the `Task` entity, `loom decompose`, and `loom_exec` — turns that context into executable work for a local LLM.
 
+> **Evaluating Loom for your team?** Read [`docs/EFFECTIVENESS.md`](docs/EFFECTIVENESS.md) — the empirical case for Loom organized by user benefit, with citations to ~1,050 trials. ~5 minute read.
+
 ## What Loom does
 
 1. **Captures requirements** from natural language (`loom extract`) with rationale, acceptance criteria, domain.
