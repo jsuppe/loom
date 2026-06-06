@@ -1,0 +1,25 @@
+{
+  "project": "loom",
+  "target_dir": ".",
+  "decomposer_model": null,
+  "executor_model": "qwen3.5:latest",
+  "embedding_provider": null,
+  "embedding_model": "nomic-embed-text",
+  "test_runner": "pytest",
+  "language": "python",
+  "test_dir": "tests",
+  "ignore": [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    "node_modules",
+    ".tox",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".claude",
+    ".worktrees"
+  ]
+}
