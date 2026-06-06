@@ -1,0 +1,120 @@
+spec_id: SPEC-85e02906
+model: ollama:qwen2.5-coder:32b
+notes: |
+  Hand-edited from proposed_tasks.original.yaml after `loom decompose` produced
+  three structural errors documented in M26 findings:
+    1. Tasks 5+6 (calibration JSON + grading test) would have modified
+       LOCKED pre-registration files — removed.
+    2. Tasks 3+4 used `src/cli.py`; actual layout (post-M9) is
+       `src/loom/cli.py` — fixed.
+    3. The judge prompt file `src/loom/prompts/spec_score.txt` was
+       missing entirely from the decomp — added as task-0 (no deps,
+       runs first).
+  No other structural changes. Task scope + ordering + size budgets
+  are decomposer's verbatim choices.
+tasks:
+- title: Author the LLM judge prompt at src/loom/prompts/spec_score.txt.
+    The prompt must instruct the judge to score four 0-25 dimensions
+    (acceptance_criteria, falsifiability, parent_alignment, concreteness)
+    and return STRICT JSON with keys score, by_dim, reasoning. Include
+    the parent_req_text + spec description + acceptance_criteria as
+    template variables {{parent_req}} / {{description}} / {{criteria}}.
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/prompts/spec_score.txt
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 60
+  depends_on_titles: []
+- title: 'Add `services.score_specification(store, spec_id, judge_model=None)`
+    function signature to src/loom/spec_scoring.py.
+
+    Place after existing functions; match docstring and type-hint style.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/spec_scoring.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 30
+  depends_on_titles:
+  - Author the LLM judge prompt at src/loom/prompts/spec_score.txt.
+    The prompt must instruct the judge to score four 0-25 dimensions
+    (acceptance_criteria, falsifiability, parent_alignment, concreteness)
+    and return STRICT JSON with keys score, by_dim, reasoning. Include
+    the parent_req_text + spec description + acceptance_criteria as
+    template variables {{parent_req}} / {{description}} / {{criteria}}.
+- title: 'Implement the core logic for `services.score_specification` in src/loom/spec_scoring.py.
+
+    Include scoring dimensions and judge model selection based on environment variables.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/spec_scoring.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 80
+  depends_on_titles:
+  - 'Add `services.score_specification(store, spec_id, judge_model=None)` function signature
+    to src/loom/spec_scoring.py.
+
+    Place after existing functions; match docstring and type-hint style.'
+- title: 'Implement the CLI command `loom spec-score <SPEC-id> [--json]` in src/loom/cli.py.
+
+    Ensure it calls `services.score_specification` and handles JSON output.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/cli.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 40
+  depends_on_titles:
+  - 'Implement the core logic for `services.score_specification` in src/loom/spec_scoring.py.
+
+    Include scoring dimensions and judge model selection based on environment variables.'
+- title: 'Add in-band scoring to `loom spec create` in src/loom/cli.py.
+
+    Warn when score < LOOM_SPEC_MIN_SCORE (default 60).'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/cli.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 40
+  depends_on_titles:
+  - 'Implement the CLI command `loom spec-score <SPEC-id> [--json]` in src/loom/cli.py.
+
+    Ensure it calls `services.score_specification` and handles JSON output.'

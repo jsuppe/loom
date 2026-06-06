@@ -1,0 +1,124 @@
+spec_id: SPEC-85e02906
+model: ollama:qwen2.5-coder:32b
+tasks:
+- title: 'Add `services.score_specification(spec_id, judge_model=None)` function signature
+    to src/loom/spec_scoring.py.
+
+    Place after existing functions; match docstring and type-hint style.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/spec_scoring.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 30
+  depends_on_titles: []
+- title: 'Implement the core logic for `services.score_specification` in src/loom/spec_scoring.py.
+
+    Include scoring dimensions and judge model selection based on environment variables.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/loom/spec_scoring.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 80
+  depends_on_titles:
+  - 'Add `services.score_specification(spec_id, judge_model=None)` function signature
+    to src/loom/spec_scoring.py.
+
+    Place after existing functions; match docstring and type-hint style.'
+- title: 'Implement the CLI command `loom spec-score <SPEC-id> [--json]` in src/cli.py.
+
+    Ensure it calls `services.score_specification` and handles JSON output.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/cli.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 40
+  depends_on_titles:
+  - 'Implement the core logic for `services.score_specification` in src/loom/spec_scoring.py.
+
+    Include scoring dimensions and judge model selection based on environment variables.'
+- title: 'Add in-band scoring to `loom spec create` in src/cli.py.
+
+    Warn when score < LOOM_SPEC_MIN_SCORE (default 60).'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - src/cli.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files: []
+  size_budget_files: 1
+  size_budget_loc: 40
+  depends_on_titles:
+  - 'Implement the CLI command `loom spec-score <SPEC-id> [--json]` in src/cli.py.
+
+    Ensure it calls `services.score_specification` and handles JSON output.'
+- title: 'Add calibration fixtures to tests/data/spec_scoring_calibration.json.
+
+    Ensure it includes high, mid, and low band specs with expected scores.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - tests/data/spec_scoring_calibration.json
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files:
+  - tests/data/spec_scoring_calibration.json
+  size_budget_files: 1
+  size_budget_loc: 80
+  depends_on_titles:
+  - 'Add in-band scoring to `loom spec create` in src/cli.py.
+
+    Warn when score < LOOM_SPEC_MIN_SCORE (default 60).'
+- title: 'Implement three-band separation test in tests/test_spec_scoring.py::TestSpecScoring.
+
+    Use calibration fixtures to verify score separations and latency budgets.'
+  parent_spec: SPEC-85e02906
+  files_to_modify:
+  - tests/test_spec_scoring.py
+  test_to_write: tests/test_spec_scoring.py::TestSpecScoring
+  context_reqs:
+  - REQ-6dec889f
+  context_specs:
+  - SPEC-85e02906
+  context_patterns: []
+  context_sidecars: []
+  context_files:
+  - tests/test_spec_scoring.py
+  size_budget_files: 1
+  size_budget_loc: 80
+  depends_on_titles:
+  - 'Add calibration fixtures to tests/data/spec_scoring_calibration.json.
+
+    Ensure it includes high, mid, and low band specs with expected scores.'
