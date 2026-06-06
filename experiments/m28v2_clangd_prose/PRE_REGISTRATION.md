@@ -1,7 +1,23 @@
 # M28v2 — ClangdIndexer + LLM-summarized contract prose: Pre-registration
 
 **Drafted:** 2026-06-06 (after M28 Phase 1 + M29 Phase A both REFUTED)
-**Status:** **DRAFT — locks after user review of the summarization prompt**
+**LOCKED:** 2026-06-06 — after user review.
+
+**User-locked decisions (per the three open items in the original draft):**
+
+1. **Summarization prompt:** locked verbatim as drafted. User declined
+   to remove more from the summarizer's input. The H3 STOP gate
+   carries the rule-leak risk.
+2. **H1 threshold:** 30pp confirmed as reasonable.
+3. **Summarizer model fallback:** `ANTHROPIC_API_KEY` not set for
+   this run. The summarizer falls back to `qwen2.5-coder:32b`. This
+   means the SAME model both summarizes and generates — the
+   self-reinforcement confound is **accepted for v1** because the
+   M28 F1 fix (REQ-cc95b9a1) emits a stderr warning identifying
+   which model summarized. If H1 confirms under qwen-as-summarizer,
+   that's a *stronger* result (no frontier dependency); if H1
+   refutes, a follow-up Phase 1.5 with Haiku-as-summarizer becomes
+   the next pre-reg.
 **Methodology pattern:** REQ-3896db58
 **Builds on:** M10.2 stub indexer (the prose-confounded baseline),
 M28 ClangdIndexer (REQ-2007b144, falsified), M29 style constraint
