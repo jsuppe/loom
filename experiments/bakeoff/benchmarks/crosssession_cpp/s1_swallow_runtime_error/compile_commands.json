@@ -1,0 +1,7 @@
+[
+  {
+    "directory": "${SCENARIO_DIR}",
+    "command": "clang++ -std=c++17 -Wall -Wextra -I${SCENARIO_DIR}/reference -c ${SCENARIO_DIR}/tests/test_retry.cpp -o ${SCENARIO_DIR}/tests/test_retry.o",
+    "file": "${SCENARIO_DIR}/tests/test_retry.cpp"
+  }
+]
