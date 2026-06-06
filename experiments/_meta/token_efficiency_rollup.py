@@ -69,11 +69,12 @@ SOURCES: list[dict[str, Any]] = [
         "language": "C++",
         "model_filter": "qwen2.5-coder:32b",
     },
-    # M29 will land here when it runs.
-    # {"label": "M29 Phase A (style constraint alone)",
-    #  "glob": "bakeoff/runs-m29/m29_*_summary.json",
-    #  "language": "C++",
-    #  "model_filter": "qwen2.5-coder:32b"},
+    {
+        "label": "M29 — style constraint alone (qwen2.5-coder:32b)",
+        "glob": "bakeoff/runs-m29/m29_*_summary.json",
+        "language": "C++",
+        "model_filter": "qwen2.5-coder:32b",
+    },
 ]
 
 

@@ -1,0 +1,22 @@
+{
+  "phase": "M29_style_constraint",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "8",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 404,
+  "input_tokens": 791,
+  "output_tokens": 236,
+  "model": "qwen2.5-coder:32b",
+  "intervention": "style_constraint",
+  "style_block_chars": 902,
+  "llm_elapsed_s": 17.9,
+  "wall_s": 18.2,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\m29_s1_cpp_zxc6gp2r",
+  "grade_stdout_tail": "PASS: runtime_error_swallowed_returns_nullopt\nPASS: runtime_error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

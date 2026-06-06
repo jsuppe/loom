@@ -235,10 +235,29 @@ don't discover them in production.
    hand-authored contract prose ("IMPORTANT: this call site does NOT
    have a try/catch... production incident 2024-09-12"), not by the
    structural Kythe-shaped facts. Same failure mode as M10.3a's phQ3
-   finding on JavaScript. C++ stays in the **weak** zone until a
-   substantively different intervention (LLM-summarized prose layer,
-   Kythe Phase 2, or M29's style-constraint hypothesis) lands and
-   replicates. Detail: [`experiments/m28_clangd_indexer/FINDINGS.md`](../experiments/m28_clangd_indexer/FINDINGS.md).
+   finding on JavaScript. Detail: [`experiments/m28_clangd_indexer/FINDINGS.md`](../experiments/m28_clangd_indexer/FINDINGS.md).
+
+5. **C++ style-constraint hypothesis (M29 Phase A) was pre-registered
+   and falsified — but as predicted by the locked predictor's prior.**
+   M29 tested whether prepending an explicit C++17 style block to the
+   prompt would lift the rat cell ≥ 20pp vs M28's baseline. N=40, H3
+   STOP gate passed (off cell 0%). Rat cell came in at 0/10 (CI 0-28%)
+   — refuted. **The pre-registration also locked a predictor's prior**
+   that H1 would refute on this specific scenario, because the
+   contrarian rule's text already pins the C++17 idiom ("Return
+   std::nullopt..."). The data confirmed the prior. The narrow finding
+   is "style constraint refuted for scenarios where the rule itself
+   pins idiom"; the broader hypothesis (style constraint as a lever on
+   scenarios where the rule is behavioral-only) remains open. Detail:
+   [`experiments/m29_style_constraint/FINDINGS.md`](../experiments/m29_style_constraint/FINDINGS.md).
+
+   C++ stays in the **weak** zone after both M28 and M29 refute.
+   Remaining candidates for what might move the rat cell: an M28v2
+   that adds an LLM-summarized contract-prose layer on top of
+   ClangdIndexer (tests whether prose IS the carrier directly); a
+   different scenario shape (multi-file C++ with idiom-underspecified
+   rule); or Kythe Phase 2 (substantially more infra cost, justifiable
+   only if the prose hypothesis also fails).
 
 4. **Loom's value on Opus is rationale-storage, not compliance lift.**
    If your team only uses Opus, the hook does not measurably improve
@@ -289,7 +308,8 @@ benchmark, four sequential interventions:
 | phL — qwen3.5 baseline, no indexer | 50% (2/4) | 588 | 7,149 | **15,474** | weak — high out-tok overhead |
 | M10.1b — qwen2.5-coder:32b, no indexer | 0% (0/5) | 581 | 266 | — | refuted (executor capacity not the lever) |
 | **M10.2 — hand-curated stub** | **50%** (3/6) | **1,111** | **259** | **2,740** | confounded (prose, not facts, carried the lift) |
-| **M28 — ClangdIndexer LSP** | **0%** (0/10) | 1,176 | 273 | — | **falsified** (this report, structural facts alone don't replicate) |
+| **M28 — ClangdIndexer LSP** | **0%** (0/10) | 1,176 | 273 | — | **falsified** (structural facts alone don't replicate) |
+| **M29 — style constraint alone** | **0%** (0/10) | **795** | 270 | — | **falsified** (rule already pinned the idiom; **32% cheaper than M28**) |
 
 What this surfaces that a pass-rate table alone doesn't:
 
