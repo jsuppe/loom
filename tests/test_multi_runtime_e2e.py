@@ -220,7 +220,9 @@ class TestPromptGenerationByRunner:
             flutter = _r.get_runner("flutter_test")
             prompt = services.task_build_prompt(s, task_id, runner=flutter)
             # Mode: replace, fence: dart
-            assert "dart code block" in prompt
+            # M26 F5: "code block" wording dropped uniformly so the
+            # .txt/.md/.json overrides don't read as "plain-text code block".
+            assert "dart block" in prompt
             assert "```dart" in prompt
             assert "entire new file content" in prompt
             assert "OVERWRITTEN" in prompt
@@ -267,7 +269,10 @@ class TestPromptGenerationByRunner:
             task_id = self._make_task(s, "vitest")
             vitest_r = _r.get_runner("vitest")
             prompt = services.task_build_prompt(s, task_id, runner=vitest_r)
-            assert "typescript code block" in prompt
+            # M26 F5: replace-mode wording is "<lang> block" not "<lang>
+            # code block" so non-code overrides (.txt/.md/.json) don't
+            # read as "plain-text code block".
+            assert "typescript block" in prompt
             assert "```typescript" in prompt
             assert "entire new file content" in prompt
         finally:

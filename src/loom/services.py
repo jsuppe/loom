@@ -5933,6 +5933,37 @@ def task_reject(
     return _task_to_dict(store.get_task(task_id))
 
 
+# M26 finding F5 — REQ-25c75b6f: non-code files override the runner's
+# Python defaults so loom_exec doesn't tell qwen to emit a python block
+# and append it to a .txt prompt file.
+_NON_CODE_EXT_OVERRIDES: dict[str, tuple[str, str, str]] = {
+    ".txt": ("text", "plain-text", "replace"),
+    ".md": ("markdown", "markdown", "replace"),
+    ".json": ("json", "JSON", "replace"),
+    ".yaml": ("yaml", "YAML", "replace"),
+    ".yml": ("yaml", "YAML", "replace"),
+    ".toml": ("toml", "TOML", "replace"),
+}
+
+
+def select_fence_and_mode(file_path: str, runner) -> tuple[str, str, str]:
+    """Return ``(fence, language_label, apply_mode)`` for the target file.
+
+    Non-code files (prompts, configs, docs) override the runner's
+    Python-/Dart-/TS-shaped defaults — they should use a content-type
+    fence and replace mode rather than appending code into a non-code
+    file. Code files keep the runner's choices.
+
+    Consumed by both :func:`task_build_prompt` (to author the executor's
+    output-contract block) and ``loom_exec`` (to drive code extraction +
+    apply mode). Both must agree, so the logic lives in one place.
+    """
+    ext = Path(file_path).suffix.lower()
+    if ext in _NON_CODE_EXT_OVERRIDES:
+        return _NON_CODE_EXT_OVERRIDES[ext]
+    return (runner.fence, runner.language, runner.apply_mode)
+
+
 def task_build_prompt(
     store: LoomStore,
     task_id: str,
@@ -6059,29 +6090,32 @@ def task_build_prompt(
             parts.append("```")
             parts.append("")
 
-    # Output contract depends on apply_mode. Append-mode (Python) is small
-    # diffs; replace-mode (Dart/TS) is whole-file, must repeat unchanged code.
-    if runner.apply_mode == "replace":
-        first_file = task.files_to_modify[0] if task.files_to_modify else "<target>"
+    # Output contract: per-file-extension override (M26 finding F5 —
+    # REQ-25c75b6f). Non-code files (.txt, .md, .json, .yaml) get a
+    # content-type fence and replace mode rather than the runner's
+    # Python-default append + python-fence.
+    first_file = task.files_to_modify[0] if task.files_to_modify else "<target>"
+    fence, lang_label, apply_mode = select_fence_and_mode(first_file, runner)
+    if apply_mode == "replace":
         contract = (
             f"## Output contract\n"
-            f"Reply with ONE {runner.language} code block "
-            f"(```{runner.fence} ... ```) containing the **entire new file "
+            f"Reply with ONE {lang_label} block "
+            f"(```{fence} ... ```) containing the **entire new file "
             f"content** for `{first_file}`. You MUST include all existing "
-            f"code you want to keep — this file will be OVERWRITTEN with "
-            f"your output. Do not include prose outside the code block.\n\n"
+            f"content you want to keep — this file will be OVERWRITTEN "
+            f"with your output. Do not include prose outside the block.\n\n"
             f"If the task is too large or mixes concerns, reply with "
             f"`TASK_REJECT: <reason>` and stop.\n"
             f"If you need information not provided, reply with "
             f"`NEED_CONTEXT: <what>` and stop.\n"
-            f"When complete, begin your final message (after the code block) "
+            f"When complete, begin your final message (after the block) "
             f"with `DONE: <one-line summary>`."
         )
     else:
         contract = (
             f"## Output contract\n"
-            f"Reply with ONE {runner.language} code block "
-            f"(```{runner.fence} ... ```) containing your changes. The model "
+            f"Reply with ONE {lang_label} code block "
+            f"(```{fence} ... ```) containing your changes. The model "
             f"output is APPENDED to the end of the target file, so redefine "
             f"functions/methods as needed (last definition wins). Do not "
             f"include unchanged code from the files above. Do not include "
@@ -6113,13 +6147,38 @@ def task_build_prompt(
 # The command-level --model flag overrides the env default.
 
 
+_DECOMPOSER_FALLBACK_WARNED = False
+
+
 def _default_decomposer_model() -> str:
+    """Resolve the decomposer model when no explicit --model was passed.
+
+    Precedence: ``LOOM_DECOMPOSER_MODEL`` env > ``ANTHROPIC_API_KEY``-present
+    Opus default > local ollama fallback.
+
+    Fires a one-time stderr warning (M26 finding F1 — REQ-cc95b9a1) when
+    falling back to ollama because ANTHROPIC_API_KEY is missing, so users
+    realize the asymmetric pipeline has degenerated to single-model.
+    """
+    global _DECOMPOSER_FALLBACK_WARNED
     import os
+    import sys
     override = os.environ.get("LOOM_DECOMPOSER_MODEL")
     if override:
         return override
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic:claude-opus-4-7"
+    if not _DECOMPOSER_FALLBACK_WARNED:
+        print(
+            "[loom] WARNING: ANTHROPIC_API_KEY not set — `loom decompose` "
+            "is using the local fallback model (ollama:qwen2.5-coder:32b). "
+            "The asymmetric pipeline (frontier decompose, local execute) "
+            "has degenerated to single-model. Set ANTHROPIC_API_KEY or pass "
+            "`--model anthropic:claude-opus-4-7` to use the frontier "
+            "decomposer.",
+            file=sys.stderr,
+        )
+        _DECOMPOSER_FALLBACK_WARNED = True
     return "ollama:qwen2.5-coder:32b"
 
 

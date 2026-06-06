@@ -416,11 +416,16 @@ def execute_task(
             })
             return {"task_id": task_id, "outcome": "no_code"}
 
-        # Apply code to scratch copy of the target.
-        scratch_target = scratch / Path(task["files_to_modify"][0])
-        code = extract_code(llm["content"], fence=runner.fence)
+        # Apply code to scratch copy of the target. Per-file-extension
+        # override (M26 finding F5 — REQ-25c75b6f) lets non-code files
+        # (.txt/.md/.json/.yaml/.toml) use a content-type fence and
+        # replace mode instead of the runner's Python-default append.
+        target_path = task["files_to_modify"][0]
+        scratch_target = scratch / Path(target_path)
+        fence, _, apply_mode = services.select_fence_and_mode(target_path, runner)
+        code = extract_code(llm["content"], fence=fence)
         scratch_target.parent.mkdir(parents=True, exist_ok=True)
-        if runner.apply_mode == "replace":
+        if apply_mode == "replace":
             scratch_target.write_text(code, encoding="utf-8")
         else:
             existing = scratch_target.read_text(encoding="utf-8") if scratch_target.exists() else ""
