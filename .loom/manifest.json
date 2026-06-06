@@ -1,10 +1,10 @@
 {
   "version": "m24-export-v1",
-  "exported_at": "2026-06-06T18:07:57.732042+00:00",
+  "exported_at": "2026-06-06T18:46:33.114773+00:00",
   "project": "loom",
-  "git_head": "78839ca1604517e4dca458121424340039ce4a1e",
+  "git_head": "88f25ef9cfbed1f2257ff56c81e2f6dce3400d49",
   "entity_counts": {
-    "requirements": 88,
+    "requirements": 91,
     "specifications": 23,
     "patterns": 0,
     "implementations": 20,

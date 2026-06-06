@@ -407,12 +407,17 @@ def execute_task(
             return {"task_id": task_id, "outcome": "need_context", "reason": detail}
 
         if kind == "no_code":
+            # M26 finding F8: log a truncated response so the user can
+            # debug "no code block" failures. Without this, qwen babbling
+            # for 6000 tokens leaves no trace.
+            response_tail = (llm.get("content") or "")[-2000:]
             services.task_reject(store, task_id, "no code block in response", escalate=True)
             _log_run(store, {
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "task_id": task_id, "model": model, "outcome": "no_code",
                 "elapsed_s": round(time.perf_counter() - t0, 2),
                 "input_tokens": llm["input_tokens"], "output_tokens": llm["output_tokens"],
+                "response_tail": response_tail,
             })
             return {"task_id": task_id, "outcome": "no_code"}
 
