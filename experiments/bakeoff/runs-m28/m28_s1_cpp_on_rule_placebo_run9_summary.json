@@ -1,0 +1,22 @@
+{
+  "phase": "M28_clangd_indexer",
+  "scenario": "S1",
+  "cell": "on-rule+placebo",
+  "run_id": "9",
+  "passed": 2,
+  "total": 2,
+  "pass_rate": 1.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 404,
+  "input_tokens": 1170,
+  "output_tokens": 236,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "clangd",
+  "semantic_context_chars": 2318,
+  "llm_elapsed_s": 18.6,
+  "wall_s": 20.5,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\m28_s1_cpp_aft5obfl",
+  "grade_stdout_tail": "PASS: runtime_error_swallowed_returns_nullopt\nPASS: runtime_error_does_not_propagate\nSUMMARY: 2 passed, 0 failed\n"
+}

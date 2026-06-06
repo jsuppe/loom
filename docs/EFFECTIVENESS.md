@@ -226,6 +226,20 @@ don't discover them in production.
    [`experiments/m26_spec_scorer/FINDINGS.md`](../experiments/m26_spec_scorer/FINDINGS.md).
    Three of the gaps were fixed the same day; six remain queued for v2.
 
+4. **C++ semantic-indexer Phase 1 (ClangdIndexer) was pre-registered
+   and falsified.** M28 tested whether the M10.2 stub-indexer's +40pp
+   lift on the rationale cell would replicate with a real LSP-backed
+   indexer. Under N=40 with H3 STOP gate passing (off cell 0% — no
+   rule leak), the rat cell came in at 0/10 (Wilson 95% CI 0-28%) —
+   below the 20% falsifier band. The M10.2 lift was carried by
+   hand-authored contract prose ("IMPORTANT: this call site does NOT
+   have a try/catch... production incident 2024-09-12"), not by the
+   structural Kythe-shaped facts. Same failure mode as M10.3a's phQ3
+   finding on JavaScript. C++ stays in the **weak** zone until a
+   substantively different intervention (LLM-summarized prose layer,
+   Kythe Phase 2, or M29's style-constraint hypothesis) lands and
+   replicates. Detail: [`experiments/m28_clangd_indexer/FINDINGS.md`](../experiments/m28_clangd_indexer/FINDINGS.md).
+
 4. **Loom's value on Opus is rationale-storage, not compliance lift.**
    If your team only uses Opus, the hook does not measurably improve
    correctness because Opus already passes the contrarian benchmark at
@@ -255,6 +269,48 @@ The 60-second demo that shows the loop end-to-end is in
 [`docs/WORKED_EXAMPLE.md`](WORKED_EXAMPLE.md).
 
 ---
+
+## Token-efficiency frontier (C++ S1 case study)
+
+When evaluating an intervention, "did it improve pass rate" is half
+the question. The other half is "what did it cost in tokens." Both
+matter for production deployment economics. The token-efficiency
+rollup at
+[`experiments/_meta/token_efficiency_rollup.py`](../experiments/_meta/token_efficiency_rollup.py)
+walks every per-trial JSON under `experiments/bakeoff/runs-*/` and
+computes mean tokens, pass rate, and tokens-per-pass per (intervention,
+cell).
+
+Run on the C++ S1 lineage as of 2026-06-06 — same scenario, same
+benchmark, four sequential interventions:
+
+| intervention | rat pass rate | mean in-tok | mean out-tok | tokens / pass | verdict |
+|---|---|---|---|---|---|
+| phL — qwen3.5 baseline, no indexer | 50% (2/4) | 588 | 7,149 | **15,474** | weak — high out-tok overhead |
+| M10.1b — qwen2.5-coder:32b, no indexer | 0% (0/5) | 581 | 266 | — | refuted (executor capacity not the lever) |
+| **M10.2 — hand-curated stub** | **50%** (3/6) | **1,111** | **259** | **2,740** | confounded (prose, not facts, carried the lift) |
+| **M28 — ClangdIndexer LSP** | **0%** (0/10) | 1,176 | 273 | — | **falsified** (this report, structural facts alone don't replicate) |
+
+What this surfaces that a pass-rate table alone doesn't:
+
+* **The qwen3.5 baseline (phL) was paying ~6× more output tokens per
+  trial** than the qwen2.5-coder:32b interventions (~7,200 vs ~260).
+  Verbosity, not capability, was a hidden cost on the original
+  baseline.
+* **M10.2's "structural facts" lift was unmatched on efficiency** —
+  2,740 tokens/pass on rat is the best ratio across the four
+  interventions. M28's clangd added similar tokens but produced no
+  passes; the ratio is undefined and the cost is pure waste.
+* **The right question for M29 (style constraint) and any future
+  C++ work** is not "did pass rate go up" but "did pass rate go up
+  *relative to the marginal token cost*." Style constraints (~190
+  words) cost less than the M10.2 stub block (~1,800 chars). If
+  M29's rat cell hits even 20-30% at that cost, the tokens/pass
+  ratio would beat the M10.2 baseline.
+
+The rollup script is generic — it reads any new `experiments/bakeoff/runs-*/`
+output without code changes. Add a new intervention to the `SOURCES`
+list and it's surfaced automatically.
 
 ## How to read the underlying evidence
 

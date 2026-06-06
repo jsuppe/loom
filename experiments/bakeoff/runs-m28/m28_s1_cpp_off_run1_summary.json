@@ -1,0 +1,22 @@
+{
+  "phase": "M28_clangd_indexer",
+  "scenario": "S1",
+  "cell": "off",
+  "run_id": "1",
+  "passed": 0,
+  "total": 2,
+  "pass_rate": 0.0,
+  "compile_failed": false,
+  "cited_rationale": false,
+  "rationale_keyphrases_matched": [],
+  "rationale_len": 0,
+  "input_tokens": 768,
+  "output_tokens": 249,
+  "model": "qwen2.5-coder:32b",
+  "indexer": "clangd",
+  "semantic_context_chars": 1355,
+  "llm_elapsed_s": 23.1,
+  "wall_s": 24.9,
+  "workspace": "C:\\Users\\jonsu\\AppData\\Local\\Temp\\m28_s1_cpp_mm66y9xi",
+  "grade_stdout_tail": "FAIL: runtime_error_swallowed_returns_nullopt (exception propagated: connection failed: http://example.com)\nFAIL: runtime_error_does_not_propagate (runtime_error propagated: connection failed: http://example.com)\nSUMMARY: 0 passed, 2 failed\n"
+}
