@@ -28,9 +28,9 @@ from pathlib import Path
 
 import pytest
 
-# Import-time failure is intentional: until loom_exec produces the
-# scorer, this test cannot be collected and is reported as failed.
-from loom.services import score_specification  # noqa: E402
+# Per-test deferred imports for `score_specification` so the smoke tests
+# that don't need the scorer (file existence, CLI registration) can
+# collect + run even before loom_exec produces it.
 from loom.store import LoomStore, Requirement, Specification  # noqa: E402
 
 
@@ -86,6 +86,7 @@ def populated_store(tmp_path_factory, calibration):
 @pytest.fixture(scope="class")
 def scored(populated_store, calibration):
     """Run the scorer on each fixture once; reuse across all assertions."""
+    from loom.services import score_specification
     results = []
     for fx in calibration["specs"]:
         out = score_specification(populated_store, fx["spec_id"])
@@ -105,6 +106,7 @@ class TestSpecScoring:
 
     def test_shape_returns_expected_dict(self, populated_store, calibration):
         """AC1 — shape contract on a single representative spec."""
+        from loom.services import score_specification
         out = score_specification(populated_store, calibration["specs"][0]["spec_id"])
         assert isinstance(out, dict)
         assert isinstance(out["score"], int)
@@ -180,4 +182,198 @@ class TestSpecScoring:
         assert not above, (
             f"{len(above)} low specs scored >60: "
             f"{[(r['spec_id'], r['score'], r['source']) for r in above]}"
+        )
+
+
+# ====================================================================
+# Per-task smoke tests (M26 F6 workaround — REQ-75d6f16c)
+#
+# Each TestSmoke* class is the grading target for one of the 5 atomic
+# tasks in the decomp. Minimal deliverables per task so loom_exec
+# doesn't waste attempts on tasks that can't pass TestSpecScoring
+# until the full implementation lands.
+#
+#   Task 1 (prompt file)     → TestSmokePromptFile
+#   Task 2 (function sig)    → TestSmokeSignatureImportable
+#   Task 3 (core logic)      → TestSpecScoring  (the full grading above)
+#   Task 4 (CLI command)     → TestSmokeCliSpecScore
+#   Task 5 (in-band integ)   → TestSmokeInBandScoring
+# ====================================================================
+
+
+class TestSmokePromptFile:
+    """Task 1 — judge prompt file exists with required template vars."""
+
+    PROMPT_PATH = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "loom" / "prompts" / "spec_score.txt"
+    )
+
+    def test_prompt_file_exists(self):
+        assert self.PROMPT_PATH.exists(), (
+            f"Expected prompt at {self.PROMPT_PATH}"
+        )
+
+    def test_prompt_includes_template_variables(self):
+        prompt = self.PROMPT_PATH.read_text(encoding="utf-8")
+        for var in ("parent_req", "description", "criteria"):
+            assert ("{{" + var + "}}") in prompt or ("{" + var + "}") in prompt, (
+                f"prompt missing template variable: {var}"
+            )
+
+    def test_prompt_mentions_scoring_dimensions(self):
+        prompt = self.PROMPT_PATH.read_text(encoding="utf-8").lower()
+        for dim in (
+            "acceptance_criteria",
+            "falsifiability",
+            "parent_alignment",
+            "concreteness",
+        ):
+            assert dim in prompt, f"prompt missing dimension: {dim}"
+
+
+class TestSmokeSignatureImportable:
+    """Task 2 — services.score_specification importable + correct signature.
+    Implementation may be a stub at this stage."""
+
+    def test_importable(self):
+        from loom.services import score_specification  # noqa: F401
+
+    def test_is_callable(self):
+        from loom.services import score_specification
+        assert callable(score_specification)
+
+    def test_accepts_expected_args(self):
+        """Signature: score_specification(store, spec_id, judge_model=None)."""
+        import inspect
+        from loom.services import score_specification
+        sig = inspect.signature(score_specification)
+        params = list(sig.parameters)
+        assert params[:2] == ["store", "spec_id"], (
+            f"expected (store, spec_id, ...), got {params}"
+        )
+        assert "judge_model" in sig.parameters, "missing judge_model kwarg"
+
+
+class TestSmokeCliSpecScore:
+    """Task 4 — `loom spec-score <SPEC-id>` CLI subcommand registered."""
+
+    def test_subcommand_registered(self):
+        import subprocess
+        import sys
+        result = subprocess.run(
+            [sys.executable, "scripts/loom", "spec-score", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        assert result.returncode == 0, (
+            f"`loom spec-score --help` failed: {result.stderr}"
+        )
+        assert "spec" in result.stdout.lower(), (
+            f"--help output doesn't mention spec: {result.stdout[:200]}"
+        )
+
+    def test_subcommand_supports_json(self):
+        import subprocess
+        import sys
+        result = subprocess.run(
+            [sys.executable, "scripts/loom", "spec-score", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        assert "--json" in result.stdout, (
+            f"--json flag not in --help: {result.stdout[:300]}"
+        )
+
+
+class TestSmokeInBandScoring:
+    """Task 5 — `loom spec` create scores in-band when
+    LOOM_SPEC_SCORE_ON_CREATE=1. Stubs services.score_specification so the
+    test exercises only the integration glue, not the LLM judge."""
+
+    def test_score_function_called_during_create(
+        self, tmp_path_factory, monkeypatch
+    ):
+        from loom import services
+        from loom.store import LoomStore, Requirement
+
+        tmpdir = tmp_path_factory.mktemp("inband_store")
+        store = LoomStore(project="m26-inband", data_dir=tmpdir)
+        store.add_requirement(Requirement(
+            id="REQ-parent-inband",
+            domain="behavior",
+            value="Parent requirement for in-band scoring smoke.",
+            source_msg_id="test",
+            source_session="test",
+            timestamp="2026-01-01T00:00:00",
+        ))
+
+        calls: list[str] = []
+
+        def fake_score(store_, spec_id, **kw):
+            calls.append(spec_id)
+            return {
+                "score": 30,
+                "by_dim": {
+                    "acceptance_criteria": 5,
+                    "falsifiability": 5,
+                    "parent_alignment": 10,
+                    "concreteness": 10,
+                },
+                "judge_model": "stub",
+                "latency_ms": 10,
+                "reasoning": "stub",
+            }
+
+        monkeypatch.setattr(services, "score_specification", fake_score)
+        monkeypatch.setenv("LOOM_SPEC_SCORE_ON_CREATE", "1")
+
+        services.spec_add(
+            store,
+            parent_req="REQ-parent-inband",
+            description="A vague spec with no acceptance criteria.",
+            criteria=[],
+        )
+
+        assert len(calls) == 1, (
+            f"expected score_specification called once, got {len(calls)}"
+        )
+
+    def test_no_score_call_when_flag_unset(
+        self, tmp_path_factory, monkeypatch
+    ):
+        from loom import services
+        from loom.store import LoomStore, Requirement
+
+        tmpdir = tmp_path_factory.mktemp("inband_store_off")
+        store = LoomStore(project="m26-inband-off", data_dir=tmpdir)
+        store.add_requirement(Requirement(
+            id="REQ-parent-inband-off",
+            domain="behavior",
+            value="Parent requirement for in-band scoring smoke (off).",
+            source_msg_id="test",
+            source_session="test",
+            timestamp="2026-01-01T00:00:00",
+        ))
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            services, "score_specification",
+            lambda *a, **kw: (calls.append(a), {"score": 0})[1],
+        )
+        monkeypatch.delenv("LOOM_SPEC_SCORE_ON_CREATE", raising=False)
+
+        services.spec_add(
+            store,
+            parent_req="REQ-parent-inband-off",
+            description="A spec without in-band scoring.",
+            criteria=["criterion 1"],
+        )
+
+        assert calls == [], (
+            f"score_specification called when flag unset: {calls}"
         )
