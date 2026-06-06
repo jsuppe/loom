@@ -1,11 +1,16 @@
 # M29 — Style Constraint for C++: Pre-registration
 
-**Drafted:** 2026-06-06 (while M28.4 runs)
-**Status:** **DRAFT — locks after M28.4 verdict lands**
+**Drafted:** 2026-06-06 (while M28.4 ran)
+**LOCKED:** 2026-06-06 — after M28.4's verdict landed
 **Methodology pattern:** REQ-3896db58
-**Builds on:** M10.2 (stub indexer baseline), M28 (ClangdIndexer Phase 1
-running concurrently), M22c finding REQ-7e2d6518 (model file-path
-hallucination from training-data priors)
+**Builds on:** M10.2 stub indexer baseline (`FINDINGS-bakeoff-v2-cpp-stub-indexer.md`),
+M28 ClangdIndexer falsification (REQ-2007b144 + `experiments/m28_clangd_indexer/FINDINGS.md`),
+M22c finding REQ-7e2d6518 (training-data priors)
+
+**M28's measured rat cell baseline:** 0/10 = 0% (Wilson 95% CI 0-28%).
+M28 H1 was REFUTED. Phase B (combined style + semantic) is therefore
+**DROPPED** per the conditional clause in this pre-reg. M29 reduces
+to Phase A only.
 
 > **Hypothesis under test (single sentence):**
 > Explicitly constraining C++ style (language version, memory model,
@@ -50,8 +55,8 @@ they could compound or be orthogonal.
 **H1 (primary):** Style constraint alone lifts the rat cell by ≥ 20pp
 versus M28's no-style-constraint baseline.
 
-Concretely: let `M28_rat` be the rat-cell pass rate from M28.4. M29
-predicts `M29_rat_style_only ≥ M28_rat + 20pp`.
+`M28_rat = 0/10 = 0%`. **M29 H1 prediction (locked):**
+`M29_rat_style_only ≥ 20%` (≥ 2/10 passes).
 
 * **Confirms** if `M29_rat_style_only - M28_rat ≥ 20pp` with the
   pre-registered Wilson 95% lower CI on the difference
@@ -63,12 +68,25 @@ predicts `M29_rat_style_only ≥ M28_rat + 20pp`.
   before deciding.
 
 **H2 (secondary, conditional on M28 H1 confirming):** Style + semantic
-combined ≥ max(style alone, semantic alone) + 10pp. Tests for additive
-or multiplicative interaction. Skipped if M28's H1 is refuted (no
-semantic baseline to combine with).
+combined ≥ max(style alone, semantic alone) + 10pp. **DROPPED** —
+M28 H1 was refuted, so there is no semantic baseline to combine with.
+Phase B will not be run under this pre-reg.
 
 **H3 (tertiary, STOP gate):** The style-constraint block does NOT leak
 rule-equivalent content. Off cell pass rate ≤ 20%.
+
+**Expected direction (NOT a hypothesis — predictor's prior, locked
+before run):** I expect H1 to **refute** on this specific scenario.
+Reasoning: the contrarian rule's text already pins the C++17 idiom
+("Return std::nullopt when all attempts fail"), so adding a style
+block that says "Use std::optional" is redundant with what the rule
+already says. Style constraint is predicted to be more useful on
+scenarios that *under*-specify idiom — scenarios where the rule is
+behavioral ("must validate input") but doesn't constrain HOW. This
+prediction is documented to prevent post-hoc storytelling either way:
+if H1 confirms, it confirms despite the prior; if H1 refutes, the
+finding is "style constraint helps in *some* scenarios, this isn't
+one of them" rather than "style constraint doesn't help in general."
 
 This is the analog of M10.3a's phQ3 STOP gate. The risk is concrete:
 the style-constraint block mentions `std::optional` as the preferred
