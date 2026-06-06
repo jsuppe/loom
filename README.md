@@ -101,7 +101,7 @@ study (Headline Finding 4 below):
 
 | measure | value |
 |---|---|
-| Total trials | **~830** across the bake-off series |
+| Total trials | **~1,050+** across the bake-off series |
 | Languages tested | **9** (Python, Java, JS, TS, Go, C, C++, Rust, Asm) |
 | Cross-language S1 cells | **9 langs × 4 cells × N=5** = 180 trials in the cross-language smoke alone |
 | Storage backend | SQLite (single `loom.db` per project, brute-force cosine NN) |
@@ -271,7 +271,9 @@ Detail: [`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-
 ## Features
 
 - **Requirement extraction** — Parse decisions from natural language into structured requirements with rationale and domain.
-- **Specification layer** — Detailed HOW for each requirement; the anchor for tasks and implementations.
+- **Specification layer (required intermediate)** — Detailed HOW for each requirement; the anchor for tasks and implementations. As of **M25 (REQ-7df25683)**, requirements MUST link to implementations through a `Specification`; direct `Requirement → Implementation` links are rejected by `loom link` with a citation to the rule. `loom doctor` warns on any legacy direct links left over from pre-M25 stores.
+- **Local web UI (M23)** — `loom ui -p <project>` starts a read-only FastAPI server on `localhost:8090` with HTML views for reqs / findings / specs / files plus semantic search and `/api/*` JSON mirrors. Opt-in via `pip install loom-cli[ui]`. Server-rendered, no JS build step, single-project per server start.
+- **Team-shareable text snapshot (M24)** — `loom export` writes `.loom/*.jsonl` (one file per kind, sorted by id, canonical field order, LF newlines) into the repo; `loom import` materializes it into another developer's local store, auto-rebuilding embeddings via the configured provider. The SQLite store stays per-developer in `$HOME`; `.loom/` is the canonical text that travels with the repo. Embeddings, audit logs, and `Implementation.content` excluded by design. Round-trip is byte-deterministic (modulo manifest timestamp). Format locked in [`docs/specs/M24_LOOM_EXPORT_FORMAT.md`](docs/specs/M24_LOOM_EXPORT_FORMAT.md).
 - **Pattern entity** — Shared design standards applied across multiple requirements.
 - **Task entity** — Atomic, dependency-ordered work items with lifecycle (pending → claimed → complete | rejected | escalated) and atomicity budget (≤2 files, ≤80 LoC by default).
 - **Semantic search** — Find requirements by meaning via Ollama embeddings (`nomic-embed-text`, 768-dim).
@@ -295,7 +297,7 @@ Detail: [`FINDINGS-bakeoff-m22a-pilot.md`](experiments/bakeoff/FINDINGS-bakeoff-
 - **Supersession workflow closure (M20.1)** — `loom unlink <file>` removes implementation rows; `loom supersede` enumerates affected impls and suggests cleanup commands. Closes the drift-signal-without-affordance gap.
 - **Idempotent doc sync (Fix A)** — `loom sync` skips writing files when only the auto-generated timestamp differs. Keeps `git status` clean after no-op regenerations.
 - **Rationale tracking** — `Requirement.rationale` (free text) plus `rationale_links` (M11.1) form a DAG of "why" pointers. `loom chain` traverses both directions (M12.4); `loom audit-rationale` previews the impact of `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` before flipping it (M11.4). `loom needs-rationale` lists captures missing both prose and links.
-- **Semantic indexers** — Pluggable `SemanticIndexer` registry (M10) injects a structured **Semantic context** block into `loom_exec` prompts and powers a structural-drift channel in `loom check`. Shipped: an LSP-backed `JsIndexer` (TypeScript / JavaScript via `typescript-language-server`) plus stub indexers for C/C++/JS. `loom indexer-doctor` health-checks the pipeline.
+- **Semantic indexers** — Pluggable `SemanticIndexer` registry (M10) injects a structured **Semantic context** block into `loom_exec` prompts and powers a structural-drift channel in `loom check`. Shipped: an LSP-backed `JsIndexer` (TypeScript / JavaScript via `typescript-language-server`), an LSP-backed `PyIndexer` (Python via `python-lsp-server` invoked through `[sys.executable, "-m", "pylsp"]`, M16.3), plus stub indexers for C/C++/JS. `loom indexer-doctor` health-checks the pipeline.
 - **Driftgraph integration (warrants + foundation drift)** — Outbound: every captured finding / methodology / process rule can be pushed as a Toulmin@v1 (M13.L2) or Falsifiability@v1 (M13.L3d) warrant with claim-id tracking, retract / supersede cascade. Inbound: a three-tier channel (cache → HTTP → Cypher fallback, M13.5a-e) surfaces upstream claim invalidations as a `GRAPH-DRIFT` flag in `loom context`, with a scope-qualified warning prompt that lifts F1 to **0.965** at 100 % recall on the locked m13_v1 evaluation set (M13.7d).
 - **Drift-warning evaluation harness** — `experiments/bakeoff/v3_driver/` ships a four-tool lifecycle (`m13_eval_curate.py` / `_lock.py` / `_runner.py` / `_compare.py`) plus the locked m13_v1 set (170 stratified scenarios across 21 cells). `m13_run_counterfactual.py` runs prompt-variant ablations against pinned baselines (M13.7e).
 - **MCP server** — Phase A (read) and Phase B (write) tools shipped; wraps `LoomStore` as typed MCP tools for Claude Code and other clients. See [`mcp_server/README.md`](mcp_server/README.md).
@@ -386,6 +388,15 @@ loom health-score  # single 0-100 score for CI gates
 # Hygiene
 loom stale --older-than 90 --json   # cold + unlinked requirements
 loom archive REQ-xxx                # excluded from list/query (recoverable)
+
+# Browse via web UI (opt-in: pip install loom-cli[ui])
+loom ui          # serves http://localhost:8090 — reqs / findings / specs / files + search
+
+# Share with the team
+loom export                          # write .loom/*.jsonl into the repo
+git add .loom && git commit -m "loom: snapshot"
+# ...teammate pulls, then:
+loom import                          # materialize into their local store + rebuild embeddings
 ```
 
 ## End-to-end pipeline
@@ -461,6 +472,9 @@ Read-only commands support `--json` / `-j`. Exit codes: **0** success, **1** err
 | **`intake-stats`**       | Aggregate intake-hook activity from `.intake-log.jsonl` (M11.5)      | yes      |
 | **`audit-rationale`**    | Preview impact of `LOOM_REQUIRE_RATIONALE_FOR_COMPLETE=1` (M11.4)    | yes      |
 | **`indexer-doctor`**     | Health-check the semantic-indexer pipeline (M10.5)                   | yes      |
+| **`ui`**                 | Start the local web UI on localhost:8090 (M23). Opt-in extra: `pip install loom-cli[ui]` | — |
+| **`export`**             | Write `.loom/*.jsonl` team-shareable snapshot into the repo (M24). Excludes embeddings + audit logs by design | yes |
+| **`import`**             | Materialize `.loom/*.jsonl` into the local store (M24). Default errors on conflict; `--force` / `--merge` opt in. Auto-rebuilds embeddings | yes |
 | `check <file>`           | Multi-channel drift detection: content / structural / superseded (M10.4) | yes  |
 | `context <file>`         | Pre-edit briefing: linked reqs, specs, drift, GRAPH-DRIFT (used by the hook) | yes |
 | `link <file>`            | Link code to reqs (`--req`), specs (`--spec`), or symbol (`--symbol --language`); `--lines` for ranges (M16)  | —        |
@@ -614,14 +628,15 @@ actionable advice.
 ## Source of truth
 
 ```
-Loom Store (SQLite at ~/.openclaw/loom/<project>/loom.db)
-    ↓ loom sync
-REQUIREMENTS.md + TEST_SPEC.md  (generated — do NOT edit by hand)
-    ↓ git push
-Repo (for sharing)
+Loom Store (SQLite at ~/.openclaw/loom/<project>/loom.db)     ← per-developer authoritative
+    ↓ loom sync                          ↓ loom export
+REQUIREMENTS.md + TEST_SPEC.md         <repo>/.loom/*.jsonl    ← team-shareable canonical text
++ FINDINGS.md + …                            ↓ git push / git pull
+(generated — do NOT edit by hand)            ↓ loom import
+                                       Another developer's local store
 ```
 
-To modify requirements: `loom extract` / `loom refine` / `loom supersede` — never edit generated files.
+To modify requirements: `loom extract` / `loom refine` / `loom supersede` — never edit generated files. To share with the team: `loom export` then commit `.loom/` to the repo. The next developer runs `loom import` to materialize it into their own SQLite store; their own local edits go back through `loom export` → commit → PR.
 
 ## Privacy
 
@@ -637,15 +652,28 @@ Generate public docs: `loom sync --public`.
 
 ## Data storage
 
+Two locations: a per-developer SQLite store in `$HOME`, and a team-shareable text snapshot in the repo.
+
 ```
-~/.openclaw/loom/<project>/
+~/.openclaw/loom/<project>/        # per-developer, source of truth
 ├── loom.db                  # SQLite — 6 entity tables + _loom_meta
 ├── .loom-specs.json         # Test specifications
 ├── .loom-events.jsonl       # User-meaningful event log (M5: feeds `loom metrics` + `loom health-score`)
 ├── .hook-log.jsonl          # PreToolUse hook activity log (feeds `loom cost`)
+├── .intake-log.jsonl        # UserPromptSubmit intake-hook activity log (feeds `loom intake-stats`)
 ├── .exec-log.jsonl          # loom_exec run log
 └── PRIVATE.md               # Private requirement IDs
+
+<repo-root>/.loom/                  # team-shareable, committed to the repo (M24)
+├── manifest.json            # schema version + git_head + entity counts
+├── requirements.jsonl       # one entity per line, sorted by id, canonical field order, LF newlines
+├── specifications.jsonl
+├── patterns.jsonl
+├── implementations.jsonl
+└── test_specs.jsonl
 ```
+
+`loom export` writes the `.loom/` snapshot; `loom import` materializes it into another developer's `~/.openclaw/...` store and rebuilds embeddings. Embeddings, audit logs (`*.jsonl`), `Implementation.content`, and `last_referenced` are intentionally excluded from the snapshot — they're either regenerable, per-developer telemetry, or recoverable from disk.
 
 ## Requirement format
 
