@@ -1,20 +1,32 @@
 #!/usr/bin/env python3
 """
-Loom MCP server — skeleton for Milestone 4.2.
+Loom MCP server (Milestone 4.2 — Phase A + Phase B shipped).
 
 Exposes LoomStore as typed MCP tools so Claude Code can call Loom without
-shelling out to `scripts/loom`. Phase A ships read-only tools only.
+shelling out to `scripts/loom`.
 
-Prerequisites (not wired yet):
+Tools currently implemented:
+
+  Phase A (read-only):
+    loom_query, loom_list, loom_status, loom_trace, loom_chain,
+    loom_coverage, loom_doctor
+
+  Phase B (write):
+    loom_extract, loom_context, loom_check, loom_link, loom_conflicts,
+    loom_sync, loom_supersede, loom_set_status, loom_refine,
+    loom_spec_add, loom_spec_list, loom_spec_link
+    (+ pattern / test entity CRUD)
+
+See `mcp_server/README.md` for the per-tool I/O schema and the
+roadmap entry M4.2 for the design rationale.
+
+Prerequisites:
     pip install mcp
 
 Run standalone:
     python3 mcp_server/server.py
 
-Register in Claude Code via .mcp.json (see repo root).
-
-Status: SKELETON — tools are declared but handlers are TODO. The intent
-is to show structure and let a follow-up PR fill in the bodies.
+Register in Claude Code via `.mcp.json` (sample shipped in repo root).
 """
 from __future__ import annotations
 
