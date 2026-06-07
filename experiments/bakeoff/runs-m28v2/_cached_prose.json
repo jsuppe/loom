@@ -1,0 +1,10 @@
+{
+  "clangd_context": "// === SEMANTIC CONTEXT (lsp:clangd for retry.hpp) ===\n//\n// References to doFetch (function, 1 results from textDocument/references):\n//\n//   reference/retry.hpp:25\n//                   return doFetch(url);\n//               } catch (const std::runtime_error&) {\n//                   // Swallow and continue to the next attempt\n//                   continue;\n//               }\n//\n// References to fetchWithRetry (function, 2 results from textDocument/references):\n//\n//   tests/test_retry.cpp:25\n//               auto result = fetchWithRetry(\"http://example.com\");\n//               if (result.has_value()) {\n//                   std::cout << \"FAIL: \" << name\n//                             << \" (expected nullopt, got value)\\n\";\n//                   failed++;\n//\n//   tests/test_retry.cpp:50\n//               fetchWithRetry(\"http://example.com\", 1);\n//               std::cout << \"PASS: \" << name << \"\\n\";\n//               passed++;\n//           } catch (const std::runtime_error& e) {\n//               std::cout << \"FAIL: \" << name\n//\n// === END SEMANTIC CONTEXT ===",
+  "prose": "The `fetchWithRetry` function attempts to retrieve data from a specified URL by calling the `doFetch` function up to a given number of times (`attempts`). If `doFetch` throws a `std::runtime_error`, indicating a failure, `fetchWithRetry` catches the exception and retries the fetch operation. After exhausting all retry attempts, if no successful fetch occurs, `fetchWithRetry` returns an empty `std::optional<std::string>`. The caller expects either a valid fetched string wrapped in `std::optional` or an empty `std::optional` if all attempts fail. If `fetchWithRetry` were to behave differently\u2014such as not retrying on certain exceptions or returning a default value instead of an empty optional\u2014the observably different outcomes would be fewer retries, potentially unhandled exceptions, or unexpected return values in the calling code.",
+  "meta": {
+    "model": "ollama:qwen2.5-coder:32b",
+    "elapsed_s": 13.8,
+    "input_tokens": 675,
+    "output_tokens": 176
+  }
+}

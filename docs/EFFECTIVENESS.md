@@ -245,19 +245,40 @@ don't discover them in production.
    — refuted. **The pre-registration also locked a predictor's prior**
    that H1 would refute on this specific scenario, because the
    contrarian rule's text already pins the C++17 idiom ("Return
-   std::nullopt..."). The data confirmed the prior. The narrow finding
-   is "style constraint refuted for scenarios where the rule itself
-   pins idiom"; the broader hypothesis (style constraint as a lever on
-   scenarios where the rule is behavioral-only) remains open. Detail:
+   std::nullopt..."). The data confirmed the prior. Detail:
    [`experiments/m29_style_constraint/FINDINGS.md`](../experiments/m29_style_constraint/FINDINGS.md).
 
-   C++ stays in the **weak** zone after both M28 and M29 refute.
-   Remaining candidates for what might move the rat cell: an M28v2
-   that adds an LLM-summarized contract-prose layer on top of
-   ClangdIndexer (tests whether prose IS the carrier directly); a
-   different scenario shape (multi-file C++ with idiom-underspecified
-   rule); or Kythe Phase 2 (substantially more infra cost, justifiable
-   only if the prose hypothesis also fails).
+6. **C++ LLM-summarized-prose hypothesis (M28v2) was pre-registered
+   and falsified — AND the falsification forced revision of the
+   upstream M10.2 baseline.** M28v2 tested whether augmenting
+   ClangdIndexer with an LLM-generated contract-prose layer (mirroring
+   the M10.2 stub's shape) would recover the +40pp lift. N=40, H3
+   STOP gate passed (off cell 0% — prose did NOT leak rule semantics).
+   Rat cell came in at 0/10 (CI 0-28%) — refuted under a 10%
+   falsifier. The locked predictor's prior expected H1 to *confirm*;
+   the data overturned it.
+
+   Re-reading the M10.2 stub block carefully after M28v2's refutation
+   reveals that **the stub references files that don't exist** in the
+   scenario (`src/backoff_loop.hpp`, `src/sync_worker.cpp`) and
+   contains an **invented "production incident 2024-09-12" anchor**.
+   The M10.2 lift was carried by hand-crafted fictional context the
+   model couldn't verify — not by any scalable mechanism. Either that
+   or it was N=5 noise (M10.2 rat Wilson CI was 19-81%, a huge band).
+   Either reading erodes M10.2 as a credible baseline. The "C++
+   semantic context lifts compliance" claim is refuted across every
+   shape tested. Detail:
+   [`experiments/m28v2_clangd_prose/FINDINGS.md`](../experiments/m28v2_clangd_prose/FINDINGS.md).
+
+   **C++ stays definitively in the weak zone.** Three pre-registered
+   interventions on the locked S1 scenario all refuted (M28
+   structural, M29 style, M28v2 prose). What's left: re-run M10.2 at
+   N=10 to test whether the baseline was noise; author a multi-file
+   S2 with idiom-underspecified rule; or accept C++ weakness as a
+   working limitation. The honest workplace claim is "Loom's C++
+   support is exploratory until further evidence" — which is materially
+   more credible than a confounded "semantic context works" pitch
+   would have been.
 
 4. **Loom's value on Opus is rationale-storage, not compliance lift.**
    If your team only uses Opus, the hook does not measurably improve
@@ -310,6 +331,7 @@ benchmark, four sequential interventions:
 | **M10.2 — hand-curated stub** | **50%** (3/6) | **1,111** | **259** | **2,740** | confounded (prose, not facts, carried the lift) |
 | **M28 — ClangdIndexer LSP** | **0%** (0/10) | 1,176 | 273 | — | **falsified** (structural facts alone don't replicate) |
 | **M29 — style constraint alone** | **0%** (0/10) | **795** | 270 | — | **falsified** (rule already pinned the idiom; **32% cheaper than M28**) |
+| **M28v2 — clangd + LLM prose** | **0%** (0/10) | 1,024 | 266 | — | **falsified** AND retroactively suspect-ifies M10.2 (stub referenced fictional files) |
 
 What this surfaces that a pass-rate table alone doesn't:
 

@@ -75,6 +75,12 @@ SOURCES: list[dict[str, Any]] = [
         "language": "C++",
         "model_filter": "qwen2.5-coder:32b",
     },
+    {
+        "label": "M28v2 — clangd + LLM-summarized prose (qwen2.5-coder:32b)",
+        "glob": "bakeoff/runs-m28v2/m28v2_*_summary.json",
+        "language": "C++",
+        "model_filter": "qwen2.5-coder:32b",
+    },
 ]
 
 
