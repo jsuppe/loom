@@ -254,31 +254,42 @@ don't discover them in production.
    ClangdIndexer with an LLM-generated contract-prose layer (mirroring
    the M10.2 stub's shape) would recover the +40pp lift. N=40, H3
    STOP gate passed (off cell 0% — prose did NOT leak rule semantics).
-   Rat cell came in at 0/10 (CI 0-28%) — refuted under a 10%
-   falsifier. The locked predictor's prior expected H1 to *confirm*;
-   the data overturned it.
-
-   Re-reading the M10.2 stub block carefully after M28v2's refutation
-   reveals that **the stub references files that don't exist** in the
-   scenario (`src/backoff_loop.hpp`, `src/sync_worker.cpp`) and
-   contains an **invented "production incident 2024-09-12" anchor**.
-   The M10.2 lift was carried by hand-crafted fictional context the
-   model couldn't verify — not by any scalable mechanism. Either that
-   or it was N=5 noise (M10.2 rat Wilson CI was 19-81%, a huge band).
-   Either reading erodes M10.2 as a credible baseline. The "C++
-   semantic context lifts compliance" claim is refuted across every
-   shape tested. Detail:
+   Rat cell came in at 0/10 (CI 0-28%) — refuted. Detail:
    [`experiments/m28v2_clangd_prose/FINDINGS.md`](../experiments/m28v2_clangd_prose/FINDINGS.md).
 
-   **C++ stays definitively in the weak zone.** Three pre-registered
-   interventions on the locked S1 scenario all refuted (M28
-   structural, M29 style, M28v2 prose). What's left: re-run M10.2 at
-   N=10 to test whether the baseline was noise; author a multi-file
-   S2 with idiom-underspecified rule; or accept C++ weakness as a
-   working limitation. The honest workplace claim is "Loom's C++
-   support is exploratory until further evidence" — which is materially
-   more credible than a confounded "semantic context works" pitch
-   would have been.
+7. **M10.2 baseline replication at N=10 CONFIRMED the original
+   effect — and exposed an LLM-susceptibility-to-fabrication finding.**
+   After three pre-registered C++ S1 refutations (M28, M29, M28v2),
+   the question became: was the M10.2 stub's 50% rat cell at N=5 real
+   signal or Type I error? At N=10: **40% (4/10, Wilson 95% CI
+   17-69%) — H1 confirmed.** All three sanity checks passed. The
+   locked predictor's prior expected refutation (60% prior); the
+   data overturned it.
+
+   **The mechanism is troubling.** The M10.2 stub's content that
+   carries the lift consists of *unverifiable hand-crafted fictional
+   context* — call sites at file paths that don't exist
+   (`src/backoff_loop.hpp:42`, `src/sync_worker.cpp:118`), an
+   invented production-incident timestamp, prose narration about
+   how these nonexistent callers would be affected. M28 (real LSP
+   refs), M29 (style constraints), and M28v2 (LLM prose constrained
+   to real files) all produced 0% on the same scenario.
+
+   **The interpretation:** qwen2.5-coder:32b treats plausibly-shaped
+   but unverifiable context as authoritative weight on the contrarian
+   rule. This isn't a Loom-deployable feature — it's a finding about
+   how this class of executor weighs plausibility vs verifiability.
+   For the C++ language fitness map, the honest claim is now
+   "Loom has not demonstrated a scalable C++ S1 mechanism; the one
+   intervention that lifts compliance requires hand-crafted
+   unverifiable context not safe for real-world deployment."
+   C++ stays in the **weak** zone definitively.
+
+   The methodology pattern (REQ-3896db58) is now 9/9 across the M22-M28v2-M10.2
+   arc, including this case — the highest-information outcome where
+   the locked predictor's prior was wrong AND the result was
+   confirmation. Detail:
+   [`experiments/m10p2_replication/FINDINGS.md`](../experiments/m10p2_replication/FINDINGS.md).
 
 4. **Loom's value on Opus is rationale-storage, not compliance lift.**
    If your team only uses Opus, the hook does not measurably improve
@@ -332,6 +343,7 @@ benchmark, four sequential interventions:
 | **M28 — ClangdIndexer LSP** | **0%** (0/10) | 1,176 | 273 | — | **falsified** (structural facts alone don't replicate) |
 | **M29 — style constraint alone** | **0%** (0/10) | **795** | 270 | — | **falsified** (rule already pinned the idiom; **32% cheaper than M28**) |
 | **M28v2 — clangd + LLM prose** | **0%** (0/10) | 1,024 | 266 | — | **falsified** AND retroactively suspect-ifies M10.2 (stub referenced fictional files) |
+| **M10.2 REPL — same stub, N=10** | **40%** (4/10) | 1,111 | 263 | **3,435** | **CONFIRMED** (predictor's prior was wrong; mechanism = LLM responds to unverifiable plausible context) |
 
 What this surfaces that a pass-rate table alone doesn't:
 

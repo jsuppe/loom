@@ -58,8 +58,14 @@ SOURCES: list[dict[str, Any]] = [
         "model_filter": "qwen2.5-coder:32b",
     },
     {
-        "label": "M10.2 — hand-curated stub (qwen2.5-coder:32b)",
+        "label": "M10.2 — hand-curated stub (qwen2.5-coder:32b, N=5 original)",
         "glob": "bakeoff/runs-v2/phL2_*_summary.json",
+        "language": "C++",
+        "model_filter": "qwen2.5-coder:32b",
+    },
+    {
+        "label": "M10.2 — REPLICATION at N=10 (qwen2.5-coder:32b)",
+        "glob": "bakeoff/runs-m10p2-n10/m10p2_n10_*_summary.json",
         "language": "C++",
         "model_filter": "qwen2.5-coder:32b",
     },
