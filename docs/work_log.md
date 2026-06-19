@@ -29,6 +29,99 @@ breaks, since that's an important continuity marker.
 
 ---
 
+## 2026-05-28 → 2026-06-18 — Catch-up: M19v3 through M32 (multi-session arc)
+
+*Consolidated back-fill. The work log stalled at 2026-05-26 while ~7
+working sessions of substantive work shipped. This single entry covers
+the arc; per-experiment detail lives in the `FINDINGS.md` files and the
+ROADMAP M14–M32 back-fill (commit `6ef4cbb`). Several assistant context
+resets happened across this span (compactions + a model switch from
+Fable 5 to Opus 4.8 on 2026-06-13).*
+
+### What we did
+
+- **Workplace-readiness pass.** README caught up to M23/M24/M25 + PyIndexer;
+  authored `docs/EFFECTIVENESS.md` — the decision-maker-facing synthesis
+  (5 validated benefits, honest-null section, token-efficiency frontier,
+  week-1 deployment plan). This was the pivot when the user said the M26
+  FINDINGS doc was "captured mistakes," not a value story.
+- **M26 — Loom-builds-Loom pilot.** Used `loom decompose` + `loom_exec`
+  to build the spec-quality scorer on loom-self. Halted at dry-run;
+  surfaced 10 pipeline gaps (F1–F10). Shipped F1/F5/F8 fixes to
+  production; T1 (prompt-file task) succeeded end-to-end on qwen3.5 —
+  first real "Loom built Loom" artifact.
+- **M28 C++ arc (the big one).** Four pre-registered experiments to find
+  a scalable C++ contrarian-compliance lever: ClangdIndexer (shipped as
+  real code, `src/loom/indexers_cpp.py`, 22 tests), style constraint,
+  LLM-summarized prose — **all three REFUTED at N=10**. Then replicated
+  the original M10.2 stub at N=10 → **CONFIRMED (40%)**. Installed
+  clang/clangd 22.1.7 via scoop to run these.
+- **M30** token-efficiency rollup + **M31** Verified Contract Card pattern
+  (REQ-8c890e85 / PAT-c1e17beb) + **M32** validation experiment authored
+  (review-gated, uncommitted).
+- **Cross-team support.** Fixed a stale "SKELETON" docstring in
+  `mcp_server/server.py` that had misled a Sparkeye agent into thinking
+  MCP wasn't shipped (it is — Phase A + B). Then back-filled ROADMAP
+  M14–M32 (same class of staleness bug, one level up) + this work-log entry.
+
+### What we decided
+
+- **The M10.2 mechanism is not deployable.** Three verifiable
+  interventions (real LSP facts, style hints, real-file LLM prose) all
+  produced 0% on C++ S1; the only thing that lifts compliance is the
+  *unverifiable* fictional context from the original stub. Conclusion:
+  qwen2.5-coder:32b treats plausibly-shaped unverifiable context as
+  authoritative — a finding about LLM plausibility-vs-verifiability
+  weighting, NOT a Loom feature. C++ stays honestly "weak."
+- **Methodology pattern earned its keep 9/9.** Twice the locked
+  predictor's prior was wrong (M28v2 expected confirm → refuted; M10.2
+  expected refute → confirmed). Logging priors before the run is what
+  made those the most informative results, not retconned ones.
+- **Design-first, validate-after** for the Verified Contract Card
+  (user's explicit sequencing): ship the pattern doc + Pattern row, then
+  run M32 to test whether a *verified* card recovers the M10.2 lift.
+- **Honest-engineering pitch beats a clean-win pitch.** The workplace
+  narrative is stronger as "we tested 4 mechanisms, 3 refuted, the 4th
+  works via fabrication so we won't ship it" than any single confirm.
+
+### What's still open
+
+- **M32 review gate** (highest-priority decision): user sign-off needed
+  on H3 threshold (20% vs 10%), scenario shape, card wording. Scenario
+  extension + locked card sit uncommitted in the working tree awaiting a
+  single LOCK commit.
+- **M19v3.4/.5** (tasks #87/#88) — oldest dangling thread; hand-
+  classification + findings doc. ~1–2h mechanical closure.
+- **M26 v2 gap backlog** (F2/F3/F4/F7/F9/F10) — decomposer repo-layout
+  grounding, pre-reg file protection, re-export-chain awareness.
+- **Stray files** — `session.ps1` + `experiments/pilot/m13_response_to_driftgraph_2026-05-07.md`
+  uncommitted/untriaged (pre-existing, not from this arc).
+
+### Pointers
+
+- **Commits:** `6ef4cbb` (roadmap back-fill), `3044eae` (MCP docstring),
+  `80a3e2a` (M31), `0454a9d` (M32.0 draft), `fdefa82` (M10.2-N10 CONFIRMED),
+  `03a5c7d` (M28v2 REFUTED), `37e1c32` (M29 REFUTED) + the M28/M30/M26
+  chain between `c025263` and the M26 commits. Full arc:
+  `git log --oneline` from the M26 commits to `6ef4cbb`.
+- **Findings docs:** `experiments/m26_spec_scorer/FINDINGS.md`,
+  `experiments/m28_clangd_indexer/FINDINGS.md`,
+  `experiments/m29_style_constraint/FINDINGS.md`,
+  `experiments/m28v2_clangd_prose/FINDINGS.md`,
+  `experiments/m10p2_replication/FINDINGS.md`. Synthesis:
+  `docs/EFFECTIVENESS.md`.
+- **Captured findings (this arc):** REQ-2007b144 (M28), REQ-e349a0ad
+  (M29), REQ-b096c333 (M28v2), REQ-c38ea918 (M10.2-N10 + the
+  plausibility-vs-verifiability mechanism), REQ-cc95b9a1…REQ-75d6f16c
+  (F1–F7 M26 gaps), REQ-13c1d348/REQ-0ce376ef/REQ-5ffe1299 (F8–F10),
+  REQ-70898c0e (intake numbered-answer false-positive gap),
+  REQ-ec63fa50 (temperature pre-reg drift). Adopted: REQ-8c890e85 +
+  PAT-c1e17beb (Verified Contract Card).
+- **Model note:** Fable 5 became unavailable 2026-06-13; switched to
+  Opus 4.8 (1M context) mid-arc.
+
+---
+
 ## 2026-05-26 — M16.3 PyIndexer shipped + M19v2 enriched drift-eval
 
 ### What we did
