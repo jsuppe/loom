@@ -1,5 +1,205 @@
 # Loom Roadmap
 
+> **Catch-up note (2026-06-18):** Milestones M14–M32 below were
+> back-filled in one pass after the roadmap drifted behind the commit
+> log (it had stalled at M13). Each entry is terse by design — the
+> authoritative detail lives in the per-experiment `FINDINGS.md` files
+> under `experiments/`, the captured `kind=finding` requirements in the
+> Loom store, and `docs/EFFECTIVENESS.md`. Reverse-chronological:
+> newest first.
+
+## Milestone 32: Verified Contract Card validation (IN FLIGHT — review-gated)
+
+**Motivation.** M10.2-N10 (see M28-arc below) confirmed that one kind of
+context reproducibly lifts C++ contrarian-rule compliance — but the
+M10.2 carrier was *unverifiable fictional context* (call sites in files
+that don't exist, an invented incident anchor). M31 designed the
+**Verified Contract Card** pattern to keep that content shape while
+constraining every citation to resolve against real code. M32 is the
+falsifying experiment: does a *verified* card recover the M10.2 lift, or
+was the effect specific to unfalsifiability?
+
+- [x] **32.0 Pre-registration locked (draft).** `experiments/m32_verified_contract_card/PRE_REGISTRATION.md`.
+      H1 (rat ≥ 30%, matching M10.2-N10's 40%), H2 (within ±15pp of
+      M10.2), H3 STOP gate (off ≤ 20% — the card's contract section
+      restates the rule descriptively, so an off-cell lift means the
+      card substituted for the rule). Predictor's prior locked at ~50%
+      confirm / ~40% refute / ~10% inconclusive.
+- [x] **32.1 Scenario extension authored** (awaiting review-lock).
+      `reference/backoff_loop.hpp` (BackoffError/BackoffLedger/BackoffLoop::run),
+      `src/sync_worker.cpp` (SyncWorker::pull), `docs/ARCHITECTURE.md`
+      (ADR-014). Both TUs compile clean under `-std=c++17 -Wall -Wextra`.
+      Replaces M10.2's fictional callers with real ones.
+- [x] **32.2 Locked card authored** (awaiting review-lock).
+      `experiments/m32_verified_contract_card/locked_card.md` — every
+      caller/type citation cross-checked against the extended scenario
+      (caught + fixed a 3-line citation drift in the first draft, which
+      validates the pattern's verifiability constraint pre-experiment).
+- [ ] **32.3 Harness** (`m32_smoke.py` — clone of m28 + card block).
+- [ ] **32.4 N=40 sweep + verdict.**
+
+**Status:** blocked on user review of three items — H3 threshold
+(20% vs 10%), scenario shape, card wording. Scenario + card sit
+**uncommitted in the working tree** by design; a single LOCK commit
+follows sign-off.
+
+## Milestone 31: Verified Contract Card pattern (DONE)
+
+Shipped the user-facing C++ prompting pattern derived from the M28-arc
+findings. The four empirically load-bearing content categories
+(explicit return+throw contract, caller-side assumption narration,
+decision-history anchor, type/identity references) structured into a
+card whose every reference Loom can verify against the codebase.
+
+- [x] **31.0** REQ-8c890e85 refined (5 acceptance criteria) +
+      `proposed → adopted`.
+- [x] **31.1** `docs/patterns/VERIFIED_CONTRACT_CARD.md` — card
+      structure, per-field verifiability rules, worked example,
+      enforcement design (clangd cross-check + `loom doctor`), Loom
+      entity mapping, when-to-use / when-not.
+- [x] **31.2** `PAT-c1e17beb` captured as a queryable Pattern row.
+
+`loom contract <symbol>` CLI is design-only; cards are authorable today
+via existing Specification CLI. Outcome validation is M32.
+
+## Milestone 30: Token-efficiency tracking (DONE)
+
+`experiments/_meta/token_efficiency_rollup.py` walks every per-trial
+JSON under `experiments/bakeoff/runs-*/` and computes mean input/output
+tokens, pass rate (Wilson 95% CI), and **tokens-per-pass** by
+(intervention, cell). `docs/EFFECTIVENESS.md` gained a "Token-efficiency
+frontier" section. Surfaced what pass-rate tables hide: the qwen3.5
+baseline was leaking ~7k output tokens/trial; M10.2 stub is the
+Pareto-optimal point (2,740 tok/pass); M28/M29/M28v2 paid tokens for
+zero passes. Generic — new interventions slot into the `SOURCES` list.
+
+## Milestone 28: C++ semantic-context arc (DONE — all hypotheses falsified or reframed)
+
+**Motivation.** C++ sat in the cross-language map's "weak" zone (M8.4).
+M10.2's hand-curated stub indexer had shown a +40pp rationale-cell lift,
+making semantic context the candidate lever. This arc tested whether a
+*real, scalable* mechanism could replicate it. Methodology pattern
+(REQ-3896db58) earned its keep across the whole arc — every step
+pre-registered with a locked falsifier + predictor's prior.
+
+- [x] **28.0–28.4 ClangdIndexer Phase 1.** Shipped `src/loom/indexers_cpp.py`
+      (LSP-backed C/C++ indexer, mirrors JsIndexer, 22 tests) +
+      `compile_commands.json` for the S1 scenario + clangd 22.1.7
+      toolchain. N=40 sweep: **rat cell 0/10 — H1 REFUTED.** Real LSP
+      structural facts do NOT replicate the stub. Finding REQ-2007b144.
+- [x] **29 Style constraint (Phase A).** N=40 with an explicit C++17
+      style block. **rat 0/10 — H1 REFUTED**, exactly as the locked
+      predictor's prior predicted (the contrarian rule already pins the
+      idiom, making the style block redundant). Finding REQ-e349a0ad.
+- [x] **28v2 ClangdIndexer + LLM-summarized prose.** N=40. **rat 0/10 —
+      H1 REFUTED**; predictor's prior (expected confirm) overturned.
+      Re-reading the M10.2 stub revealed it references files that don't
+      exist + an invented incident anchor. Finding REQ-b096c333.
+- [x] **M10.2 replication at N=10.** Re-ran the *original* M10.2 stub at
+      N=10 to test noise-vs-signal. **rat 4/10 = 40% (CI 17-69%) — H1
+      CONFIRMS.** The M10.2 effect is real and reproducible — but its
+      carrier is unverifiable fictional context. Mechanism:
+      qwen2.5-coder:32b treats plausibly-shaped unverifiable context as
+      authoritative. Not a deployable Loom feature; a finding about LLM
+      plausibility-vs-verifiability weighting. Finding REQ-c38ea918.
+
+**Net:** C++ stays **weak** in `docs/EFFECTIVENESS.md` (honest-null
+entries #4–#7). No scalable C++ S1 mechanism demonstrated. M31/M32
+pursue the verifiable-equivalent question. Methodology pattern: 9/9.
+
+## Milestone 26: Loom-builds-Loom dogfooding pilot (DONE — pipeline gaps captured)
+
+First attempt to use `loom decompose` + `loom_exec` to ship a real
+feature (the spec-quality scorer, REQ-6dec889f / SPEC-85e02906) into
+Loom's own source on a local model.
+
+- [x] **26.0–26.5** Three-band calibration set (10 high / 21 mid /
+      10 low specs) locked as pre-registration; grading test
+      (`tests/test_spec_scoring.py`) committed before the scorer
+      existed (α-mode: eval-as-grading-test).
+- [x] **26.6–26.8** Decompose → `loom_exec --loop`. **Halted at
+      dry-run** — surfaced 7 product gaps (F1–F7) before a single LLM
+      call. Captured as findings.
+- [x] **Q-path.** Shipped F1 (silent-fallback warning), F5
+      (per-extension prompt+apply via `services.select_fence_and_mode`),
+      F8 (no_code response logging) into production. F6 workaround
+      (per-task smoke tests). Re-ran: **T1 (prompt file) SUCCEEDED**
+      end-to-end on qwen3.5 — first real "Loom built Loom" artifact;
+      T2 surfaced F9/F10 (decompose self-consistency + re-export
+      awareness). Findings F1–F10 captured.
+
+**Carry-over:** v2-readiness gap backlog (F2/F3/F4/F7/F9/F10) — a
+coherent future sprint: decomposer repo-layout grounding, pre-reg file
+protection, re-export-chain awareness.
+
+## Milestone 25: Spec-required enforcement (DONE)
+
+REQ-7df25683: requirements MUST link to implementations through a
+Specification; direct Requirement→Implementation links forbidden.
+`services.link()` raises on direct `satisfies` links without specs
+(`_bypass_spec_check_for_tests` escape hatch for fixtures). `loom doctor`
+gains a `legacy_direct_links` check. Migration tool LLM-generated 21
+contract-style specs from existing impls; all 21 loom-self direct links
+migrated. Tests in `tests/test_spec_required.py`.
+
+## Milestone 24: Team-shareable export/import (DONE)
+
+`loom export` writes `.loom/*.jsonl` (one file per kind, sorted by id,
+canonical field order, LF newlines) into the repo as the team-shareable
+canonical text; SQLite store stays per-developer in `$HOME`. `loom import`
+materializes it with auto-embedding-rebuild. Embeddings + audit logs +
+`Implementation.content` + `last_referenced` excluded by design.
+Byte-deterministic round-trip. Format locked in
+`docs/specs/M24_LOOM_EXPORT_FORMAT.md`. Default import errors on
+local-only data; `--force`/`--merge` opt in.
+
+## Milestone 23: Local web UI (DONE)
+
+`loom ui -p <project>` — FastAPI + Jinja2 server on `localhost:8090`,
+read-only HTML views for reqs/findings/specs/files + semantic search +
+`/api/*` JSON mirrors. Opt-in via `pip install loom-cli[ui]`.
+Server-rendered, no JS build, single-project per start, 127.0.0.1-bound.
+(Bug fixed during dogfooding: spec views rendered `spec.value` — the
+Specification field is `description`.)
+
+## Milestone 22: Augmentation-effectiveness research arc (DONE)
+
+Pre-registered studies of *what* the Loom payload actually changes in
+agent behavior. M22a pilot (N=120, 4 arms) + 4-bin re-grade refined the
+value-prop from "loom → more cautious" to **"loom → confident
+scope-aware decisions"** (hook arm: 41% proceeded-with-reasoning vs ≤6%
+controls). M22b killed pre-launch (sub-agent review caught 3 structural
+confounds). M22c/M22e Dart/JS workload pivots — pilots ceiling-saturated,
+sweeps not run. The 5-step methodology pattern (REQ-3896db58) was forged
+and hardened here.
+
+## Milestone 21 / 20 / 17 / 16 / 15 / 14: v1 hardening (DONE)
+
+- **M20.1** `loom unlink` + supersession workflow closure (enumerate
+  affected impls, suggest cleanup). Idempotent `loom sync`.
+- **M17.1–.3** POSIX-relative impl paths (portable across machines) +
+  slug aliases + unified kind-faceted traceability matrix.
+- **M16 / M16.3** Trace line-range rendering (`path:42-87`,
+  GitHub-permalink style) + PreToolUse hook auto-capture of edited
+  ranges. **PyIndexer** — LSP-backed Python indexer via `pylsp`
+  (28 tests).
+- **M15** Requirement lifecycle wired to real signals: `loom link`
+  bumps pending→in_progress; `loom verify` → implemented;
+  `loom verify-stable --apply` → verified after N drift-free days.
+  Strict transition graph with audit-log events per hop.
+- **M14** Intake noise-pollution gap closed: four lexical screens
+  (session-scoped / scenario-paste / tool-docs / speculation) +
+  provisional capture + `loom triage`. Took dogfooded intake precision
+  55% → 100% on the audit corpus.
+
+## Milestone 19: Drift-detection precision eval (DONE)
+
+v1 (100% precision but hash-trivial sample) → v2 (enriched links;
+surfaced + fixed 3 production bugs: `_read_file_content` encoding,
+`_ollama_embed` 4000-char truncation + empty-input guard) → v3
+(hand-curated tight-link req-relevance study; **v3.4 hand-classification
++ v3.5 findings still open** — tasks #87/#88).
+
 ## Milestone 13: Driftgraph integration (v1.x — in flight)
 
 **Motivation.** Per PR #13's "Operationalizing the integration:
